@@ -1,0 +1,14 @@
+pub mod fields;
+pub mod tags;
+pub mod data_dictionary;
+pub mod field_map;
+pub mod message;
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        let result = 2 + 2;
+        assert_eq!(result, 4);
+    }
+}
