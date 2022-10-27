@@ -3,6 +3,7 @@ pub mod tags;
 pub mod data_dictionary;
 pub mod field_map;
 pub mod message;
+pub mod message_factory;
 
 #[cfg(test)]
 mod tests {

@@ -5,13 +5,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::any::TypeId;
 use crate::message::Message;
 use crate::field_map::Tag;
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMap;
+use crate::field_map::FieldMapError;
 use crate::field_map::Group;
 use crate::fields;
 
+#[derive(Clone, Debug)]
 pub enum MessageValidationError {
     UnsupportedVersion(String),
     RepeatedTag(Tag),
@@ -24,8 +27,17 @@ pub enum MessageValidationError {
     TagNotDefinedForMessage(Tag, String),
     RepeatingGroupCountMismatch(Tag),
     InvalidStructure(Tag),
+    FieldMapError(FieldMapError),
+    DictionaryParseException(String),
 }
 
+impl From<FieldMapError> for MessageValidationError {
+    fn from(e: FieldMapError) -> Self {
+        MessageValidationError::FieldMapError(e)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum SpecError {
 
 }
@@ -46,8 +58,49 @@ pub struct DataDictionary {
 }
 
 impl DataDictionary {
-    pub fn new(_check_fields_have_values: bool, _spec: FixSpec) -> Result<DataDictionary, SpecError>{
-        todo!()
+    pub fn new(
+        check_fields_have_values: bool,
+        check_fields_out_of_order: bool,
+        check_user_defined_fields: bool,
+        allow_unknown_message_fields: bool,
+        spec: FixSpec
+    ) -> Result<DataDictionary, SpecError>{
+        let dd_fields = spec.fields.values.values().map(|f| {
+            let tag: Tag = f.number.parse().unwrap();
+            let name = f.name.clone();
+            let field_type = f.type_name.clone();
+            let enum_dictionary = f.values.iter().map(|v| (v.enum_values.clone(), v.description.clone())).collect();
+            DDField::new(tag, name, enum_dictionary, field_type)
+        });
+        let fields_by_tag = dd_fields.clone().map(|d| (d.tag, d)).collect();
+        let fields_by_name = dd_fields.clone().map(|d| (d.name.clone(), d)).collect();
+
+        let components_by_name = spec.components.values.iter().map(|(k, v)| {
+            (k.clone(), v.values.clone())
+        }).collect();
+
+        let version = Some(format!("{}{}.{}", spec.type_name, spec.major, spec.minor));
+
+        let messages = spec.messages.values.values().map(|m| {
+            let key = m.msgtype.clone();
+            let ddmap = parse_msg_el(DDMap::default(), &m.fields, &fields_by_name, &components_by_name, None).unwrap();
+            (key, ddmap)
+        }).collect();
+        let header = parse_msg_el(DDMap::default(), &spec.header.values, &fields_by_name, &components_by_name, None).unwrap();
+        let trailer = parse_msg_el(DDMap::default(), &spec.trailer.values, &fields_by_name, &components_by_name, None).unwrap();
+
+        Ok(Self {
+            check_fields_have_values,
+            check_fields_out_of_order,
+            check_user_defined_fields,
+            allow_unknown_message_fields,
+            version,
+            fields_by_tag,
+            fields_by_name,
+            messages,
+            header,
+            trailer,
+        })
     }
 
     pub fn version(&self) -> Option<&String> {
@@ -160,7 +213,7 @@ impl DataDictionary {
         //         throw new RequiredTagMissing(field);
         // }
         for field in self.messages[msg_type].required_fields() {
-            if !message.trailer().is_field_set(*field) {
+            if !message.is_field_set(*field) {
                 return Err(MessageValidationError::RequiredTagMissing(*field))
             }
         }
@@ -168,7 +221,7 @@ impl DataDictionary {
     }
     fn check_has_no_repeated_tags(map: &FieldMap) -> Result<(), MessageValidationError> {
         if map.repeated_tags().len() > 0 {
-            Err(MessageValidationError::RepeatedTag(*map.repeated_tags().get(0).unwrap()))
+            Err(MessageValidationError::RepeatedTag(map.repeated_tags().get(0).unwrap().tag()))
         }else{
             Ok(())
         }
@@ -252,7 +305,7 @@ impl DataDictionary {
         //         throw new RepeatingGroupCountMismatch(field.Tag);
         //     }
         // }
-        if self.is_group(msg_type, field.tag()) && map.get_int(field.tag()) as usize != map.group_count(field.tag()) {
+        if self.is_group(msg_type, field.tag()) && map.get_int(field.tag())? as usize != map.group_count(field.tag())? {
             return Err(MessageValidationError::RepeatingGroupCountMismatch(field.tag()));
         }
         Ok(())
@@ -325,13 +378,13 @@ impl DataDictionary {
         // foreach (int groupTag in map.GetGroupDefinitionTags())
         for tag in message.group_tags() {
             // for (int i = 1; i <= map.GroupDefinitionCount(groupTag); i++)
-            for i in 1..=message.group_count(tag) {
+            for i in 1..=message.group_count(*tag)? {
                 // GroupDefinition g = map.GetGroupDefinition(i, groupTag);
                 // DDGrp ddg = this.Messages[msgType].GetGroupDefinition(groupTag);
                 // IterateGroupDefinition(g, ddg, msgType);
 
-                let g = message.get_group(i as u32, tag);
-                let ddg = self.messages[msg_type].get_group(tag);
+                let g = message.get_group(i as u32, *tag)?;
+                let ddg = self.messages[msg_type].get_group(*tag);
                 self.iterate_group(g, ddg, msg_type)?;
             }
         }
@@ -339,7 +392,7 @@ impl DataDictionary {
         Ok(())
     }
 
-    fn iterate_group(&self, group: Group, group_definition: Option<&DDGroup>, msg_type: &str) -> Result<(), MessageValidationError> {
+    fn iterate_group(&self, group: &Group, group_definition: Option<&DDGroup>, msg_type: &str) -> Result<(), MessageValidationError> {
         if group_definition.is_none() {
             return Err(MessageValidationError::MissingGroupDefinition());
         }
@@ -386,13 +439,13 @@ impl DataDictionary {
         // foreach (int groupTag in map.GetGroupTags())
         for tag in group.group_tags() {
             // for (int i = 1; i <= map.GroupCount(groupTag); i++)
-            for i in 1..=group.group_count(tag) {
+            for i in 1..=group.group_count(*tag)? {
                 // Group g = group.GetGroup(i, groupTag);
                 // DDGrp ddg = ddgroup.GetGroup(groupTag);
                 // IterateGroup(g, ddg, msgType);
 
-                let g = group.get_group(i as u32, tag);
-                let ddg = group_definition.get_group(tag);
+                let g = group.get_group(i as u32, *tag)?;
+                let ddg = group_definition.get_group(*tag);
                 self.iterate_group(g, ddg, msg_type)?;
             }
         }
@@ -405,7 +458,7 @@ impl DataDictionary {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct DDMap {
     fields: HashMap<Tag, DDField>,
     groups: HashMap<Tag, DDGroup>,
@@ -433,6 +486,118 @@ impl DDMap {
     pub fn required_fields(&self) -> &HashSet<Tag> {
         &self.required_fields
     }
+    pub fn required_fields_mut(&mut self) -> &mut HashSet<Tag> {
+        &mut self.required_fields
+    }
+    pub fn add_required_field(&mut self, tag: Tag) {
+        self.required_fields.insert(tag);
+    }
+}
+trait AsDDMap {
+    fn as_map(&self) -> &DDMap;
+    fn as_map_mut(&mut self) -> &mut DDMap;
+}
+impl AsDDMap for DDMap {
+    fn as_map(&self) -> &DDMap {
+        &self
+    }
+    fn as_map_mut(&mut self) -> &mut DDMap {
+        self
+    }
+}
+impl<D: DerefMut<Target = DDMap>> AsDDMap for D {
+    fn as_map(&self) -> &DDMap {
+        self.deref()
+    }
+    fn as_map_mut(&mut self) -> &mut DDMap {
+        self.deref_mut()
+    }
+}
+
+fn parse_msg_el<D: AsDDMap + 'static>(
+    ddmap: D,
+    parts: &HashMap<String, MessagePart>,
+    fields_by_name: &HashMap<String, DDField>,
+    components_by_name: &HashMap<String, HashMap<String, MessagePart>>,
+    component_required: Option<bool>
+) -> Result<D, MessageValidationError> {
+    let mut org = ddmap;
+    let ddmap = &mut org.as_map_mut();
+    for (k, v) in parts {
+       match v {
+           MessagePart::Field(field) => {
+               if !fields_by_name.contains_key(&field.name) {
+                   return Err(MessageValidationError::DictionaryParseException(format!("Field '{}' is not defined in <fields> section.", field.name)));
+               }
+               let dd_field = &fields_by_name[&field.name];
+               let required = field.required == "Y" && component_required.unwrap_or(true);
+               if required {
+                   ddmap.add_required_field(dd_field.tag());
+               }
+
+               if !ddmap.is_field(dd_field.tag()) {
+                   ddmap.add_field(dd_field.clone());
+               }
+
+               // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
+               // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
+               if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
+                   unsafe {
+                       let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
+                       if casted.delim() == 0 {
+                           casted.delim = dd_field.tag();
+               //     ddGroup.Delim = fld.Tag;
+                       }
+                   }
+               }
+           },
+           MessagePart::GroupDefinition(group) => {
+               if !fields_by_name.contains_key(&group.name) {
+                   return Err(MessageValidationError::DictionaryParseException(format!("Field '{}' is not defined in <fields> section.", group.name)));
+               }
+               let dd_field = &fields_by_name[&group.name];
+               let required = group.required == "Y" && component_required.unwrap_or(true);
+               if required {
+                   ddmap.add_required_field(dd_field.tag());
+               }
+
+               if !ddmap.is_field(dd_field.tag()) {
+                   ddmap.add_field(dd_field.clone());
+               }
+
+               // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
+               // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
+               if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
+                   unsafe {
+                       let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
+                       if casted.delim() == 0 {
+                           casted.delim = dd_field.tag();
+                       }
+                   }
+               }
+               // ddgrp grp = new ddgrp();
+               let mut grp = DDGroup::default();
+               // grp.numfld = fld.tag;
+               grp.num_fld = dd_field.tag();
+               // if (required)
+               if required {
+               //     grp.required = true;
+                   grp.required = true;
+               }
+
+               // parsemsgel(childnode, grp);
+               let grp = parse_msg_el(grp, &group.fields, fields_by_name, components_by_name, None)?;
+               // ddmap.groups.add(fld.tag, grp);
+               ddmap.groups.insert(dd_field.tag(), grp);
+           },
+           MessagePart::Component(component) => {
+               let component_fields = components_by_name.get(&component.name).unwrap();
+               let component = parse_msg_el(org, component_fields, fields_by_name, components_by_name, Some(component.required == "Y"))?;
+               return Ok(component)
+           }
+       } 
+    }
+    Ok(org)
 }
 
 #[derive(Debug, Clone)]
@@ -450,6 +615,36 @@ pub struct DDField {
     is_multiple_value_field_with_enums: bool
 }
 impl DDField {
+    pub fn new(
+        // public int Tag;
+        tag: Tag,
+        // public String Name;
+        name: String,
+        // public Dictionary<String, String> EnumDict;
+        enum_dictionary: HashMap<String, String>,
+        // public String FixFldType;
+        field_type: String,
+        // TODO type?
+        // public Type FieldType;
+        // is_multiple_value_field_with_enums: bool
+    ) -> Self {
+                // case "MULTIPLEVALUESTRING": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
+                // case "MULTIPLESTRINGVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
+                // case "MULTIPLECHARVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
+        let is_multiple_value_field_with_enums = match field_type.as_str() {
+            "MULTIPLEVALUESTRING" => true,
+            "MULTIPLESTRINGVALUE" => true,
+            "MULTIPLECHARVALUE" => true,
+            _ => false,
+        };
+        DDField {
+            tag,
+            name,
+            enum_dictionary,
+            field_type,
+            is_multiple_value_field_with_enums
+        }
+    }
     pub fn tag(&self) -> Tag {
         self.tag
     }
@@ -470,7 +665,7 @@ impl DDField {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct DDGroup {
     num_fld: u32,
     delim: u32,
@@ -657,7 +852,7 @@ pub enum MessagePart {
 
 impl MessagePart {
     fn get_group(&self, tag: Tag) -> GroupDefinition {
-        todo!("{:?}", tag)
+        todo!("{:?}", tag) // might become redundant message part
     }
 }
 
@@ -688,7 +883,7 @@ impl Named for MessageDefinition {
 
 impl MessageDefinition {
     fn get_group(&self, tag: Tag) -> GroupDefinition {
-        todo!("{:?}", tag)
+        todo!("{:?}", tag) // might become redundant message part
     }
 }
 
@@ -699,12 +894,12 @@ pub struct GroupDefinition {
     // #[serde(rename = "$value")]
     // fields: Vec<Field>,
     #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
-    fields: HashMap<String, Field>,
+    fields: HashMap<String, MessagePart>,
 }
 
 impl GroupDefinition {
     fn get_group(&self, tag: Tag) -> GroupDefinition {
-        todo!("{:?}", tag)
+        todo!("{:?}", tag) // might become redundant message part
     }
 }
 
@@ -962,5 +1157,18 @@ mod tests {
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_xml_fixT11_dd() {
+        let reader = File::open("spec/FIXT11.xml").unwrap();
+        //let fd  = serde_xml_rs::from_reader(reader);
+        let jd = &mut serde_xml_rs::Deserializer::new_from_reader(reader);
+        let fd = serde_path_to_error::deserialize(jd);
+        //println!("{:?}", fd);
+        assert!(fd.is_ok());
+        let fd: FixSpec = fd.unwrap();
+        let dd = DataDictionary::new(false, false, false, false, fd);
     }
 }

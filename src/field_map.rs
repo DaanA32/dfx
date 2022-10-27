@@ -1,10 +1,16 @@
 use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
+use crate::tags;
+use crate::message::Message;
 
 #[derive(Default, Clone, Debug)]
 pub struct FieldMap {
-    fields: HashMap<Tag, Field>,
-    groups: HashMap<Tag, Vec<Group>>,
+    fields: BTreeMap<Tag, Field>,
+    groups: BTreeMap<Tag, Vec<Group>>,
+    // fields: HashMap<Tag, Field>,
+    // groups: HashMap<Tag, Vec<Group>>,
     repeated_tags: Vec<Field>,
     field_order: FieldOrder,
 }
@@ -15,26 +21,42 @@ pub type Length = u32;
 pub type FieldOrder = Vec<u32>;
 pub type Field = FieldBase;
 
+#[derive(Clone, Debug)]
+pub enum FieldMapError {
+    FieldNotFound(Tag),
+}
+
 #[derive(Default, Clone, Debug)]
-pub struct Group(FieldMap);
+pub struct Group {
+    delim: Tag,
+    field: Tag,
+    map: FieldMap,
+}
 impl Group {
-    pub fn new(tag: Tag, delim: Tag) -> Self {
-        todo!();
+    pub fn new(field: Tag, delim: Tag) -> Self {
+        Group {
+            delim,
+            field,
+            map: FieldMap::default(),
+        }
+    }
+    pub fn delim(&self) -> Tag {
+        self.delim
     }
     pub fn field(&self) -> Tag {
-        todo!();
+        self.field
     }
 }
 impl Deref for Group {
     type Target = FieldMap;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.map
     }
 }
 
 impl DerefMut for Group {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        &mut self.map
     }
 }
 #[derive(Default, Clone, Debug)]
@@ -50,13 +72,24 @@ impl FieldBase {
     pub fn value(&self) -> &String {
         &self.1
     }
+    pub fn to_string_field(&self) -> String {
+        format!("{}={}", self.tag(), self.value())
+    }
+    pub fn get_total(&self) -> u32 {
+        self.to_string_field().as_bytes().iter().map(|b| *b as u32).sum::<u32>() + 1 //incl SOH
+    }
+    pub fn len(&self) -> u32 {
+        self.to_string_field().as_bytes().len() as u32 + 1 //incl SOH
+    }
 }
 
 impl FieldMap {
 
     pub fn from_field_order(field_order: FieldOrder) -> Self {
-        let fields = HashMap::default();
-        let groups = HashMap::default();
+        let fields = BTreeMap::default();
+        let groups = BTreeMap::default();
+        // let fields = HashMap::default();
+        // let groups = HashMap::default();
         let repeated_tags = Vec::default();
         FieldMap {
             fields,
@@ -86,8 +119,14 @@ impl FieldMap {
     pub fn get_field(&self, tag: Tag) -> &FieldBase {
         &self.fields[&tag]
     }
-    pub fn get_int(&self, tag: Tag) -> u32 {
-        self.fields[&tag].value().parse().unwrap()
+    pub fn get_int(&self, tag: Tag) -> Result<u32, FieldMapError> {
+        match self.fields.get(&tag) {
+            None => Err(FieldMapError::FieldNotFound(tag)),
+            Some(value) => Ok(value.value().parse::<u32>().unwrap())
+        }
+    }
+    pub fn get_string(&self, tag: Tag) -> String {
+        self.fields[&tag].value().into()
     }
     pub fn get_field_mut(&mut self, tag: Tag) -> &mut FieldBase {
         self.fields.get_mut(&tag).unwrap()
@@ -128,52 +167,275 @@ impl FieldMap {
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
-    pub fn get_group(&self, index: u32, field: Tag) -> Group {
-        todo!("{:?} {:?}", index, field);
+    pub fn get_group(&self, index: u32, field: Tag) -> Result<&Group, FieldMapError> {
+        // if (!_groups.ContainsKey(field))
+        //     throw new FieldNotFoundException(field);
+        if !self.groups.contains_key(&field) {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (num <= 0)
+        //     throw new FieldNotFoundException(field);
+        if index <= 0 {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (_groups[field].Count < num)
+        //     throw new FieldNotFoundException(field);
+        if self.groups[&field].len() < index as usize {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+
+        // return _groups[field][num - 1];
+        Ok(&self.groups[&field][index as usize])
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
-    pub fn remove_group(&mut self, index: u32, field: Tag) {
-        todo!("{:?} {:?}", index, field);
+    pub fn get_group_mut(&mut self, index: u32, field: Tag) -> Result<&Group, FieldMapError> {
+        // if (!_groups.ContainsKey(field))
+        //     throw new FieldNotFoundException(field);
+        if !self.groups.contains_key(&field) {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (num <= 0)
+        //     throw new FieldNotFoundException(field);
+        if index <= 0 {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (_groups[field].Count < num)
+        //     throw new FieldNotFoundException(field);
+        if self.groups[&field].len() < index as usize {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+
+        // return _groups[field][num - 1];
+        Ok(&mut self.groups.get_mut(&field).unwrap()[index as usize])
     }
-    pub fn replace_group(&mut self, tag: Tag, group: &FieldMap, set_count: Option<bool>) {
-        todo!("{:?} {:?} {:?}", tag, group, set_count)
+    /// index: Index in group starting at 1
+    /// field: Field Tag (Tag of field which contains count of group)
+    pub fn remove_group(&mut self, index: u32, field: Tag) -> Result<(), FieldMapError>{
+        // if (!_groups.ContainsKey(field))
+        //     throw new FieldNotFoundException(field);
+        if !self.groups.contains_key(&field) {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (num <= 0)
+        //     throw new FieldNotFoundException(field);
+        if index <= 0 {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (_groups[field].Count < num)
+        //     throw new FieldNotFoundException(field);
+        if self.groups[&field].len() < index as usize {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+
+        // if (_groups[field].Count.Equals(1))
+        if self.groups[&field].len() == 1 {
+        //     _groups.Remove(field);
+            self.groups.remove(&field);
+        // else
+        } else {
+        //     _groups[field].RemoveAt(num - 1);
+            self.groups.get_mut(&field).unwrap().remove((index as usize)-1);
+        }
+        Ok(())
+    }
+    pub fn replace_group(&mut self, index: Tag, field: Tag, group: Group) -> Result<Group, FieldMapError> {
+        // if (!_groups.ContainsKey(field))
+        //     throw new FieldNotFoundException(field);
+        if !self.groups.contains_key(&field) {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (num <= 0)
+        //     throw new FieldNotFoundException(field);
+        if index <= 0 {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        // if (_groups[field].Count < num)
+        //     throw new FieldNotFoundException(field);
+        if self.groups[&field].len() < index as usize {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+
+        // return _groups[field][num - 1] = group;
+        let group_ref = self.groups.get_mut(&field).unwrap().get_mut(index as usize - 1).unwrap();
+        let group = std::mem::replace(group_ref, group);
+
+        Ok(group)
     }
 
-    pub fn group_tags(&self) -> Vec<Tag> {
-        todo!()
+    pub fn group_tags<'a>(&'a self) -> impl Iterator<Item = &'a Tag> {
+        self.groups.keys()
     }
 
-    pub fn group_count(&self, tag: Tag) -> usize {
-        todo!()
+    pub fn group_count(&self, field: Tag) -> Result<usize, FieldMapError> {
+        if !self.groups.contains_key(&field) {
+            return Err(FieldMapError::FieldNotFound(field));
+        }
+        Ok(self.groups[&field].len())
     }
 
     pub fn is_empty(&self) -> bool {
-        todo!()
+        self.fields.len() == 0 && self.groups.len() == 0
     }
 
     pub fn calculate_total(&self) -> Total {
-        todo!();
+        // int total = 0;
+        let mut total = 0;
+        // foreach (Fields.IField field in _fields.Values)
+        for field in self.fields.values() {
+        //  if (field.Tag != Fields.Tags.CheckSum)
+            if field.tag() != tags::CheckSum {
+        //      total += field.getTotal();
+                total += field.get_total();
+            }
+        }
+
+        // foreach (Fields.IField field in this.RepeatedTags)
+        for field in self.repeated_tags() {
+        //  if (field.Tag != Fields.Tags.CheckSum)
+            if field.tag() != tags::CheckSum {
+        //      total += field.getTotal();
+                total += field.get_total();
+            }
+        }
+
+        // foreach (List<Group> groupList in _groups.Values)
+        for group_list in self.groups.values() {
+        //     foreach (Group group in groupList)
+            for group in group_list {
+        //         total += group.CalculateTotal();
+                total += group.calculate_total();
+            }
+        }
+        // return total;
+        total
     }
 
     pub fn len(&self) -> Length {
-        todo!();
+        // int total = 0;
+        let mut total = 0;
+        // foreach (Fields.IField field in _fields.Values)
+        for field in self.fields.values() {
+        //     if (field != null
+        //         && field.Tag != Tags.BeginString
+        //         && field.Tag != Tags.BodyLength
+        //         && field.Tag != Tags.CheckSum)
+            if field.tag() != tags::CheckSum && field.tag() != tags::BeginString && field.tag() != tags::BodyLength {
+        //      total += field.getLength();
+                total += field.len();
+            }
+        }
+
+        // foreach (Fields.IField field in this.RepeatedTags)
+        for field in self.repeated_tags() {
+        //     if (field != null
+        //         && field.Tag != Tags.BeginString
+        //         && field.Tag != Tags.BodyLength
+        //         && field.Tag != Tags.CheckSum)
+            if field.tag() != tags::CheckSum && field.tag() != tags::BeginString && field.tag() != tags::BodyLength {
+        //      total += field.getLength();
+                total += field.len();
+            }
+        }
+
+        // foreach (List<Group> groupList in _groups.Values)
+        for group_list in self.groups.values() {
+        //     foreach (Group group in groupList)
+            for group in group_list {
+        //         total += group.CalculateLength();
+                total += group.len();
+            }
+        }
+
+        total
     }
 
-    pub fn repeated_tags(&self) -> Vec<Tag> {
-        todo!();
+    pub fn repeated_tags(&self) -> &Vec<FieldBase> {
+        &self.repeated_tags
     }
 
-    pub fn repeated_tags_mut(&self) -> &mut Vec<FieldBase> {
-        todo!();
+    pub fn repeated_tags_mut(&mut self) -> &mut Vec<FieldBase> {
+        &mut self.repeated_tags
     }
 
-    pub fn entries(&self) -> Vec<(Tag, FieldBase)> {
-        todo!();
+    pub fn entries<'a>(&'a self) -> impl Iterator<Item = (&'a Tag, &FieldBase)> {
+        self.fields.iter()
     }
 
     pub fn clear(&mut self) {
         self.fields.clear();
         self.groups.clear();
+    }
+
+    pub fn calculate_string(&self, prefields: Option<Vec<Tag>>) -> String {
+        // HashSet<int> groupCounterTags = new HashSet<int>(_groups.Keys);
+        let group_counter_tags: HashSet<Tag> = HashSet::new();
+        let prefields = prefields.unwrap_or_default();
+        let mut sb = String::new();
+
+        // foreach (int preField in preFields)
+        for prefield in &prefields {
+        //     if (IsSetField(preField))
+            if self.is_field_set(*prefield) {
+        //         sb.Append(preField + "=" + GetString(preField)).Append(Message.SOH);
+                sb.push_str(format!("{}={}{}", prefield, self.get_string(*prefield), Message::SOH).as_str());
+        //         if (groupCounterTags.Contains(preField))
+                if group_counter_tags.contains(&prefield) {
+        //             List<Group> glist = _groups[preField];
+                    let glist = &self.groups[&prefield];
+        //             foreach (Group g in glist)
+                    for g in glist {
+        //                 sb.Append(g.CalculateString());
+                        sb.push_str(&g.calculate_string(None));
+                    }
+                }
+            }
+        }
+
+        // foreach (Fields.IField field in _fields.Values)
+        for field in self.fields.values() {
+        //     if (groupCounterTags.Contains(field.Tag))
+            if group_counter_tags.contains(&field.tag()) {
+        //         continue;
+                continue;
+            }
+        //     if (preFields.Contains(field.Tag))
+            if *(&prefields.contains(&field.tag())) {
+        //         continue; //already did this one
+                continue; //already did this one
+            }
+        //     sb.Append(field.Tag.ToString() + "=" + field.ToString());
+        //     sb.Append(Message.SOH);
+            sb.push_str(format!("{}={}{}", field.tag(), field.value(), Message::SOH).as_str());
+        }
+
+        // foreach(int counterTag in _groups.Keys)
+        for counter_tag in self.groups.keys() {
+        //     if (preFields.Contains(counterTag))
+            if prefields.contains(&counter_tag) {
+        //         continue; //already did this one
+                continue; //already did this one
+            }
+
+        //     List<Group> groupList = _groups[counterTag];
+            let grouplist = &self.groups[counter_tag];
+        //     if (groupList.Count == 0)
+            if grouplist.len() == 0 {
+        //         continue; //probably unnecessary, but it doesn't hurt to check
+                continue; //probably unnecessary, but it doesn't hurt to check
+            }
+
+        //     sb.Append(_fields[counterTag].toStringField());
+        //     sb.Append(Message.SOH);
+            sb.push_str(format!("{}{}", self.fields[counter_tag].to_string_field(), Message::SOH).as_str());
+
+        //     foreach (Group group in groupList)
+            for group in grouplist {
+        //         sb.Append(group.CalculateString());
+                sb.push_str(&group.calculate_string(None));
+            }
+        }
+
+        sb
     }
 }

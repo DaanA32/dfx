@@ -8,12 +8,21 @@ use crate::data_dictionary::DDGroup;
 use crate::field_map::Tag;
 use crate::field_map::FieldBase;
 use crate::field_map::Group;
+use crate::field_map::FieldMapError;
 use crate::tags;
+use crate::message_factory::MessageFactory;
 
 #[derive(Default, Clone, Debug)]
 pub struct Header(FieldMap);
 
+impl Header {
+    pub fn calculate_string(&self) -> String {
+        self.0.calculate_string(Some(HEADER_FIELD_ORDER.to_vec()))
+    }
+}
+
 const HEADER_FIELD_ORDER: [Tag; 3] = [ tags::BeginString, tags::BodyLength, tags::MsgType ];
+// const HEADER_FIELD_ORDER: Vec<Tag> = vec![ tags::BeginString, tags::BodyLength, tags::MsgType ];
 
 impl Deref for Header {
     type Target = FieldMap;
@@ -31,6 +40,15 @@ impl DerefMut for Header {
 #[derive(Default, Clone, Debug)]
 pub struct Trailer(FieldMap);
 
+impl Trailer {
+    pub fn calculate_string(&self) -> String {
+        self.0.calculate_string(Some(TRAILER_FIELD_ORDER.to_vec()))
+    }
+}
+
+const TRAILER_FIELD_ORDER: [Tag; 3] = [ tags::SignatureLength, tags::Signature, tags::CheckSum ];
+// const TRAILER_FIELD_ORDER: Vec<Tag> = vec![ tags::SignatureLength, tags::Signature, tags::CheckSum ];
+
 impl Deref for Trailer {
     type Target = FieldMap;
     fn deref(&self) -> &Self::Target {
@@ -44,7 +62,7 @@ impl DerefMut for Trailer {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone)]
 pub struct Message {
     header: Header,
     body: FieldMap,
@@ -54,7 +72,27 @@ pub struct Message {
     valid_structure_: bool,
 }
 
+impl Default for Message {
+    fn default() -> Self {
+        Message {
+            header: Header::default(),
+            body: FieldMap::default(),
+            trailer: Trailer::default(),
+            application_data_dictionary: None,
+            field_: 0,
+            valid_structure_: true,
+        }
+    }
+}
+
+impl std::fmt::Debug for Message {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        fmt.write_str(format!("Message (\n\tHeader {:?},\n\tBody: {:?},\n\ttrailer: {:?}\n)", self.header, self.body, self.trailer).as_str())
+    }
+}
+
 impl Message {
+    pub const SOH: char = 1 as char;
     pub fn header(&self) -> &Header {
         &self.header
     }
@@ -137,7 +175,7 @@ impl Message {
             tags::LastMsgSeqNumProcessed => true,
             //tags::OnBehalfOfSendingTime => true, TODO
             _ => match data_dictionary {
-                Some(dd) => dd.is_trailer_field(tag),
+                Some(dd) => dd.is_header_field(tag),
                 None => false,
             }
         }
@@ -172,8 +210,12 @@ impl Message {
             return Err(MessageParseError::FailedToFindEqualsAt(*pos))
         }
 
-        let tagend = tagend.unwrap();
+        let tagend = *pos + tagend.unwrap();
+        // println!("{:?}", tagend);
         // int tag = Convert.ToInt32(msgstr.Substring(pos, tagend - pos));
+        if *pos > tagend {
+            return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
+        }
         let tag: Result<u32, _> = msgstr[*pos..tagend].parse();
         if tag.is_err() {
             return Err(MessageParseError::FailedToConvertTagToInt(msgstr[*pos..tagend].into()))
@@ -184,11 +226,12 @@ impl Message {
         *pos = tagend + 1;
 
         //     int fieldvalend = msgstr.IndexOf((char)1, pos);
-        let fieldend = msgstr[*pos..].chars().position(|c| c == '\x01');
+        let fieldend = msgstr[*pos..].chars().position(|c| c == Message::SOH);
+        // println!("{}", msgstr[*pos..].chars().collect::<String>());
         if fieldend.is_none() {
             return Err(MessageParseError::FailedToFindSohAt(*pos))
         }
-        let fieldend = fieldend.unwrap();
+        let fieldend = *pos + fieldend.unwrap();
         //     StringField field =  new StringField(tag, msgstr.Substring(pos, fieldvalend - pos));
         let value = &msgstr[*pos..fieldend];
         let field = FieldBase::new(tag, value.into());
@@ -221,27 +264,25 @@ impl Message {
         Ok(field)
     }
 
-/// <summary>
-/// Creates a Message from a FIX string
-/// </summary>
-/// <param name="msgstr"></param>
-/// <param name="validate"></param>
-/// <param name="sessionDD"></param>
-/// <param name="appDD"></param>
-/// <param name="msgFactory">If null, any groups will be constructed as generic Group objects</param>
-/// <param name="ignoreBody">(default false) if true, ignores all non-header non-trailer fields.
-///   Intended for callers that only need rejection-related information from the header.
-/// </param>
 // public void FromString(string msgstr, bool validate,
 //     DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD, IMessageFactory msgFactory,
 //     bool ignoreBody)
+    /// Creates a Message from a FIX string.
+    ///
+    /// msg_factory
+    /// > If [None], any groups will be constructed as generic Group objects
+    ///
+    /// ignoreBody
+    /// > (default false) if true, ignores all non-header and non-trailer fields.
+    /// >
+    /// > Intended for callers that only need rejection-related information from the header.
     pub fn from_string(
         &mut self,
         msgstr: &str,
         validate: bool,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
-        msg_factory: Option<bool>,
+        msg_factory: Option<&Box<dyn MessageFactory>>,
         ignore_body: bool
     ) -> Result<(), MessageParseError> {
 //      this.ApplicationDataDictionary = appDD;
@@ -264,8 +305,10 @@ impl Message {
 
 //      while (pos < msgstr.Length)
         while pos < msgstr.len() {
+            // println!("{}", pos);
 //          StringField f = ExtractField(msgstr, ref pos, sessionDD, appDD);
             let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd )?;
+            // println!("{:?}", f);
 
 //          if (validate && (count < 3) && (Header.HEADER_FIELD_ORDER[count++] != f.Tag))
             if validate && count < 3 && HEADER_FIELD_ORDER[count] != f.tag() {
@@ -318,7 +361,7 @@ impl Message {
 //              expectingBody = false;
                 expecting_body = false;
 //              if (!this.Trailer.SetField(f, false))
-                if !self.header.set_field_base(f.clone(), Some(false)) {
+                if !self.trailer.set_field_base(f.clone(), Some(false)) {
 //                  this.Trailer.RepeatedTags.Add(f);
                     self.trailer.repeated_tags_mut().push(f.clone());
                 }
@@ -377,7 +420,7 @@ impl Message {
         group_dd: Option<&DDGroup>,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
-        msg_factory: Option<bool>
+        msg_factory: Option<&Box<dyn MessageFactory>>,
     ) -> Result<usize, MessageParseError> {
         // TODO fix
         let group_dd = group_dd.unwrap();
@@ -411,9 +454,9 @@ impl Message {
 
                 // Create a new group!
                 // if (msgFactory != null)
-                if let Some(factory) = msg_factory {
+                if let Some(factory) = msg_factory.as_ref() {
                     // grp = msgFactory.Create(Message.ExtractBeginString(msgstr), Message.GetMsgType(msgstr), grpNoFld.Tag);
-                    todo!();
+                    todo!(); // requires message factory
                 }
 
                 //If above failed (shouldn't ever happen), just use a generic Group.
@@ -488,13 +531,13 @@ impl Message {
         //     throw new InvalidMessage("BodyLength or Checksum has wrong format", e);
         // }
 
-        let received_body_length = self.header.get_int(tags::BodyLength);
+        let received_body_length = self.header.get_int(tags::BodyLength)?;
         if self.body_length() != received_body_length {
-            return Err(MessageParseError::InvalidMessage(format!("Expected BodyLength={}, Received BodyLength={}, Message.SeqNum={}", self.body_length(), received_body_length, self.header.get_int(tags::MsgSeqNum))));
+            return Err(MessageParseError::InvalidMessage(format!("Expected BodyLength={}, Received BodyLength={}, Message.SeqNum={}", self.body_length(), received_body_length, self.header.get_int(tags::MsgSeqNum)?)));
         }
-        let received_checksum = self.header.get_int(tags::CheckSum);
+        let received_checksum = self.trailer.get_int(tags::CheckSum)?;
         if self.checksum() != received_checksum {
-            return Err(MessageParseError::InvalidMessage(format!("Expected CheckSum={}, Received CheckSum={}, Message.SeqNum={}", self.checksum(), received_checksum, self.header.get_int(tags::MsgSeqNum))));
+            return Err(MessageParseError::InvalidMessage(format!("Expected CheckSum={}, Received CheckSum={}, Message.SeqNum={}", self.checksum(), received_checksum, self.header.get_int(tags::MsgSeqNum)?)));
         }
         Ok(())
     }
@@ -519,6 +562,24 @@ impl Message {
         self.body.clear();
         self.trailer.clear();
     }
+
+    pub fn to_string(&mut self) -> String {
+        // public override string ToString()
+        // {
+        //     lock (lock_ToString)
+        //     {
+        //         this.Header.SetField(new BodyLength(BodyLength()), true);
+        //         this.Trailer.SetField(new CheckSum(Fields.Converters.CheckSumConverter.Convert(CheckSum())), true);
+
+        //         return this.Header.CalculateString() + CalculateString() + this.Trailer.CalculateString();
+        //     }
+        // }
+        let len = self.body_length().to_string();
+        self.header.set_field_base(FieldBase::new(tags::BodyLength, len), Some(true));
+        let checksum = self.checksum().to_string();
+        self.header.set_field_base(FieldBase::new(tags::CheckSum, checksum), Some(true));
+        format!("{}{}{}", self.header.calculate_string(), self.calculate_string(None), self.trailer.calculate_string())
+    }
 }
 
 impl Deref for Message {
@@ -534,11 +595,90 @@ impl DerefMut for Message {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum MessageParseError {
     InvalidMessage(String),
     FailedToConvertTagToInt(String),
     FailedToFindEqualsAt(usize),
     FailedToFindSohAt(usize),
+    PosGreaterThanLen(usize, usize),
     RepeatedTagWithoutGroupDelimiterTagException(Tag, Tag),
     GroupDelimiterTagException(Tag, Tag),
+    FieldMapError(FieldMapError),
+}
+
+impl From<FieldMapError> for MessageParseError {
+    fn from(e: FieldMapError) -> MessageParseError {
+        MessageParseError::FieldMapError(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Message;
+    use crate::message_factory::*;
+    use crate::data_dictionary::DataDictionary;
+    use crate::data_dictionary::FixSpec;
+    use std::fs::File;
+    #[test]
+    fn test_parse() {
+        let reader = File::open("spec/FIXT11.xml").unwrap();
+        //let fd  = serde_xml_rs::from_reader(reader);
+        let jd = &mut serde_xml_rs::Deserializer::new_from_reader(reader);
+        let fd = serde_path_to_error::deserialize(jd);
+        //println!("{:?}", fd);
+        assert!(fd.is_ok());
+        let fd: FixSpec = fd.unwrap();
+        let dd = DataDictionary::new(false, false, false, false, fd).unwrap();
+        println!("{:#?}", dd);
+
+        let mut message = Message::default();
+
+        // let msgstr = "8=FIXT.1.1\x019=73\x0135=W\x0134=3\x0149=sender\x0152=20110909-09:09:09.999\x0156=target\x0155=sym\x01268=1\x01269=0\x01272=20111012\x01273=22:15:30.444\x0110=249\x01";
+        let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
+
+        let msgstr = expected.replace('|', "\x01");
+        let result = message.from_string(&msgstr, true, Some(&dd), Some(&dd), None, false);
+        println!("{:?}", result);
+        assert!(result.is_ok());
+
+        let actual = message.to_string().replace(Message::SOH, "|");
+
+        println!("{:?}", expected);
+        println!("{:?}", actual);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_validate() {
+        let reader = File::open("spec/FIX44.xml").unwrap();
+        //let fd  = serde_xml_rs::from_reader(reader);
+        let jd = &mut serde_xml_rs::Deserializer::new_from_reader(reader);
+        let fd = serde_path_to_error::deserialize(jd);
+        //println!("{:?}", fd);
+        assert!(fd.is_ok());
+        let fd: FixSpec = fd.unwrap();
+        let dd = DataDictionary::new(true, true, true, true, fd).unwrap();
+
+        let mut message = Message::default();
+
+        // let msgstr = "8=FIXT.1.1\x019=73\x0135=W\x0134=3\x0149=sender\x0152=20110909-09:09:09.999\x0156=target\x0155=sym\x01268=1\x01269=0\x01272=20111012\x01273=22:15:30.444\x0110=249\x01";
+        let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
+
+        let msgstr = expected.replace('|', "\x01");
+        let result = message.from_string(&msgstr, true, Some(&dd), Some(&dd), None, false);
+        println!("{:?}", result);
+        assert!(result.is_ok());
+
+        let actual = message.to_string().replace(Message::SOH, "|");
+
+        println!("{:?}", expected);
+        println!("{:?}", actual);
+        assert_eq!(expected, actual);
+
+        let result = DataDictionary::validate(&message, Some(&dd), &dd, "FIX.4.4", "A");
+        println!("{:?}", message);
+        println!("{:?}", result);
+        assert!(result.is_ok());
+    }
 }

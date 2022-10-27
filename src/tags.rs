@@ -4,7 +4,7 @@ pub use intern::*;
 #[allow(dead_code)]
 mod intern {
     use crate::field_map::Tag;
-    const Account: Tag = 1;
+    pub const Account: Tag = 1;
     pub const AdvId: Tag = 2;
     pub const AdvRefID: Tag = 3;
     pub const AdvSide: Tag = 4;
