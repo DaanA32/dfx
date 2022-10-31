@@ -5,9 +5,11 @@ pub mod data_dictionary_provider;
 pub mod field_map;
 pub mod message;
 pub mod message_factory;
+pub mod message_store;
 pub mod message_store_factory;
 pub mod log_factory;
 pub mod session;
+pub mod log;
 
 #[cfg(test)]
 mod tests {

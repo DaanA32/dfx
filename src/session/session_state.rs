@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
 use crate::message::Message;
+use crate::message_store::MessageStore;
+use crate::log::Log;
 
 // private object sync_ = new object();
 // private bool isEnabled_ = true;
@@ -43,12 +45,12 @@ pub struct SessionState {
     logout_timeout_ms: u64,
     resend_range: Option<u32>,
     message_queue: BTreeMap<u32, Message>,
-    msg_store: u32, //TODO Message Store
+    msg_store: Box<dyn MessageStore>, //TODO Message Store
     logger: u32, //TODO logger
 }
 
 impl SessionState {
-    pub fn new(is_initiator: bool, logger: u32, heartbeat_int: u32) -> Self {
+    pub fn new(is_initiator: bool, logger: Option<Box<dyn Log>>, heartbeat_int: u32, msg_store: Box<dyn MessageStore>) -> Self {
         SessionState {
             is_enabled: true,
             is_initiator: is_initiator,
@@ -69,7 +71,7 @@ impl SessionState {
             logout_timeout_ms: 10 * 1000,
             resend_range: None,
             message_queue: BTreeMap::default(),
-            msg_store: 0, //TODO Message Store
+            msg_store, //TODO Message Store
             logger: 0, //TODO logger
         }
     }

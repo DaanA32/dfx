@@ -8,7 +8,9 @@ use crate::session::SessionState;
 use crate::session::SessionId;
 use crate::session::Application;
 use crate::session::SessionSchedule;
+use crate::message_store::MessageStore;
 use crate::message_store_factory::MessageStoreFactory;
+use crate::data_dictionary::DataDictionary;
 use crate::data_dictionary_provider::DataDictionaryProvider;
 use crate::message_factory::MessageFactory;
 use crate::log_factory::LogFactory;
@@ -57,10 +59,40 @@ impl<R: Read> Session<R> {
         session_id: SessionId,
         session_schedule: SessionSchedule,
         heartbeat_int: u32,
-        log_factory: Box<dyn LogFactory>,
+        log_factory: Option<Box<dyn LogFactory>>,
         msg_factory: Box<dyn MessageFactory>,
         sender_default_appl_ver_id: &str,
     ) -> Self {
+        let application = app;
+        let schedule = session_schedule;
+        let app_does_early_intercept = false; //TODO app is IApplicationExt
+        let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&session_id.begin_string);
+        let application_data_dictionar = if session_id.is_fixt {
+            data_dictionary_provider.get_application_data_dictionary(sender_default_appl_ver_id)
+        }else{
+            session_data_dictionary.clone()
+        };
+        let log = log_factory.map(|l| l.create(&session_id));
+        let msg_store = store_factory.create(&session_id);
+        let state = SessionState::new(is_initiator, log, heartbeat_int, msg_store);
+        // Configuration defaults.
+        // Will be overridden by the SessionFactory with values in the user's configuration.
+        let PersistMessages = true;
+        let ResetOnDisconnect = false;
+        let SendRedundantResendRequests = false;
+        let ResendSessionLevelRejects = false;
+        let ValidateLengthAndChecksum = true;
+        let CheckCompID = true;
+        let TimeStampPrecision = TimeStampPrecision.Millisecond;
+        let EnableLastMsgSeqNumProcessed = false;
+        let MaxMessagesInResendRequest = 0;
+        let SendLogoutBeforeTimeoutDisconnect = false;
+        let IgnorePossDupResendRequests = false;
+        let RequiresOrigSendingTime = true;
+        let CheckLatency = true;
+        let MaxLatency = 120;
+
+        //SessionTime
         todo!()
     }
 
