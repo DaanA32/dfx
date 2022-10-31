@@ -236,7 +236,7 @@ impl DataDictionary {
             Ok(())
         }
     }
-    fn check_valid_format(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
+    fn check_valid_format(&self, _field: &FieldBase) -> Result<(), MessageValidationError> {
         // TODO check format based on type received.
         println!("DataDictionary.check_valid_format(): TODO check format based on type received.");
         Ok(())
@@ -403,7 +403,7 @@ impl DataDictionary {
         // int lastField = 0;
         let mut last_field = 0;
         // foreach (KeyValuePair<int, Fields.IField> kvp in group)
-        for (k, v) in group.entries() {
+        for (_, v) in group.entries() {
             let field = v;
 
             // if (lastField != 0 && field.Tag == lastField)
@@ -417,7 +417,7 @@ impl DataDictionary {
             // if (!string.IsNullOrEmpty(this.Version))
             if matches!(&self.version, Some(version) if version.len() > 0) {
                 // CheckValidFormat(field);
-                self.check_valid_format(&field);
+                self.check_valid_format(&field)?;
 
                 // if (ShouldCheckTag(field))
                 if self.should_check_tag(&field) {
@@ -455,6 +455,10 @@ impl DataDictionary {
 
     pub fn get_map_for_message(&self, msg_type: &str) -> Option<&DDMap> {
         self.messages.get(msg_type)
+    }
+
+    pub fn get_field_by_name(&self, field_name: &String) -> Option<&DDField> {
+        self.fields_by_name.get(field_name)
     }
 }
 
@@ -523,7 +527,7 @@ fn parse_msg_el<D: AsDDMap + 'static>(
 ) -> Result<D, MessageValidationError> {
     let mut org = ddmap;
     let ddmap = &mut org.as_map_mut();
-    for (k, v) in parts {
+    for (_, v) in parts {
        match v {
            MessagePart::Field(field) => {
                if !fields_by_name.contains_key(&field.name) {
@@ -850,12 +854,6 @@ pub enum MessagePart {
     GroupDefinition(GroupDefinition),
 }
 
-impl MessagePart {
-    fn get_group(&self, tag: Tag) -> GroupDefinition {
-        todo!("{:?}", tag) // might become redundant message part
-    }
-}
-
 impl Named for MessagePart {
     fn name(&self) -> &str {
         match self {
@@ -881,12 +879,6 @@ impl Named for MessageDefinition {
     }
 }
 
-impl MessageDefinition {
-    fn get_group(&self, tag: Tag) -> GroupDefinition {
-        todo!("{:?}", tag) // might become redundant message part
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GroupDefinition {
     name: String,
@@ -895,12 +887,6 @@ pub struct GroupDefinition {
     // fields: Vec<Field>,
     #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
     fields: HashMap<String, MessagePart>,
-}
-
-impl GroupDefinition {
-    fn get_group(&self, tag: Tag) -> GroupDefinition {
-        todo!("{:?}", tag) // might become redundant message part
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1169,6 +1155,6 @@ mod tests {
         //println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
-        let dd = DataDictionary::new(false, false, false, false, fd);
+        let _dd = DataDictionary::new(false, false, false, false, fd);
     }
 }

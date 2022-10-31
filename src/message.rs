@@ -203,7 +203,7 @@ impl Message {
     }
 
     // public static StringField ExtractField(string msgstr, ref int pos, DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD)
-    fn extract_field(msgstr: &str, pos: &mut usize, session_dd: Option<&DataDictionary>, app_dd: Option<&DataDictionary>) -> Result<FieldBase, MessageParseError> {
+    fn extract_field(msgstr: &str, pos: &mut usize, _session_dd: Option<&DataDictionary>, _app_dd: Option<&DataDictionary>) -> Result<FieldBase, MessageParseError> {
         // int tagend = msgstr.IndexOf('=', pos);
         let tagend = msgstr[*pos..].chars().position(|c| c == '=');
         if tagend.is_none() {
@@ -291,7 +291,7 @@ impl Message {
         self.clear();
 
 //      string msgType = "";
-        let mut msg_type = "";
+        let mut msg_type;
 //      bool expectingHeader = true;
         let mut expecting_header = true;
 //      bool expectingBody = true;
@@ -456,7 +456,7 @@ impl Message {
                 // if (msgFactory != null)
                 if let Some(factory) = msg_factory.as_ref() {
                     // grp = msgFactory.Create(Message.ExtractBeginString(msgstr), Message.GetMsgType(msgstr), grpNoFld.Tag);
-                    todo!(); // requires message factory
+                    todo!("{:?}", factory); // requires message factory
                 }
 
                 //If above failed (shouldn't ever happen), just use a generic Group.
@@ -580,6 +580,10 @@ impl Message {
         self.header.set_field_base(FieldBase::new(tags::CheckSum, checksum), Some(true));
         format!("{}{}{}", self.header.calculate_string(), self.calculate_string(None), self.trailer.calculate_string())
     }
+
+    pub fn is_admin(&self) -> bool {
+        todo!()
+    }
 }
 
 impl Deref for Message {
@@ -616,7 +620,6 @@ impl From<FieldMapError> for MessageParseError {
 #[cfg(test)]
 mod tests {
     use super::Message;
-    use crate::message_factory::*;
     use crate::data_dictionary::DataDictionary;
     use crate::data_dictionary::FixSpec;
     use std::fs::File;

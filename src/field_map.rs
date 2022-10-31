@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
@@ -12,7 +11,7 @@ pub struct FieldMap {
     // fields: HashMap<Tag, Field>,
     // groups: HashMap<Tag, Vec<Group>>,
     repeated_tags: Vec<Field>,
-    field_order: FieldOrder,
+    _field_order: FieldOrder,
 }
 
 pub type Tag = u32;
@@ -20,6 +19,7 @@ pub type Total = u32;
 pub type Length = u32;
 pub type FieldOrder = Vec<u32>;
 pub type Field = FieldBase;
+pub type FieldValue = String;
 
 #[derive(Clone, Debug)]
 pub enum FieldMapError {
@@ -60,7 +60,7 @@ impl DerefMut for Group {
     }
 }
 #[derive(Default, Clone, Debug)]
-pub struct FieldBase(Tag, String);
+pub struct FieldBase(Tag, FieldValue);
 
 impl FieldBase {
     pub fn new(tag: Tag, value: String) -> Self {
@@ -85,7 +85,7 @@ impl FieldBase {
 
 impl FieldMap {
 
-    pub fn from_field_order(field_order: FieldOrder) -> Self {
+    pub fn from_field_order(_field_order: FieldOrder) -> Self {
         let fields = BTreeMap::default();
         let groups = BTreeMap::default();
         // let fields = HashMap::default();
@@ -95,7 +95,7 @@ impl FieldMap {
             fields,
             groups,
             repeated_tags,
-            field_order
+            _field_order
         }
     }
 
@@ -139,7 +139,7 @@ impl FieldMap {
     }
 
     // Groups
-    pub fn add_group(&mut self, tag: Tag, group: &Group, set_count: Option<bool>) {
+    pub fn add_group(&mut self, _tag: Tag, group: &Group, set_count: Option<bool>) {
         // if (!_groups.ContainsKey(group.Field))
         //     _groups.Add(group.Field, new List<Group>());
         // _groups[group.Field].Add(group);
@@ -437,5 +437,57 @@ impl FieldMap {
         }
 
         sb
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Tag;
+    use super::FieldValue;
+    use std::any::Any;
+    use std::any::TypeId;
+
+    trait TagValue: Any {
+        fn tag(&self) -> Tag;
+        fn value(&self) -> &FieldValue;
+        fn as_any(&self) -> &dyn Any;
+    }
+
+    #[derive(Debug)]
+    struct Test {
+        pub tag: Tag,
+        pub value: FieldValue,
+    }
+    impl TagValue for Test {
+        fn tag(&self) -> Tag {
+            self.tag
+        }
+        fn value(&self) -> &FieldValue {
+            &self.value
+        }
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+    impl<T: TagValue> From<T> for Box<dyn TagValue> {
+        fn from(tag_value: T) -> Self {
+            Box::new(tag_value)
+        }
+    }
+
+    #[test]
+    fn box_test() {
+        let boxed = Test { tag: 0, value: "Hello".into()}.into();
+        let boxed_vec: Vec<Box<dyn TagValue>> = vec![boxed];
+        for value in boxed_vec {
+            let value: &dyn TagValue = &*value;
+            if value.type_id() == TypeId::of::<Test>() {
+                let result = value.as_any().downcast_ref::<Test>();
+                assert!(result.is_some());
+                println!("{:?}", result.unwrap());
+            } else {
+                assert!(false);
+            }
+        }
     }
 }
