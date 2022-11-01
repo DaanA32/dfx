@@ -9,6 +9,7 @@ pub trait MessageFactory: Debug {
     fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Group;
 }
 
+#[derive(Clone, Debug)]
 pub enum MessageFactoryError {
     UnsupportedBeginString(String),
     UnsupportedMsgType(String),

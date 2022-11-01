@@ -4,27 +4,6 @@ use crate::message::Message;
 use crate::message_store::MessageStore;
 use crate::log::Log;
 
-// private object sync_ = new object();
-// private bool isEnabled_ = true;
-// private bool receivedLogon_ = false;
-// private bool receivedReset_ = false;
-// private bool sentLogon_ = false;
-// private bool sentLogout_ = false;
-// private bool sentReset_ = false;
-// private string logoutReason_ = "";
-// private int testRequestCounter_ = 0;
-// private int heartBtInt_ = 0;
-// private int heartBtIntAsMilliSecs_ = 0;
-// private DateTime lastReceivedTimeDT_ = DateTime.MinValue;
-// private DateTime lastSentTimeDT_ = DateTime.MinValue;
-// private int logonTimeout_ = 10;
-// private long logonTimeoutAsMilliSecs_ = 10 * 1000;
-// private int logoutTimeout_ = 2;
-// private long logoutTimeoutAsMilliSecs_ = 2 * 1000;
-// private ResendRange resendRange_ = new ResendRange();
-// private Dictionary<int, Message> msgQueue = new Dictionary<int, Message>();
-
-
 pub struct SessionState {
     is_enabled: bool,
     is_initiator: bool,
@@ -45,12 +24,12 @@ pub struct SessionState {
     logout_timeout_ms: u64,
     resend_range: Option<u32>,
     message_queue: BTreeMap<u32, Message>,
-    msg_store: Box<dyn MessageStore>, //TODO Message Store
-    logger: u32, //TODO logger
+    msg_store: Box<dyn MessageStore>,
+    logger: Box<dyn Log>,
 }
 
 impl SessionState {
-    pub fn new(is_initiator: bool, logger: Option<Box<dyn Log>>, heartbeat_int: u32, msg_store: Box<dyn MessageStore>) -> Self {
+    pub fn new(is_initiator: bool, logger: Box<dyn Log>, heartbeat_int: u32, msg_store: Box<dyn MessageStore>) -> Self {
         SessionState {
             is_enabled: true,
             is_initiator: is_initiator,
@@ -71,8 +50,8 @@ impl SessionState {
             logout_timeout_ms: 10 * 1000,
             resend_range: None,
             message_queue: BTreeMap::default(),
-            msg_store, //TODO Message Store
-            logger: 0, //TODO logger
+            msg_store,
+            logger,
         }
     }
 
@@ -87,5 +66,56 @@ impl SessionState {
     }
     pub fn is_enabled(&self) -> bool {
         self.is_enabled
+    }
+
+    pub fn sent_logon(&self) -> bool {
+        self.sent_logon
+    }
+    pub fn set_sent_logon(&mut self, sent_logon: bool) {
+        self.sent_logon = sent_logon;
+    }
+    pub fn sent_logout(&self) -> bool {
+        self.sent_logout
+    }
+    pub fn received_logon(&self) -> bool {
+        self.received_logon
+    }
+    pub fn logout_reason(&self) -> Option<String> {
+        self.logout_reason.clone()
+    }
+    pub fn heartbeat_int(&self) -> u32 {
+        self.heartbeat_int
+    }
+
+    pub fn test_request_counter(&self) -> u32 {
+        self.test_request_counter
+    }
+    pub fn set_test_request_counter(&mut self, test_request_counter: u32) {
+        self.test_request_counter = test_request_counter
+    }
+
+    pub fn logon_timed_out(&self) -> bool {
+        todo!()
+    }
+    pub fn logout_timed_out(&self) -> bool {
+        todo!()
+    }
+    pub fn timed_out(&self) -> bool {
+        todo!()
+    }
+    pub fn within_heartbeat(&self) -> bool {
+        todo!()
+    }
+    pub fn need_heartbeat(&self) -> bool {
+        todo!()
+    }
+    pub fn need_test_request(&self) -> bool {
+        todo!()
+    }
+    pub fn reset(&mut self, message: &str) {
+        todo!("{}", message)
+    }
+    pub fn set_last_received_time(&mut self, instant: Instant) {
+        todo!()
     }
 }

@@ -111,6 +111,15 @@ impl FieldMap {
         return true;
     }
 
+    pub fn set_field_deref<F: Deref<Target = FieldBase> + Clone>(&mut self, field: F, overwrite: Option<bool>) -> bool {
+        if matches!(overwrite, Some(b) if b) {
+            return false;
+        }
+        let field: &FieldBase = &field;
+        self.fields.insert(field.tag(), field.clone());
+        return true;
+    }
+
     pub fn set_field(&mut self, tag: Tag, value: &str) {
         let field_base = FieldBase(tag, value.into());
         self.set_field_base(field_base, None);

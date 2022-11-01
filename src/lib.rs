@@ -10,6 +10,7 @@ pub mod message_store_factory;
 pub mod log_factory;
 pub mod session;
 pub mod log;
+pub mod connection;
 
 #[cfg(test)]
 mod tests {
