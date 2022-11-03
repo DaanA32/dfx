@@ -1,16 +1,22 @@
+use lazy_static::lazy_static;
+use regex::Regex;
+
+use crate::data_dictionary::DDGroup;
+use crate::data_dictionary::DDMap;
+use crate::data_dictionary::DataDictionary;
+use crate::data_dictionary::MessageValidationError;
+use crate::field_map::FieldBase;
 use crate::field_map::FieldMap;
+use crate::field_map::FieldMapError;
+use crate::field_map::Group;
+use crate::field_map::Tag;
+use crate::fields::ApplVerID;
+use crate::fix_values;
+use crate::message_factory::MessageFactory;
+use crate::tags;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use crate::data_dictionary::MessageValidationError;
-use crate::data_dictionary::DataDictionary;
-use crate::data_dictionary::DDMap;
-use crate::data_dictionary::DDGroup;
-use crate::field_map::Tag;
-use crate::field_map::FieldBase;
-use crate::field_map::Group;
-use crate::field_map::FieldMapError;
-use crate::tags;
-use crate::message_factory::MessageFactory;
 
 #[derive(Default, Clone, Debug)]
 pub struct Header(FieldMap);
@@ -21,7 +27,7 @@ impl Header {
     }
 }
 
-const HEADER_FIELD_ORDER: [Tag; 3] = [ tags::BeginString, tags::BodyLength, tags::MsgType ];
+const HEADER_FIELD_ORDER: [Tag; 3] = [tags::BeginString, tags::BodyLength, tags::MsgType];
 // const HEADER_FIELD_ORDER: Vec<Tag> = vec![ tags::BeginString, tags::BodyLength, tags::MsgType ];
 
 impl Deref for Header {
@@ -46,7 +52,7 @@ impl Trailer {
     }
 }
 
-const TRAILER_FIELD_ORDER: [Tag; 3] = [ tags::SignatureLength, tags::Signature, tags::CheckSum ];
+const TRAILER_FIELD_ORDER: [Tag; 3] = [tags::SignatureLength, tags::Signature, tags::CheckSum];
 // const TRAILER_FIELD_ORDER: Vec<Tag> = vec![ tags::SignatureLength, tags::Signature, tags::CheckSum ];
 
 impl Deref for Trailer {
@@ -87,7 +93,13 @@ impl Default for Message {
 
 impl std::fmt::Debug for Message {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        fmt.write_str(format!("Message (\n\tHeader {:?},\n\tBody: {:?},\n\ttrailer: {:?}\n)", self.header, self.body, self.trailer).as_str())
+        fmt.write_str(
+            format!(
+                "Message (\n\tHeader {:?},\n\tBody: {:?},\n\ttrailer: {:?}\n)",
+                self.header, self.body, self.trailer
+            )
+            .as_str(),
+        )
     }
 }
 
@@ -109,7 +121,7 @@ impl Message {
     pub fn has_valid_structure(&self) -> Result<(), MessageValidationError> {
         if self.valid_structure_ {
             Ok(())
-        }else{
+        } else {
             Err(MessageValidationError::InvalidStructure(self.field_))
         }
     }
@@ -177,7 +189,7 @@ impl Message {
             _ => match data_dictionary {
                 Some(dd) => dd.is_header_field(tag),
                 None => false,
-            }
+            },
         }
     }
 
@@ -198,16 +210,21 @@ impl Message {
             _ => match data_dictionary {
                 Some(dd) => dd.is_trailer_field(tag),
                 None => false,
-            }
+            },
         }
     }
 
     // public static StringField ExtractField(string msgstr, ref int pos, DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD)
-    fn extract_field(msgstr: &str, pos: &mut usize, _session_dd: Option<&DataDictionary>, _app_dd: Option<&DataDictionary>) -> Result<FieldBase, MessageParseError> {
+    fn extract_field(
+        msgstr: &str,
+        pos: &mut usize,
+        _session_dd: Option<&DataDictionary>,
+        _app_dd: Option<&DataDictionary>,
+    ) -> Result<FieldBase, MessageParseError> {
         // int tagend = msgstr.IndexOf('=', pos);
         let tagend = msgstr[*pos..].chars().position(|c| c == '=');
         if tagend.is_none() {
-            return Err(MessageParseError::FailedToFindEqualsAt(*pos))
+            return Err(MessageParseError::FailedToFindEqualsAt(*pos));
         }
 
         let tagend = *pos + tagend.unwrap();
@@ -218,7 +235,9 @@ impl Message {
         }
         let tag: Result<u32, _> = msgstr[*pos..tagend].parse();
         if tag.is_err() {
-            return Err(MessageParseError::FailedToConvertTagToInt(msgstr[*pos..tagend].into()))
+            return Err(MessageParseError::FailedToConvertTagToInt(
+                msgstr[*pos..tagend].into(),
+            ));
         }
         let tag = tag.unwrap();
 
@@ -229,7 +248,7 @@ impl Message {
         let fieldend = msgstr[*pos..].chars().position(|c| c == Message::SOH);
         // println!("{}", msgstr[*pos..].chars().collect::<String>());
         if fieldend.is_none() {
-            return Err(MessageParseError::FailedToFindSohAt(*pos))
+            return Err(MessageParseError::FailedToFindSohAt(*pos));
         }
         let fieldend = *pos + fieldend.unwrap();
         //     StringField field =  new StringField(tag, msgstr.Substring(pos, fieldvalend - pos));
@@ -264,9 +283,9 @@ impl Message {
         Ok(field)
     }
 
-// public void FromString(string msgstr, bool validate,
-//     DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD, IMessageFactory msgFactory,
-//     bool ignoreBody)
+    // public void FromString(string msgstr, bool validate,
+    //     DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD, IMessageFactory msgFactory,
+    //     bool ignoreBody)
     /// Creates a Message from a FIX string.
     ///
     /// msg_factory
@@ -282,131 +301,159 @@ impl Message {
         validate: bool,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
-        msg_factory: Option<&Box<dyn MessageFactory>>,
-        ignore_body: bool
+        msg_factory: Option<&dyn MessageFactory>,
+        ignore_body: bool,
     ) -> Result<(), MessageParseError> {
-//      this.ApplicationDataDictionary = appDD;
-        self.application_data_dictionary = app_dd.map(|d| d.clone());
-//      Clear();
+        //      this.ApplicationDataDictionary = appDD;
+        self.application_data_dictionary = app_dd.cloned();
+        //      Clear();
         self.clear();
 
-//      string msgType = "";
+        //      string msgType = "";
         let mut msg_type;
-//      bool expectingHeader = true;
+        //      bool expectingHeader = true;
         let mut expecting_header = true;
-//      bool expectingBody = true;
+        //      bool expectingBody = true;
         let mut expecting_body = true;
-//      int count = 0;
+        //      int count = 0;
         let mut count = 0;
-//      int pos = 0;
+        //      int pos = 0;
         let mut pos = 0;
-//      DataDictionary.IFieldMapSpec msgMap = null;
+        //      DataDictionary.IFieldMapSpec msgMap = null;
         let mut msg_map: Option<&DDMap> = None;
 
-//      while (pos < msgstr.Length)
+        //      while (pos < msgstr.Length)
         while pos < msgstr.len() {
             // println!("{}", pos);
-//          StringField f = ExtractField(msgstr, ref pos, sessionDD, appDD);
-            let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd )?;
+            //          StringField f = ExtractField(msgstr, ref pos, sessionDD, appDD);
+            let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd)?;
             // println!("{:?}", f);
 
-//          if (validate && (count < 3) && (Header.HEADER_FIELD_ORDER[count++] != f.Tag))
+            //          if (validate && (count < 3) && (Header.HEADER_FIELD_ORDER[count++] != f.Tag))
             if validate && count < 3 && HEADER_FIELD_ORDER[count] != f.tag() {
-//              throw new InvalidMessage("Header fields out of order");
-                return Err(MessageParseError::InvalidMessage("Header fields out of order".into()));
+                //              throw new InvalidMessage("Header fields out of order");
+                return Err(MessageParseError::InvalidMessage(
+                    "Header fields out of order".into(),
+                ));
             }
             count += 1;
 
-//          if (IsHeaderField(f.Tag, sessionDD))
-//          {
+            //          if (IsHeaderField(f.Tag, sessionDD))
+            //          {
             if Message::is_header_field(f.tag(), session_dd) {
-//              if (!expectingHeader)
+                //              if (!expectingHeader)
                 if !expecting_header {
-//                  if (0 == field_)
+                    //                  if (0 == field_)
                     if 0 == self.field_ {
-//                      field_ = f.Tag;
+                        //                      field_ = f.Tag;
                         self.field_ = f.tag();
                     }
-//                  validStructure_ = false;
+                    //                  validStructure_ = false;
                     self.valid_structure_ = false;
                 }
 
-//              if (Tags.MsgType.Equals(f.Tag))
+                //              if (Tags.MsgType.Equals(f.Tag))
                 if tags::MsgType == f.tag() {
-//                  msgType = string.Copy(f.Obj);
+                    //                  msgType = string.Copy(f.Obj);
                     msg_type = f.value();
-//                  if (appDD != null)
-                    if app_dd.is_some() {
-//                      msgMap = appDD.GetMapForMessage(msgType);
-                        msg_map = app_dd.unwrap().get_map_for_message(msg_type);
+                    //                  if (appDD != null)
+                    if let Some(app_dd) = app_dd {
+                        //                      msgMap = appDD.GetMapForMessage(msgType);
+                        msg_map = app_dd.get_map_for_message(msg_type);
                     }
                 }
 
-//              if (!this.Header.SetField(f, false))
+                //              if (!this.Header.SetField(f, false))
                 if !self.header.set_field_base(f.clone(), Some(false)) {
-//                  this.Header.RepeatedTags.Add(f);
+                    //                  this.Header.RepeatedTags.Add(f);
                     self.header.repeated_tags_mut().push(f.clone());
                 }
 
-//              if ((null != sessionDD) && sessionDD.Header.IsGroup(f.Tag))
+                //              if ((null != sessionDD) && sessionDD.Header.IsGroup(f.Tag))
                 if matches!(session_dd, Some(dd) if dd.header().is_group(f.tag())) {
                     let dd = session_dd.unwrap();
-//                  pos = SetGroup(f, msgstr, pos, this.Header, sessionDD.Header.GetGroupSpec(f.Tag), sessionDD, appDD, msgFactory);
-                    pos = Message::set_group(f.clone(), msgstr, pos, &mut self.header, dd.header().get_group(f.tag()), session_dd, app_dd, msg_factory)?;
+                    //                  pos = SetGroup(f, msgstr, pos, this.Header, sessionDD.Header.GetGroupSpec(f.Tag), sessionDD, appDD, msgFactory);
+                    pos = Message::set_group(
+                        f.clone(),
+                        msgstr,
+                        pos,
+                        &mut self.header,
+                        dd.header().get_group(f.tag()),
+                        session_dd,
+                        app_dd,
+                        msg_factory,
+                    )?;
                 }
-//          else if (IsTrailerField(f.Tag, sessionDD))
-            }else if Message::is_trailer_field(f.tag(), session_dd) {
-//              expectingHeader = false;
+            //          else if (IsTrailerField(f.Tag, sessionDD))
+            } else if Message::is_trailer_field(f.tag(), session_dd) {
+                //              expectingHeader = false;
                 expecting_header = false;
-//              expectingBody = false;
+                //              expectingBody = false;
                 expecting_body = false;
-//              if (!this.Trailer.SetField(f, false))
+                //              if (!this.Trailer.SetField(f, false))
                 if !self.trailer.set_field_base(f.clone(), Some(false)) {
-//                  this.Trailer.RepeatedTags.Add(f);
+                    //                  this.Trailer.RepeatedTags.Add(f);
                     self.trailer.repeated_tags_mut().push(f.clone());
                 }
 
-//              if ((null != sessionDD) && sessionDD.Trailer.IsGroup(f.Tag))
+                //              if ((null != sessionDD) && sessionDD.Trailer.IsGroup(f.Tag))
                 if matches!(session_dd, Some(dd) if dd.trailer().is_group(f.tag())) {
                     let dd = session_dd.unwrap();
-//                  pos = SetGroup(f, msgstr, pos, this.Trailer, sessionDD.Trailer.GetGroup(f.Tag), sessionDD, appDD, msgFactory);
-                    pos = Message::set_group(f.clone(), msgstr, pos, &mut self.trailer, dd.trailer().get_group(f.tag()), session_dd, app_dd, msg_factory)?;
+                    //                  pos = SetGroup(f, msgstr, pos, this.Trailer, sessionDD.Trailer.GetGroup(f.Tag), sessionDD, appDD, msgFactory);
+                    pos = Message::set_group(
+                        f.clone(),
+                        msgstr,
+                        pos,
+                        &mut self.trailer,
+                        dd.trailer().get_group(f.tag()),
+                        session_dd,
+                        app_dd,
+                        msg_factory,
+                    )?;
                 }
 
-//          else if (ignoreBody==false)
+            //          else if (ignoreBody==false)
             } else if !ignore_body {
-//              if (!expectingBody)
+                //              if (!expectingBody)
                 if !expecting_body {
-//                  if (0 == field_)
+                    //                  if (0 == field_)
                     if self.field_ == 0 {
-//                      field_ = f.Tag;
+                        //                      field_ = f.Tag;
                         self.field_ = f.tag();
                     }
-//                  validStructure_ = false;
+                    //                  validStructure_ = false;
                     self.valid_structure_ = false;
                 }
 
-//              expectingHeader = false;
+                //              expectingHeader = false;
                 expecting_header = false;
-//              if (!SetField(f, false))
+                //              if (!SetField(f, false))
                 if !self.set_field_base(f.clone(), Some(false)) {
-//                  this.RepeatedTags.Add(f);
+                    //                  this.RepeatedTags.Add(f);
                     self.repeated_tags_mut().push(f.clone());
                 }
 
-//              if((null != msgMap) && (msgMap.IsGroup(f.Tag)))
+                //              if((null != msgMap) && (msgMap.IsGroup(f.Tag)))
                 if matches!(msg_map, Some(map) if map.is_group(f.tag())) {
                     let map = msg_map.unwrap();
-//                  pos = SetGroup(f, msgstr, pos, this, msgMap.GetGroupSpec(f.Tag), sessionDD, appDD, msgFactory);
-                    pos = Message::set_group(f.clone(), msgstr, pos, self, map.get_group(f.tag()), session_dd, app_dd, msg_factory)?;
+                    //                  pos = SetGroup(f, msgstr, pos, this, msgMap.GetGroupSpec(f.Tag), sessionDD, appDD, msgFactory);
+                    pos = Message::set_group(
+                        f.clone(),
+                        msgstr,
+                        pos,
+                        self,
+                        map.get_group(f.tag()),
+                        session_dd,
+                        app_dd,
+                        msg_factory,
+                    )?;
                 }
-
             }
         }
 
-//      if (validate)
+        //      if (validate)
         if validate {
-//          Validate();
+            //          Validate();
             self.validate()?;
         }
         Ok(())
@@ -420,7 +467,7 @@ impl Message {
         group_dd: Option<&DDGroup>,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
-        msg_factory: Option<&Box<dyn MessageFactory>>,
+        msg_factory: Option<&dyn MessageFactory>,
     ) -> Result<usize, MessageParseError> {
         // TODO fix
         let group_dd = group_dd.unwrap();
@@ -456,7 +503,13 @@ impl Message {
                 // if (msgFactory != null)
                 if let Some(factory) = msg_factory.as_ref() {
                     // grp = msgFactory.Create(Message.ExtractBeginString(msgstr), Message.GetMsgType(msgstr), grpNoFld.Tag);
-                    todo!("{:?}", factory); // requires message factory
+                    let begin_string = Message::extract_begin_string(msgstr)?;
+                    let msg_type = Message::get_msg_type(msgstr)?;
+                    group = Some(factory.create_group(
+                        begin_string.as_str(),
+                        msg_type,
+                        grp_no_fld.tag(),
+                    ));
                 }
 
                 //If above failed (shouldn't ever happen), just use a generic Group.
@@ -472,24 +525,35 @@ impl Message {
 
                 // if (grp != null)
                 if let Some(group) = group {
-                   // fieldMap.AddGroup(grp, false);
-                   map.add_group(f.tag(), &group, Some(false));
+                    // fieldMap.AddGroup(grp, false);
+                    map.add_group(f.tag(), &group, Some(false));
                 }
                 return Ok(grp_pos);
             // else if(groupDD.IsField(f.Tag) && grp != null && grp.IsSetField(f.Tag))
-            } else if group_dd.is_field(f.tag()) && group.is_some() && group.as_ref().unwrap().is_field_set(f.tag()) {
+            } else if group_dd.is_field(f.tag())
+                && group.is_some()
+                && group.as_ref().unwrap().is_field_set(f.tag())
+            {
                 // Tag is appearing for the second time within a group element.
                 // Presumably the sender didn't set the delimiter (or their DD has a different delimiter).
 
                 // throw new RepeatedTagWithoutGroupDelimiterTagException(grpNoFld.Tag, f.Tag);
-                return Err(MessageParseError::RepeatedTagWithoutGroupDelimiterTagException(grp_no_fld.tag(), f.tag()));
+                return Err(
+                    MessageParseError::RepeatedTagWithoutGroupDelimiterTagException(
+                        grp_no_fld.tag(),
+                        f.tag(),
+                    ),
+                );
             } else {
                 // if (grp == null)
                 if group.is_none() {
                     // This means we got into the group's fields without finding a delimiter tag.
 
                     //throw new GroupDelimiterTagException(grpNoFld.Tag, grpEntryDelimiterTag);
-                    return Err(MessageParseError::GroupDelimiterTagException(grp_no_fld.tag(), f.tag()));
+                    return Err(MessageParseError::GroupDelimiterTagException(
+                        grp_no_fld.tag(),
+                        f.tag(),
+                    ));
                 }
                 let group: &mut Group = group.as_mut().unwrap();
 
@@ -502,10 +566,18 @@ impl Message {
                     // f is a counter for a nested group.  Recurse!
 
                     //pos = SetGroup(f, msgstr, pos, grp, groupDD.GetGroupSpec(f.Tag), sessionDataDictionary, appDD, msgFactory);
-                    pos = Message::set_group(f.clone(), msgstr, pos, group, group_dd.get_group(f.tag()), session_dd, app_dd, msg_factory)?;
+                    pos = Message::set_group(
+                        f.clone(),
+                        msgstr,
+                        pos,
+                        group,
+                        group_dd.get_group(f.tag()),
+                        session_dd,
+                        app_dd,
+                        msg_factory,
+                    )?;
                 }
             }
-
         }
 
         Ok(grp_pos)
@@ -533,27 +605,32 @@ impl Message {
 
         let received_body_length = self.header.get_int(tags::BodyLength)?;
         if self.body_length() != received_body_length {
-            return Err(MessageParseError::InvalidMessage(format!("Expected BodyLength={}, Received BodyLength={}, Message.SeqNum={}", self.body_length(), received_body_length, self.header.get_int(tags::MsgSeqNum)?)));
+            return Err(MessageParseError::InvalidMessage(format!(
+                "Expected BodyLength={}, Received BodyLength={}, Message.SeqNum={}",
+                self.body_length(),
+                received_body_length,
+                self.header.get_int(tags::MsgSeqNum)?
+            )));
         }
         let received_checksum = self.trailer.get_int(tags::CheckSum)?;
         if self.checksum() != received_checksum {
-            return Err(MessageParseError::InvalidMessage(format!("Expected CheckSum={}, Received CheckSum={}, Message.SeqNum={}", self.checksum(), received_checksum, self.header.get_int(tags::MsgSeqNum)?)));
+            return Err(MessageParseError::InvalidMessage(format!(
+                "Expected CheckSum={}, Received CheckSum={}, Message.SeqNum={}",
+                self.checksum(),
+                received_checksum,
+                self.header.get_int(tags::MsgSeqNum)?
+            )));
         }
         Ok(())
     }
 
     fn body_length(&self) -> u32 {
-        self.header.len() +
-        self.len() +
-        self.trailer.len()
+        self.header.len() + self.len() + self.trailer.len()
     }
 
     fn checksum(&self) -> u32 {
-        (
-            self.header.calculate_total() +
-            self.calculate_total() +
-            self.trailer.calculate_total()
-        ) % 256
+        (self.header.calculate_total() + self.calculate_total() + self.trailer.calculate_total())
+            % 256
     }
 
     fn clear(&mut self) {
@@ -563,26 +640,89 @@ impl Message {
         self.trailer.clear();
     }
 
-    pub fn to_string(&mut self) -> String {
-        // public override string ToString()
-        // {
-        //     lock (lock_ToString)
-        //     {
-        //         this.Header.SetField(new BodyLength(BodyLength()), true);
-        //         this.Trailer.SetField(new CheckSum(Fields.Converters.CheckSumConverter.Convert(CheckSum())), true);
-
-        //         return this.Header.CalculateString() + CalculateString() + this.Trailer.CalculateString();
-        //     }
-        // }
+    pub fn to_string_mut(&mut self) -> String {
         let len = self.body_length().to_string();
-        self.header.set_field_base(FieldBase::new(tags::BodyLength, len), Some(true));
+        self.header
+            .set_field_base(FieldBase::new(tags::BodyLength, len), Some(true));
         let checksum = self.checksum().to_string();
-        self.header.set_field_base(FieldBase::new(tags::CheckSum, checksum), Some(true));
-        format!("{}{}{}", self.header.calculate_string(), self.calculate_string(None), self.trailer.calculate_string())
+        self.header
+            .set_field_base(FieldBase::new(tags::CheckSum, checksum), Some(true));
+        format!(
+            "{}{}{}",
+            self.header.calculate_string(),
+            self.calculate_string(None),
+            self.trailer.calculate_string()
+        )
     }
 
     pub fn is_admin(&self) -> bool {
-        todo!()
+        self.header.is_field_set(tags::MsgType)
+            && Message::is_admin_msg_type(&self.header.get_string(tags::MsgType))
+    }
+
+    pub fn is_admin_msg_type(msg_type: &str) -> bool {
+        msg_type.len() == 1 && "0A12345n".contains(msg_type)
+    }
+
+    pub(crate) fn extract_begin_string(msgstr: &str) -> Result<String, MessageParseError> {
+        let mut pos = 0;
+        let f = Message::extract_field(msgstr, &mut pos, None, None)?;
+        Ok(f.value().clone())
+    }
+
+    pub(crate) fn get_msg_type(msgstr: &str) -> Result<&str, MessageParseError> {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"35=([^\x01])*\x01").unwrap();
+        }
+        RE.captures(msgstr)
+            .and_then(|cap| cap.get(1).map(|login| login.as_str()))
+            .ok_or_else(|| {
+                MessageParseError::Malformed(format!(
+                    "missing or malformed tag 35 in msg: {}",
+                    msgstr
+                ))
+            })
+    }
+
+    pub(crate) fn identify_type(msg_str: &str) -> Result<&str, MessageParseError> {
+        //TODO wrap in MsgType field?
+        Message::get_msg_type(msg_str)
+    }
+
+    pub(crate) fn get_appl_ver_id(begin_string: &String) -> Result<u32, String> {
+        // switch (beginString)
+        // {
+        //     case FixValues.BeginString.FIX40:
+        //         return new ApplVerID(ApplVerID.FIX40);
+        //     case FixValues.BeginString.FIX41:
+        //         return new ApplVerID(ApplVerID.FIX41);
+        //     case FixValues.BeginString.FIX42:
+        //         return new ApplVerID(ApplVerID.FIX42);
+        //     case FixValues.BeginString.FIX43:
+        //         return new ApplVerID(ApplVerID.FIX43);
+        //     case FixValues.BeginString.FIX44:
+        //         return new ApplVerID(ApplVerID.FIX44);
+        //     case FixValues.BeginString.FIX50:
+        //         return new ApplVerID(ApplVerID.FIX50);
+        //     case FixValues.BeginString.FIX50SP1:
+        //         return new ApplVerID(ApplVerID.FIX50SP1);
+        //     case FixValues.BeginString.FIX50SP2:
+        //         return new ApplVerID(ApplVerID.FIX50SP2);
+        //     default:
+        //         throw new System.ArgumentException(String.Format());
+        // }
+
+        match begin_string.as_str() {
+            fix_values::BeginString::FIX40 => Ok(ApplVerID::FIX40),
+            fix_values::BeginString::FIX41 => Ok(ApplVerID::FIX41),
+            fix_values::BeginString::FIX42 => Ok(ApplVerID::FIX42),
+            fix_values::BeginString::FIX43 => Ok(ApplVerID::FIX43),
+            fix_values::BeginString::FIX44 => Ok(ApplVerID::FIX44),
+            fix_values::BeginString::FIX50 => Ok(ApplVerID::FIX50),
+            fix_values::BeginString::FIX50SP1 => Ok(ApplVerID::FIX50SP1),
+            fix_values::BeginString::FIX50SP2 => Ok(ApplVerID::FIX50SP2),
+            _ => Err(format!("ApplVerID for {} not supported", begin_string)),
+        }
     }
 }
 
@@ -599,6 +739,17 @@ impl DerefMut for Message {
     }
 }
 
+impl Display for Message {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt.write_fmt(format_args!(
+            "{}{}{}",
+            self.header.calculate_string(),
+            self.calculate_string(None),
+            self.trailer.calculate_string()
+        ))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum MessageParseError {
     InvalidMessage(String),
@@ -609,6 +760,7 @@ pub enum MessageParseError {
     RepeatedTagWithoutGroupDelimiterTagException(Tag, Tag),
     GroupDelimiterTagException(Tag, Tag),
     FieldMapError(FieldMapError),
+    Malformed(String),
 }
 
 impl From<FieldMapError> for MessageParseError {
@@ -622,6 +774,7 @@ mod tests {
     use super::Message;
     use crate::data_dictionary::DataDictionary;
     use crate::data_dictionary::FixSpec;
+    use crate::message::MessageParseError;
     use std::fs::File;
     #[test]
     fn test_parse() {
@@ -645,7 +798,7 @@ mod tests {
         println!("{:?}", result);
         assert!(result.is_ok());
 
-        let actual = message.to_string().replace(Message::SOH, "|");
+        let actual = message.to_string_mut().replace(Message::SOH, "|");
 
         println!("{:?}", expected);
         println!("{:?}", actual);
@@ -672,8 +825,9 @@ mod tests {
         let result = message.from_string(&msgstr, true, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         assert!(result.is_ok());
+        assert!(message.is_admin());
 
-        let actual = message.to_string().replace(Message::SOH, "|");
+        let actual = message.to_string_mut().replace(Message::SOH, "|");
 
         println!("{:?}", expected);
         println!("{:?}", actual);
@@ -683,5 +837,26 @@ mod tests {
         println!("{:?}", message);
         println!("{:?}", result);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_get_msg_type_success() {
+        let msgstr = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
+        let msgstr = msgstr.replace('|', "\x01");
+        let msg_type = Message::get_msg_type(&msgstr);
+        assert!(msg_type.is_ok());
+        assert!(msg_type.unwrap() == "A");
+    }
+
+    #[test]
+    fn test_get_msg_type_failure() {
+        let msgstr = "8=FIX.4.4|9=115|35=|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
+        let msgstr = msgstr.replace('|', "\x01");
+        let msg_type = Message::get_msg_type(&msgstr);
+        assert!(msg_type.is_err());
+        assert!(matches!(
+            msg_type.err().unwrap(),
+            MessageParseError::Malformed(_)
+        ));
     }
 }

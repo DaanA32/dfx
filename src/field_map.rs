@@ -1,8 +1,9 @@
+use crate::message::Message;
+use crate::tags;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use crate::tags;
-use crate::message::Message;
+use std::time::Instant;
 
 #[derive(Default, Clone, Debug)]
 pub struct FieldMap {
@@ -76,15 +77,19 @@ impl FieldBase {
         format!("{}={}", self.tag(), self.value())
     }
     pub fn get_total(&self) -> u32 {
-        self.to_string_field().as_bytes().iter().map(|b| *b as u32).sum::<u32>() + 1 //incl SOH
+        self.to_string_field()
+            .as_bytes()
+            .iter()
+            .map(|b| *b as u32)
+            .sum::<u32>()
+            + 1 //incl SOH
     }
-    pub fn len(&self) -> u32 {
+    pub fn bytes_len(&self) -> u32 {
         self.to_string_field().as_bytes().len() as u32 + 1 //incl SOH
     }
 }
 
 impl FieldMap {
-
     pub fn from_field_order(_field_order: FieldOrder) -> Self {
         let fields = BTreeMap::default();
         let groups = BTreeMap::default();
@@ -95,11 +100,11 @@ impl FieldMap {
             fields,
             groups,
             repeated_tags,
-            _field_order
+            _field_order,
         }
     }
 
-    pub fn from_field_map(src: FieldMap) -> Self {
+    pub fn from_field_map(src: &FieldMap) -> Self {
         src.clone()
     }
 
@@ -108,16 +113,20 @@ impl FieldMap {
             return false;
         }
         self.fields.insert(field.tag(), field);
-        return true;
+        true
     }
 
-    pub fn set_field_deref<F: Deref<Target = FieldBase> + Clone>(&mut self, field: F, overwrite: Option<bool>) -> bool {
+    pub fn set_field_deref<F: Deref<Target = FieldBase> + Clone>(
+        &mut self,
+        field: F,
+        overwrite: Option<bool>,
+    ) -> bool {
         if matches!(overwrite, Some(b) if b) {
             return false;
         }
         let field: &FieldBase = &field;
         self.fields.insert(field.tag(), field.clone());
-        return true;
+        true
     }
 
     pub fn set_field(&mut self, tag: Tag, value: &str) {
@@ -131,11 +140,14 @@ impl FieldMap {
     pub fn get_int(&self, tag: Tag) -> Result<u32, FieldMapError> {
         match self.fields.get(&tag) {
             None => Err(FieldMapError::FieldNotFound(tag)),
-            Some(value) => Ok(value.value().parse::<u32>().unwrap())
+            Some(value) => Ok(value.value().parse::<u32>().unwrap()),
         }
     }
     pub fn get_string(&self, tag: Tag) -> String {
         self.fields[&tag].value().into()
+    }
+    pub(crate) fn get_datetime(&self, tag: Tag) -> Instant {
+        todo!()
     }
     pub fn get_field_mut(&mut self, tag: Tag) -> &mut FieldBase {
         self.fields.get_mut(&tag).unwrap()
@@ -152,10 +164,11 @@ impl FieldMap {
         // if (!_groups.ContainsKey(group.Field))
         //     _groups.Add(group.Field, new List<Group>());
         // _groups[group.Field].Add(group);
-        if !self.groups.contains_key(&group.field()) {
-            self.groups.insert(group.field(), Vec::new());
-        }
-        self.groups.get_mut(&group.field()).unwrap().push(group.clone());
+        self.groups.entry(group.field()).or_insert_with(Vec::new);
+        self.groups
+            .get_mut(&group.field())
+            .unwrap()
+            .push(group.clone());
 
         // if (autoIncCounter)
         if set_count.is_none() || set_count.unwrap() {
@@ -171,7 +184,6 @@ impl FieldMap {
 
             // this.SetField(count, true);
             self.set_field_base(count, Some(true));
-
         }
     }
     /// index: Index in group starting at 1
@@ -184,7 +196,7 @@ impl FieldMap {
         }
         // if (num <= 0)
         //     throw new FieldNotFoundException(field);
-        if index <= 0 {
+        if index == 0 {
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (_groups[field].Count < num)
@@ -198,7 +210,7 @@ impl FieldMap {
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
-    pub fn get_group_mut(&mut self, index: u32, field: Tag) -> Result<&Group, FieldMapError> {
+    pub fn get_group_mut(&mut self, index: u32, field: Tag) -> Result<&mut Group, FieldMapError> {
         // if (!_groups.ContainsKey(field))
         //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
@@ -206,7 +218,7 @@ impl FieldMap {
         }
         // if (num <= 0)
         //     throw new FieldNotFoundException(field);
-        if index <= 0 {
+        if index == 0 {
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (_groups[field].Count < num)
@@ -220,7 +232,7 @@ impl FieldMap {
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
-    pub fn remove_group(&mut self, index: u32, field: Tag) -> Result<(), FieldMapError>{
+    pub fn remove_group(&mut self, index: u32, field: Tag) -> Result<(), FieldMapError> {
         // if (!_groups.ContainsKey(field))
         //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
@@ -228,7 +240,7 @@ impl FieldMap {
         }
         // if (num <= 0)
         //     throw new FieldNotFoundException(field);
-        if index <= 0 {
+        if index == 0 {
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (_groups[field].Count < num)
@@ -239,16 +251,24 @@ impl FieldMap {
 
         // if (_groups[field].Count.Equals(1))
         if self.groups[&field].len() == 1 {
-        //     _groups.Remove(field);
+            //     _groups.Remove(field);
             self.groups.remove(&field);
         // else
         } else {
-        //     _groups[field].RemoveAt(num - 1);
-            self.groups.get_mut(&field).unwrap().remove((index as usize)-1);
+            //     _groups[field].RemoveAt(num - 1);
+            self.groups
+                .get_mut(&field)
+                .unwrap()
+                .remove((index as usize) - 1);
         }
         Ok(())
     }
-    pub fn replace_group(&mut self, index: Tag, field: Tag, group: Group) -> Result<Group, FieldMapError> {
+    pub fn replace_group(
+        &mut self,
+        index: Tag,
+        field: Tag,
+        group: Group,
+    ) -> Result<Group, FieldMapError> {
         // if (!_groups.ContainsKey(field))
         //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
@@ -256,7 +276,7 @@ impl FieldMap {
         }
         // if (num <= 0)
         //     throw new FieldNotFoundException(field);
-        if index <= 0 {
+        if index == 0 {
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (_groups[field].Count < num)
@@ -266,13 +286,18 @@ impl FieldMap {
         }
 
         // return _groups[field][num - 1] = group;
-        let group_ref = self.groups.get_mut(&field).unwrap().get_mut(index as usize - 1).unwrap();
+        let group_ref = self
+            .groups
+            .get_mut(&field)
+            .unwrap()
+            .get_mut(index as usize - 1)
+            .unwrap();
         let group = std::mem::replace(group_ref, group);
 
         Ok(group)
     }
 
-    pub fn group_tags<'a>(&'a self) -> impl Iterator<Item = &'a Tag> {
+    pub fn group_tags(&self) -> impl Iterator<Item = &Tag> {
         self.groups.keys()
     }
 
@@ -292,27 +317,27 @@ impl FieldMap {
         let mut total = 0;
         // foreach (Fields.IField field in _fields.Values)
         for field in self.fields.values() {
-        //  if (field.Tag != Fields.Tags.CheckSum)
+            //  if (field.Tag != Fields.Tags.CheckSum)
             if field.tag() != tags::CheckSum {
-        //      total += field.getTotal();
+                //      total += field.getTotal();
                 total += field.get_total();
             }
         }
 
         // foreach (Fields.IField field in this.RepeatedTags)
         for field in self.repeated_tags() {
-        //  if (field.Tag != Fields.Tags.CheckSum)
+            //  if (field.Tag != Fields.Tags.CheckSum)
             if field.tag() != tags::CheckSum {
-        //      total += field.getTotal();
+                //      total += field.getTotal();
                 total += field.get_total();
             }
         }
 
         // foreach (List<Group> groupList in _groups.Values)
         for group_list in self.groups.values() {
-        //     foreach (Group group in groupList)
+            //     foreach (Group group in groupList)
             for group in group_list {
-        //         total += group.CalculateTotal();
+                //         total += group.CalculateTotal();
                 total += group.calculate_total();
             }
         }
@@ -325,33 +350,39 @@ impl FieldMap {
         let mut total = 0;
         // foreach (Fields.IField field in _fields.Values)
         for field in self.fields.values() {
-        //     if (field != null
-        //         && field.Tag != Tags.BeginString
-        //         && field.Tag != Tags.BodyLength
-        //         && field.Tag != Tags.CheckSum)
-            if field.tag() != tags::CheckSum && field.tag() != tags::BeginString && field.tag() != tags::BodyLength {
-        //      total += field.getLength();
-                total += field.len();
+            //     if (field != null
+            //         && field.Tag != Tags.BeginString
+            //         && field.Tag != Tags.BodyLength
+            //         && field.Tag != Tags.CheckSum)
+            if field.tag() != tags::CheckSum
+                && field.tag() != tags::BeginString
+                && field.tag() != tags::BodyLength
+            {
+                //      total += field.getLength();
+                total += field.bytes_len();
             }
         }
 
         // foreach (Fields.IField field in this.RepeatedTags)
         for field in self.repeated_tags() {
-        //     if (field != null
-        //         && field.Tag != Tags.BeginString
-        //         && field.Tag != Tags.BodyLength
-        //         && field.Tag != Tags.CheckSum)
-            if field.tag() != tags::CheckSum && field.tag() != tags::BeginString && field.tag() != tags::BodyLength {
-        //      total += field.getLength();
-                total += field.len();
+            //     if (field != null
+            //         && field.Tag != Tags.BeginString
+            //         && field.Tag != Tags.BodyLength
+            //         && field.Tag != Tags.CheckSum)
+            if field.tag() != tags::CheckSum
+                && field.tag() != tags::BeginString
+                && field.tag() != tags::BodyLength
+            {
+                //      total += field.getLength();
+                total += field.bytes_len();
             }
         }
 
         // foreach (List<Group> groupList in _groups.Values)
         for group_list in self.groups.values() {
-        //     foreach (Group group in groupList)
+            //     foreach (Group group in groupList)
             for group in group_list {
-        //         total += group.CalculateLength();
+                //         total += group.CalculateLength();
                 total += group.len();
             }
         }
@@ -384,17 +415,25 @@ impl FieldMap {
 
         // foreach (int preField in preFields)
         for prefield in &prefields {
-        //     if (IsSetField(preField))
+            //     if (IsSetField(preField))
             if self.is_field_set(*prefield) {
-        //         sb.Append(preField + "=" + GetString(preField)).Append(Message.SOH);
-                sb.push_str(format!("{}={}{}", prefield, self.get_string(*prefield), Message::SOH).as_str());
-        //         if (groupCounterTags.Contains(preField))
-                if group_counter_tags.contains(&prefield) {
-        //             List<Group> glist = _groups[preField];
-                    let glist = &self.groups[&prefield];
-        //             foreach (Group g in glist)
+                //         sb.Append(preField + "=" + GetString(preField)).Append(Message.SOH);
+                sb.push_str(
+                    format!(
+                        "{}={}{}",
+                        prefield,
+                        self.get_string(*prefield),
+                        Message::SOH
+                    )
+                    .as_str(),
+                );
+                //         if (groupCounterTags.Contains(preField))
+                if group_counter_tags.contains(prefield) {
+                    //             List<Group> glist = _groups[preField];
+                    let glist = &self.groups[prefield];
+                    //             foreach (Group g in glist)
                     for g in glist {
-        //                 sb.Append(g.CalculateString());
+                        //                 sb.Append(g.CalculateString());
                         sb.push_str(&g.calculate_string(None));
                     }
                 }
@@ -403,44 +442,51 @@ impl FieldMap {
 
         // foreach (Fields.IField field in _fields.Values)
         for field in self.fields.values() {
-        //     if (groupCounterTags.Contains(field.Tag))
+            //     if (groupCounterTags.Contains(field.Tag))
             if group_counter_tags.contains(&field.tag()) {
-        //         continue;
+                //         continue;
                 continue;
             }
-        //     if (preFields.Contains(field.Tag))
-            if *(&prefields.contains(&field.tag())) {
-        //         continue; //already did this one
+            //     if (preFields.Contains(field.Tag))
+            if prefields.contains(&field.tag()) {
+                //         continue; //already did this one
                 continue; //already did this one
             }
-        //     sb.Append(field.Tag.ToString() + "=" + field.ToString());
-        //     sb.Append(Message.SOH);
+            //     sb.Append(field.Tag.ToString() + "=" + field.ToString());
+            //     sb.Append(Message.SOH);
             sb.push_str(format!("{}={}{}", field.tag(), field.value(), Message::SOH).as_str());
         }
 
         // foreach(int counterTag in _groups.Keys)
         for counter_tag in self.groups.keys() {
-        //     if (preFields.Contains(counterTag))
-            if prefields.contains(&counter_tag) {
-        //         continue; //already did this one
+            //     if (preFields.Contains(counterTag))
+            if prefields.contains(counter_tag) {
+                //         continue; //already did this one
                 continue; //already did this one
             }
 
-        //     List<Group> groupList = _groups[counterTag];
+            //     List<Group> groupList = _groups[counterTag];
             let grouplist = &self.groups[counter_tag];
-        //     if (groupList.Count == 0)
-            if grouplist.len() == 0 {
-        //         continue; //probably unnecessary, but it doesn't hurt to check
+            //     if (groupList.Count == 0)
+            if grouplist.is_empty() {
+                //         continue; //probably unnecessary, but it doesn't hurt to check
                 continue; //probably unnecessary, but it doesn't hurt to check
             }
 
-        //     sb.Append(_fields[counterTag].toStringField());
-        //     sb.Append(Message.SOH);
-            sb.push_str(format!("{}{}", self.fields[counter_tag].to_string_field(), Message::SOH).as_str());
+            //     sb.Append(_fields[counterTag].toStringField());
+            //     sb.Append(Message.SOH);
+            sb.push_str(
+                format!(
+                    "{}{}",
+                    self.fields[counter_tag].to_string_field(),
+                    Message::SOH
+                )
+                .as_str(),
+            );
 
-        //     foreach (Group group in groupList)
+            //     foreach (Group group in groupList)
             for group in grouplist {
-        //         sb.Append(group.CalculateString());
+                //         sb.Append(group.CalculateString());
                 sb.push_str(&group.calculate_string(None));
             }
         }
@@ -451,8 +497,8 @@ impl FieldMap {
 
 #[cfg(test)]
 mod tests {
-    use super::Tag;
     use super::FieldValue;
+    use super::Tag;
     use std::any::Any;
     use std::any::TypeId;
 
@@ -486,7 +532,11 @@ mod tests {
 
     #[test]
     fn box_test() {
-        let boxed = Test { tag: 0, value: "Hello".into()}.into();
+        let boxed = Test {
+            tag: 0,
+            value: "Hello".into(),
+        }
+        .into();
         let boxed_vec: Vec<Box<dyn TagValue>> = vec![boxed];
         for value in boxed_vec {
             let value: &dyn TagValue = &*value;
@@ -495,7 +545,7 @@ mod tests {
                 assert!(result.is_some());
                 println!("{:?}", result.unwrap());
             } else {
-                assert!(false);
+                panic!()
             }
         }
     }

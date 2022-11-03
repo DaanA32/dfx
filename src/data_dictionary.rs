@@ -1,18 +1,18 @@
-use serde::{Serialize, Deserialize};
-use serde::Deserializer;
-use serde::Serializer;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::any::TypeId;
-use crate::message::Message;
-use crate::field_map::Tag;
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMap;
 use crate::field_map::FieldMapError;
 use crate::field_map::Group;
+use crate::field_map::Tag;
 use crate::fields;
+use crate::message::Message;
+use serde::Deserializer;
+use serde::Serializer;
+use serde::{Deserialize, Serialize};
+use std::any::TypeId;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::ops::Deref;
+use std::ops::DerefMut;
 
 #[derive(Clone, Debug)]
 pub enum MessageValidationError {
@@ -38,9 +38,7 @@ impl From<FieldMapError> for MessageValidationError {
 }
 
 #[derive(Clone, Debug)]
-pub enum SpecError {
-
-}
+pub enum SpecError {}
 
 #[derive(Clone, Debug)]
 pub struct DataDictionary {
@@ -63,31 +61,64 @@ impl DataDictionary {
         check_fields_out_of_order: bool,
         check_user_defined_fields: bool,
         allow_unknown_message_fields: bool,
-        spec: FixSpec
-    ) -> Result<DataDictionary, SpecError>{
+        spec: FixSpec,
+    ) -> Result<DataDictionary, SpecError> {
         let dd_fields = spec.fields.values.values().map(|f| {
             let tag: Tag = f.number.parse().unwrap();
             let name = f.name.clone();
             let field_type = f.type_name.clone();
-            let enum_dictionary = f.values.iter().map(|v| (v.enum_values.clone(), v.description.clone())).collect();
+            let enum_dictionary = f
+                .values
+                .iter()
+                .map(|v| (v.enum_values.clone(), v.description.clone()))
+                .collect();
             DDField::new(tag, name, enum_dictionary, field_type)
         });
         let fields_by_tag = dd_fields.clone().map(|d| (d.tag, d)).collect();
         let fields_by_name = dd_fields.clone().map(|d| (d.name.clone(), d)).collect();
 
-        let components_by_name = spec.components.values.iter().map(|(k, v)| {
-            (k.clone(), v.values.clone())
-        }).collect();
+        let components_by_name = spec
+            .components
+            .values
+            .iter()
+            .map(|(k, v)| (k.clone(), v.values.clone()))
+            .collect();
 
         let version = Some(format!("{}{}.{}", spec.type_name, spec.major, spec.minor));
 
-        let messages = spec.messages.values.values().map(|m| {
-            let key = m.msgtype.clone();
-            let ddmap = parse_msg_el(DDMap::default(), &m.fields, &fields_by_name, &components_by_name, None).unwrap();
-            (key, ddmap)
-        }).collect();
-        let header = parse_msg_el(DDMap::default(), &spec.header.values, &fields_by_name, &components_by_name, None).unwrap();
-        let trailer = parse_msg_el(DDMap::default(), &spec.trailer.values, &fields_by_name, &components_by_name, None).unwrap();
+        let messages = spec
+            .messages
+            .values
+            .values()
+            .map(|m| {
+                let key = m.msgtype.clone();
+                let ddmap = parse_msg_el(
+                    DDMap::default(),
+                    &m.fields,
+                    &fields_by_name,
+                    &components_by_name,
+                    None,
+                )
+                .unwrap();
+                (key, ddmap)
+            })
+            .collect();
+        let header = parse_msg_el(
+            DDMap::default(),
+            &spec.header.values,
+            &fields_by_name,
+            &components_by_name,
+            None,
+        )
+        .unwrap();
+        let trailer = parse_msg_el(
+            DDMap::default(),
+            &spec.trailer.values,
+            &fields_by_name,
+            &components_by_name,
+            None,
+        )
+        .unwrap();
 
         Ok(Self {
             check_fields_have_values,
@@ -127,7 +158,7 @@ impl DataDictionary {
         session_data_dictionary: Option<&DataDictionary>,
         app_data_dictionary: &DataDictionary,
         begin_string: &str,
-        msg_type: &str
+        msg_type: &str,
     ) -> Result<(), MessageValidationError> {
         // bool bodyOnly = (null == sessionDataDict);
 
@@ -136,7 +167,9 @@ impl DataDictionary {
         //         throw new UnsupportedVersion(beginString);
         if let Some(dictionary) = session_data_dictionary {
             if matches!(dictionary.version(), Some(version) if version == begin_string) {
-                return Err(MessageValidationError::UnsupportedVersion(begin_string.into()))
+                return Err(MessageValidationError::UnsupportedVersion(
+                    begin_string.into(),
+                ));
             }
         }
 
@@ -146,7 +179,9 @@ impl DataDictionary {
         //     if (!message.HasValidStructure(out field))
         //         throw new TagOutOfOrder(field);
         // }
-        let check_order_session = session_data_dictionary.map(|d| d.check_fields_out_of_order()).unwrap_or(false);
+        let check_order_session = session_data_dictionary
+            .map(|d| d.check_fields_out_of_order())
+            .unwrap_or(false);
         let check_order_app = app_data_dictionary.check_fields_out_of_order();
         if check_order_session || check_order_app {
             message.has_valid_structure()?;
@@ -178,13 +213,17 @@ impl DataDictionary {
     }
 
     fn check_msg_type(&self, msg_type: &str) -> Result<(), MessageValidationError> {
-        if self.messages.contains_key(msg_type.into()) {
+        if self.messages.contains_key(msg_type) {
             Ok(())
-        }else{
+        } else {
             Err(MessageValidationError::InvalidMessageType(msg_type.into()))
         }
     }
-    fn check_has_required(&self, message: &Message, msg_type: &str) -> Result<(), MessageValidationError> {
+    fn check_has_required(
+        &self,
+        message: &Message,
+        msg_type: &str,
+    ) -> Result<(), MessageValidationError> {
         // foreach (int field in Header.ReqFields)
         // {
         //     if (!message.Header.IsSetField(field))
@@ -192,7 +231,7 @@ impl DataDictionary {
         // }
         for field in self.header.required_fields() {
             if !message.header().is_field_set(*field) {
-                return Err(MessageValidationError::RequiredTagMissing(*field))
+                return Err(MessageValidationError::RequiredTagMissing(*field));
             }
         }
 
@@ -203,7 +242,7 @@ impl DataDictionary {
         // }
         for field in self.trailer.required_fields() {
             if !message.trailer().is_field_set(*field) {
-                return Err(MessageValidationError::RequiredTagMissing(*field))
+                return Err(MessageValidationError::RequiredTagMissing(*field));
             }
         }
 
@@ -214,15 +253,17 @@ impl DataDictionary {
         // }
         for field in self.messages[msg_type].required_fields() {
             if !message.is_field_set(*field) {
-                return Err(MessageValidationError::RequiredTagMissing(*field))
+                return Err(MessageValidationError::RequiredTagMissing(*field));
             }
         }
         Ok(())
     }
     fn check_has_no_repeated_tags(map: &FieldMap) -> Result<(), MessageValidationError> {
-        if map.repeated_tags().len() > 0 {
-            Err(MessageValidationError::RepeatedTag(map.repeated_tags().get(0).unwrap().tag()))
-        }else{
+        if !map.repeated_tags().is_empty() {
+            Err(MessageValidationError::RepeatedTag(
+                map.repeated_tags().get(0).unwrap().tag(),
+            ))
+        } else {
             Ok(())
         }
     }
@@ -230,9 +271,9 @@ impl DataDictionary {
         self.check_fields_out_of_order
     }
     fn check_has_value(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
-        if self.check_fields_have_values && field.value().len() == 0 {
+        if self.check_fields_have_values && field.value().is_empty() {
             Err(MessageValidationError::NoTagValue(field.tag()))
-        }else{
+        } else {
             Ok(())
         }
     }
@@ -260,24 +301,30 @@ impl DataDictionary {
                     if fld.is_multiple_value_field_with_enums() {
                         let splitted = field.value().split(' ');
                         for value in splitted {
-                            if !fld.enums().contains_key(value){
+                            if !fld.enums().contains_key(value) {
                                 return Err(MessageValidationError::IncorrectTagValue(field.tag()));
                             }
                         }
                         Ok(())
-                    }else if !fld.enums().contains_key(field.value()){
+                    } else if !fld.enums().contains_key(field.value()) {
+                        println!("{:?}", field);
+                        println!("{:?}", fld.enums());
                         Err(MessageValidationError::IncorrectTagValue(field.tag()))
-                    }else{
+                    } else {
                         Ok(())
                     }
                 } else {
                     Ok(())
                 }
-            },
-            None => Ok(())
+            }
+            None => Ok(()),
         }
     }
-    fn check_is_in_message(&self, field: &FieldBase, msg_type: &str) -> Result<(), MessageValidationError> {
+    fn check_is_in_message(
+        &self,
+        field: &FieldBase,
+        msg_type: &str,
+    ) -> Result<(), MessageValidationError> {
         if !self.allow_unknown_message_fields {
             return Ok(());
         }
@@ -285,19 +332,35 @@ impl DataDictionary {
         if matches!(self.messages.get(msg_type), Some(dd) if dd.fields.contains_key(&field.tag())) {
             return Ok(());
         }
-        Err(MessageValidationError::TagNotDefinedForMessage(field.tag(), msg_type.into()))
+        Err(MessageValidationError::TagNotDefinedForMessage(
+            field.tag(),
+            msg_type.into(),
+        ))
     }
-    fn check_is_in_group(&self, field: &FieldBase, dd_group: &DDGroup, msg_type: &str) -> Result<(), MessageValidationError> {
+    fn check_is_in_group(
+        &self,
+        field: &FieldBase,
+        dd_group: &DDGroup,
+        msg_type: &str,
+    ) -> Result<(), MessageValidationError> {
         // if (ddgrp.IsField(field.Tag))
         //     return;
         // throw new TagNotDefinedForMessage(field.Tag, msgType);
         if dd_group.is_field(field.tag()) {
             Ok(())
         } else {
-            Err(MessageValidationError::TagNotDefinedForMessage(field.tag(), msg_type.into()))
+            Err(MessageValidationError::TagNotDefinedForMessage(
+                field.tag(),
+                msg_type.into(),
+            ))
         }
     }
-    fn check_group_count(&self, field: &FieldBase, map: &FieldMap, msg_type: &str) -> Result<(), MessageValidationError> {
+    fn check_group_count(
+        &self,
+        field: &FieldBase,
+        map: &FieldMap,
+        msg_type: &str,
+    ) -> Result<(), MessageValidationError> {
         // if (IsGroup(msgType, field.Tag))
         // {
         //     if (map.GetInt(field.Tag) != map.GroupCount(field.Tag))
@@ -305,8 +368,12 @@ impl DataDictionary {
         //         throw new RepeatingGroupCountMismatch(field.Tag);
         //     }
         // }
-        if self.is_group(msg_type, field.tag()) && map.get_int(field.tag())? as usize != map.group_count(field.tag())? {
-            return Err(MessageValidationError::RepeatingGroupCountMismatch(field.tag()));
+        if self.is_group(msg_type, field.tag())
+            && map.get_int(field.tag())? as usize != map.group_count(field.tag())?
+        {
+            return Err(MessageValidationError::RepeatingGroupCountMismatch(
+                field.tag(),
+            ));
         }
         Ok(())
     }
@@ -316,8 +383,8 @@ impl DataDictionary {
         //     return Messages[msgType].IsGroup(tag);
         // }
         // return false;
-        if self.messages.contains_key(msg_type.into()) {
-            return self.messages[msg_type.into()].is_group(tag);
+        if self.messages.contains_key(msg_type) {
+            return self.messages[msg_type].is_group(tag);
         }
         false
     }
@@ -346,26 +413,28 @@ impl DataDictionary {
                 return Err(MessageValidationError::RepeatedTag(field.tag()));
             }
             // CheckHasValue(field);
-            self.check_has_value(&field)?;
+            self.check_has_value(field)?;
 
             // if (!string.IsNullOrEmpty(this.Version))
-            if matches!(&self.version, Some(version) if version.len() > 0) {
+            if matches!(&self.version, Some(version) if !version.is_empty()) {
                 // CheckValidFormat(field);
-                self.check_valid_format(&field)?;
+                self.check_valid_format(field)?;
 
                 // if (ShouldCheckTag(field))
-                if self.should_check_tag(&field) {
+                if self.should_check_tag(field) {
                     // CheckValidTagNumber(field.Tag);
                     self.check_valid_tag_number(field.tag())?;
 
                     // CheckValue(field);
-                    self.check_value(&field)?;
+                    self.check_value(field)?;
                     // if (!Message.IsHeaderField(field.Tag, this) && !Message.IsTrailerField(field.Tag, this))
-                    if !Message::is_header_field(field.tag(), Some(self)) && !Message::is_trailer_field(field.tag(), Some(self)) {
+                    if !Message::is_header_field(field.tag(), Some(self))
+                        && !Message::is_trailer_field(field.tag(), Some(self))
+                    {
                         // CheckIsInMessage(field, msgType);
-                        self.check_is_in_message(&field, msg_type)?;
+                        self.check_is_in_message(field, msg_type)?;
                         // CheckGroupDefinitionCount(field, map, msgType);
-                        self.check_group_count(&field, message, msg_type)?;
+                        self.check_group_count(field, message, msg_type)?;
                     }
                 }
             }
@@ -392,13 +461,18 @@ impl DataDictionary {
         Ok(())
     }
 
-    fn iterate_group(&self, group: &Group, group_definition: Option<&DDGroup>, msg_type: &str) -> Result<(), MessageValidationError> {
+    fn iterate_group(
+        &self,
+        group: &Group,
+        group_definition: Option<&DDGroup>,
+        msg_type: &str,
+    ) -> Result<(), MessageValidationError> {
         if group_definition.is_none() {
             return Err(MessageValidationError::MissingGroupDefinition());
         }
         let group_definition = group_definition.unwrap();
         // DataDictionary.CheckHasNoRepeatedTags(group);
-        DataDictionary::check_has_no_repeated_tags(&group)?;
+        DataDictionary::check_has_no_repeated_tags(group)?;
 
         // int lastField = 0;
         let mut last_field = 0;
@@ -412,24 +486,24 @@ impl DataDictionary {
                 return Err(MessageValidationError::RepeatedTag(field.tag()));
             }
             // CheckHasValue(field);
-            self.check_has_value(&field)?;
+            self.check_has_value(field)?;
 
             // if (!string.IsNullOrEmpty(this.Version))
-            if matches!(&self.version, Some(version) if version.len() > 0) {
+            if matches!(&self.version, Some(version) if version.is_empty()) {
                 // CheckValidFormat(field);
-                self.check_valid_format(&field)?;
+                self.check_valid_format(field)?;
 
                 // if (ShouldCheckTag(field))
-                if self.should_check_tag(&field) {
+                if self.should_check_tag(field) {
                     // CheckValidTagNumber(field.Tag);
                     self.check_valid_tag_number(field.tag())?;
 
                     // CheckValue(field);
-                    self.check_value(&field)?;
+                    self.check_value(field)?;
                     // CheckIsInGroup(field, ddgroup, msgType);
-                    self.check_is_in_group(&field, group_definition, msg_type)?;
+                    self.check_is_in_group(field, group_definition, msg_type)?;
                     // CheckGroupCount(field, map, msgType);
-                    self.check_group_count(&field, &group, msg_type)?;
+                    self.check_group_count(field, group, msg_type)?;
                 }
             }
             last_field = field.tag();
@@ -457,7 +531,7 @@ impl DataDictionary {
         self.messages.get(msg_type)
     }
 
-    pub fn get_field_by_name(&self, field_name: &String) -> Option<&DDField> {
+    pub fn get_field_by_name(&self, field_name: &str) -> Option<&DDField> {
         self.fields_by_name.get(field_name)
     }
 }
@@ -503,7 +577,7 @@ trait AsDDMap {
 }
 impl AsDDMap for DDMap {
     fn as_map(&self) -> &DDMap {
-        &self
+        self
     }
     fn as_map_mut(&mut self) -> &mut DDMap {
         self
@@ -523,83 +597,97 @@ fn parse_msg_el<D: AsDDMap + 'static>(
     parts: &HashMap<String, MessagePart>,
     fields_by_name: &HashMap<String, DDField>,
     components_by_name: &HashMap<String, HashMap<String, MessagePart>>,
-    component_required: Option<bool>
+    component_required: Option<bool>,
 ) -> Result<D, MessageValidationError> {
     let mut org = ddmap;
     let ddmap = &mut org.as_map_mut();
-    for (_, v) in parts {
-       match v {
-           MessagePart::Field(field) => {
-               if !fields_by_name.contains_key(&field.name) {
-                   return Err(MessageValidationError::DictionaryParseException(format!("Field '{}' is not defined in <fields> section.", field.name)));
-               }
-               let dd_field = &fields_by_name[&field.name];
-               let required = field.required == "Y" && component_required.unwrap_or(true);
-               if required {
-                   ddmap.add_required_field(dd_field.tag());
-               }
+    for v in parts.values() {
+        match v {
+            MessagePart::Field(field) => {
+                if !fields_by_name.contains_key(&field.name) {
+                    return Err(MessageValidationError::DictionaryParseException(format!(
+                        "Field '{}' is not defined in <fields> section.",
+                        field.name
+                    )));
+                }
+                let dd_field = &fields_by_name[&field.name];
+                let required = field.required == "Y" && component_required.unwrap_or(true);
+                if required {
+                    ddmap.add_required_field(dd_field.tag());
+                }
 
-               if !ddmap.is_field(dd_field.tag()) {
-                   ddmap.add_field(dd_field.clone());
-               }
+                if !ddmap.is_field(dd_field.tag()) {
+                    ddmap.add_field(dd_field.clone());
+                }
 
-               // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
-               // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
-               if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
-                   unsafe {
-                       let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
-                       if casted.delim() == 0 {
-                           casted.delim = dd_field.tag();
-               //     ddGroup.Delim = fld.Tag;
-                       }
-                   }
-               }
-           },
-           MessagePart::GroupDefinition(group) => {
-               if !fields_by_name.contains_key(&group.name) {
-                   return Err(MessageValidationError::DictionaryParseException(format!("Field '{}' is not defined in <fields> section.", group.name)));
-               }
-               let dd_field = &fields_by_name[&group.name];
-               let required = group.required == "Y" && component_required.unwrap_or(true);
-               if required {
-                   ddmap.add_required_field(dd_field.tag());
-               }
+                // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
+                // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
+                if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
+                    unsafe {
+                        let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
+                        if casted.delim() == 0 {
+                            casted.delim = dd_field.tag();
+                            //     ddGroup.Delim = fld.Tag;
+                        }
+                    }
+                }
+            }
+            MessagePart::GroupDefinition(group) => {
+                if !fields_by_name.contains_key(&group.name) {
+                    return Err(MessageValidationError::DictionaryParseException(format!(
+                        "Field '{}' is not defined in <fields> section.",
+                        group.name
+                    )));
+                }
+                let dd_field = &fields_by_name[&group.name];
+                let required = group.required == "Y" && component_required.unwrap_or(true);
+                if required {
+                    ddmap.add_required_field(dd_field.tag());
+                }
 
-               if !ddmap.is_field(dd_field.tag()) {
-                   ddmap.add_field(dd_field.clone());
-               }
+                if !ddmap.is_field(dd_field.tag()) {
+                    ddmap.add_field(dd_field.clone());
+                }
 
-               // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
-               // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
-               if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
-                   unsafe {
-                       let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
-                       if casted.delim() == 0 {
-                           casted.delim = dd_field.tag();
-                       }
-                   }
-               }
-               // ddgrp grp = new ddgrp();
-               let mut grp = DDGroup::default();
-               // grp.numfld = fld.tag;
-               grp.num_fld = dd_field.tag();
-               // if (required)
-               if required {
-               //     grp.required = true;
-                   grp.required = true;
-               }
+                // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
+                // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
+                if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
+                    unsafe {
+                        let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
+                        if casted.delim() == 0 {
+                            casted.delim = dd_field.tag();
+                        }
+                    }
+                }
+                // ddgrp grp = new ddgrp();
+                let mut grp = DDGroup {
+                    num_fld: dd_field.tag(),
+                    ..Default::default()
+                };
+                // if (required)
+                if required {
+                    //     grp.required = true;
+                    grp.required = true;
+                }
 
-               // parsemsgel(childnode, grp);
-               let grp = parse_msg_el(grp, &group.fields, fields_by_name, components_by_name, None)?;
-               // ddmap.groups.add(fld.tag, grp);
-               ddmap.groups.insert(dd_field.tag(), grp);
-           },
-           MessagePart::Component(component) => {
-               let component_fields = components_by_name.get(&component.name).unwrap();
-               let component = parse_msg_el(org, component_fields, fields_by_name, components_by_name, Some(component.required == "Y"))?;
-               return Ok(component)
-           }
-       } 
+                // parsemsgel(childnode, grp);
+                let grp =
+                    parse_msg_el(grp, &group.fields, fields_by_name, components_by_name, None)?;
+                // ddmap.groups.add(fld.tag, grp);
+                ddmap.groups.insert(dd_field.tag(), grp);
+            }
+            MessagePart::Component(component) => {
+                let component_fields = components_by_name.get(&component.name).unwrap();
+                let component = parse_msg_el(
+                    org,
+                    component_fields,
+                    fields_by_name,
+                    components_by_name,
+                    Some(component.required == "Y"),
+                )?;
+                return Ok(component);
+            }
+        }
     }
     Ok(org)
 }
@@ -616,7 +704,7 @@ pub struct DDField {
     field_type: String,
     // TODO type?
     // public Type FieldType;
-    is_multiple_value_field_with_enums: bool
+    is_multiple_value_field_with_enums: bool,
 }
 impl DDField {
     pub fn new(
@@ -632,21 +720,19 @@ impl DDField {
         // public Type FieldType;
         // is_multiple_value_field_with_enums: bool
     ) -> Self {
-                // case "MULTIPLEVALUESTRING": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
-                // case "MULTIPLESTRINGVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
-                // case "MULTIPLECHARVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
-        let is_multiple_value_field_with_enums = match field_type.as_str() {
-            "MULTIPLEVALUESTRING" => true,
-            "MULTIPLESTRINGVALUE" => true,
-            "MULTIPLECHARVALUE" => true,
-            _ => false,
-        };
+        // case "MULTIPLEVALUESTRING": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
+        // case "MULTIPLESTRINGVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
+        // case "MULTIPLECHARVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
+        let is_multiple_value_field_with_enums = matches!(
+            field_type.as_str(),
+            "MULTIPLEVALUESTRING" | "MULTIPLESTRINGVALUE" | "MULTIPLECHARVALUE"
+        );
         DDField {
             tag,
             name,
             enum_dictionary,
             field_type,
-            is_multiple_value_field_with_enums
+            is_multiple_value_field_with_enums,
         }
     }
     pub fn tag(&self) -> Tag {
@@ -656,7 +742,7 @@ impl DDField {
         &self.name
     }
     pub fn has_enums(&self) -> bool {
-        self.enum_dictionary.len() > 0
+        !self.enum_dictionary.is_empty()
     }
     pub fn enums(&self) -> &HashMap<String, String> {
         &self.enum_dictionary
@@ -748,7 +834,12 @@ pub struct FixSpec {
 pub struct Header {
     // #[serde(default, rename = "$value")]
     // values: Vec<MessagePart>,
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     values: HashMap<String, MessagePart>,
 }
 impl Deref for Header {
@@ -767,13 +858,23 @@ impl DerefMut for Header {
 pub struct Messages {
     // #[serde(default, rename = "$value")]
     // values: Vec<Message>,
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     values: HashMap<String, MessageDefinition>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Fields {
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     values: HashMap<String, FieldDefinition>,
 }
 
@@ -781,7 +882,12 @@ pub struct Fields {
 pub struct Components {
     // #[serde(default, rename = "$value")]
     // values: Vec<ComponentDefinition>
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     values: HashMap<String, ComponentDefinition>,
 }
 
@@ -789,7 +895,12 @@ pub struct Components {
 pub struct Trailer {
     // #[serde(default, rename = "$value")]
     // values: Vec<MessagePart>,
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     values: HashMap<String, MessagePart>,
 }
 
@@ -814,7 +925,12 @@ pub struct Component {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ComponentDefinition {
     name: String,
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     values: HashMap<String, MessagePart>,
 }
 
@@ -828,7 +944,10 @@ pub trait Named {
     fn name(&self) -> &str;
 }
 
-fn ser_peer_public<S, V: Named + Serialize>(peer_public: &HashMap<String, V>, serializer: S) -> Result<S::Ok, S::Error>
+fn ser_peer_public<S, V: Named + Serialize>(
+    peer_public: &HashMap<String, V>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -836,7 +955,9 @@ where
     serializer.collect_seq(map)
 }
 
-fn de_peer_public<'de, D, V: Named + Deserialize<'de>>(deserializer: D) -> Result<HashMap<String, V>, D::Error>
+fn de_peer_public<'de, D, V: Named + Deserialize<'de>>(
+    deserializer: D,
+) -> Result<HashMap<String, V>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -869,7 +990,12 @@ pub struct MessageDefinition {
     name: String,
     msgtype: String,
     msgcat: Option<String>,
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     fields: HashMap<String, MessagePart>,
 }
 
@@ -885,7 +1011,12 @@ pub struct GroupDefinition {
     required: String,
     // #[serde(rename = "$value")]
     // fields: Vec<Field>,
-    #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
+    #[serde(
+        default,
+        rename = "$value",
+        serialize_with = "ser_peer_public",
+        deserialize_with = "de_peer_public"
+    )]
     fields: HashMap<String, MessagePart>,
 }
 
@@ -922,7 +1053,7 @@ mod tests {
     #[test]
     fn test_field_value() {
         let data = "<value enum='U' description='UP' />";
-        let fd  = serde_xml_rs::from_str(data);
+        let fd = serde_xml_rs::from_str(data);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FieldValue = fd.unwrap();
@@ -933,14 +1064,14 @@ mod tests {
     #[test]
     fn test_field_definition() {
         let data = "<field number='554' name='Password' type='STRING' />";
-        let fd  = serde_xml_rs::from_str(data);
+        let fd = serde_xml_rs::from_str(data);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FieldDefinition = fd.unwrap();
         assert!(fd.number == "554");
         assert!(fd.name == "Password");
         assert!(fd.type_name == "STRING");
-        assert!(fd.values.len() == 0);
+        assert!(fd.values.is_empty());
     }
 
     #[test]
@@ -950,7 +1081,7 @@ mod tests {
                 <value enum='S' description='SESSION' />
                 <value enum='Y' description='PROFILE' />
             </field>"#;
-        let fd  = serde_xml_rs::from_str(data);
+        let fd = serde_xml_rs::from_str(data);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FieldDefinition = fd.unwrap();
@@ -963,7 +1094,7 @@ mod tests {
     #[test]
     fn test_header_field() {
         let data = "<field name='BeginString' required='Y' />";
-        let fd  = serde_xml_rs::from_str(data);
+        let fd = serde_xml_rs::from_str(data);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: Field = fd.unwrap();
@@ -973,12 +1104,11 @@ mod tests {
 
     #[test]
     fn test_header() {
-        let data =
-            r#"<header>
+        let data = r#"<header>
                 <field name='BeginString' required='Y' />
                 <component name='InstrmtLegIOIGrp' required='N' />
             </header>"#;
-        let fd  = serde_xml_rs::from_str(data);
+        let fd = serde_xml_rs::from_str(data);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: Header = fd.unwrap();
@@ -987,8 +1117,7 @@ mod tests {
 
     #[test]
     fn test_message_group() {
-        let data =
-            r#"<message name='NewOrderBatch' msgtype='U6'>
+        let data = r#"<message name='NewOrderBatch' msgtype='U6'>
                 <field name='BatchID' required='Y' />
                 <group name='NoOrders' required='Y'>
                     <field name='ClOrdID' required='Y' />
@@ -1003,7 +1132,7 @@ mod tests {
                     <field name='TransactTime' required='N' />
                 </group>
             </message>"#;
-        let fd  = serde_xml_rs::from_str(data);
+        let fd = serde_xml_rs::from_str(data);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: MessageDefinition = fd.unwrap();
@@ -1012,8 +1141,7 @@ mod tests {
 
     #[test]
     fn test_minimal_spec() {
-        let data =
-            r#"
+        let data = r#"
 <fix type='FIX' major='4' minor='2' servicepack='0'>
  <header>
   <field name='BeginString' required='Y' />
@@ -1032,7 +1160,7 @@ mod tests {
  </trailer>
 </fix>
 "#;
-        let fd  = serde_xml_rs::from_str(data);
+        let fd = serde_xml_rs::from_str(data);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();

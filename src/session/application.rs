@@ -1,11 +1,11 @@
-use crate::session::SessionId;
 use crate::message::Message;
+use crate::session::SessionId;
 
 #[derive(Debug, Clone)]
 pub enum ApplicationError {
     DoNotAccept,
     LogonReject,
-    DoNotSend,
+    DoNotSend(Box<Message>),
 }
 
 pub trait Application {
@@ -39,32 +39,31 @@ mod tests {
     use session_id::SessionId;
 
     use super::Application;
-    use crate::session::session_id;
     use crate::message::Message;
+    use crate::session::session_id;
 
     struct TestApplication;
 
     impl Application for TestApplication {
-
         fn on_create(
             &mut self,
             _session_id: &crate::session::SessionId,
         ) -> Result<(), super::ApplicationError> {
-            todo!()
+            Ok(())
         }
 
         fn on_logon(
             &mut self,
             _session_id: &crate::session::SessionId,
         ) -> Result<(), super::ApplicationError> {
-            todo!()
+            Ok(())
         }
 
         fn on_logout(
             &mut self,
             _session_id: &crate::session::SessionId,
         ) -> Result<(), super::ApplicationError> {
-            todo!()
+            Ok(())
         }
 
         fn to_admin(
@@ -80,7 +79,7 @@ mod tests {
             _message: Message,
             _session_id: &crate::session::SessionId,
         ) -> Result<(), super::ApplicationError> {
-            todo!()
+            Ok(())
         }
 
         fn to_app(
@@ -88,7 +87,7 @@ mod tests {
             _message: Message,
             _session_id: &crate::session::SessionId,
         ) -> Result<Message, super::ApplicationError> {
-            todo!()
+            Ok(_message)
         }
 
         fn from_app(
@@ -96,7 +95,7 @@ mod tests {
             _message: Message,
             _session_id: &crate::session::SessionId,
         ) -> Result<(), super::ApplicationError> {
-            todo!()
+            Ok(())
         }
     }
 

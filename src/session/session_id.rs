@@ -1,3 +1,6 @@
+use std::fmt::Display;
+
+#[derive(Debug, Clone)]
 pub struct SessionId {
     pub id: String,
     pub begin_string: String,
@@ -44,5 +47,11 @@ impl SessionId {
             // session_qualifier,
             is_fixt,
         }
+    }
+}
+
+impl Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}", self.id))
     }
 }
