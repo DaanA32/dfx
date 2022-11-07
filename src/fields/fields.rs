@@ -117,3 +117,12 @@ impl ApplVerID {
     pub const FIX50SP1: u32 = 0;
     pub const FIX50SP2: u32 = 0;
 }
+
+pub struct SessionRejectReason;
+impl SessionRejectReason {
+
+    pub const VALUE_IS_INCORRECT: &str = "";
+    pub const SENDING_TIME_ACCURACY_PROBLEM: &str = "";
+    pub const COMPID_PROBLEM: &str = "";
+
+}

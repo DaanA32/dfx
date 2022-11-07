@@ -20,7 +20,7 @@ pub type Total = u32;
 pub type Length = u32;
 pub type FieldOrder = Vec<u32>;
 pub type Field = FieldBase;
-pub type FieldValue = String;
+pub type FieldValue = Vec<u8>;
 
 #[derive(Clone, Debug)]
 pub enum FieldMapError {
@@ -65,16 +65,22 @@ pub struct FieldBase(Tag, FieldValue);
 
 impl FieldBase {
     pub fn new(tag: Tag, value: String) -> Self {
+        FieldBase(tag, value.into_bytes())
+    }
+    pub fn from_bytes(tag: Tag, value: Vec<u8>) -> Self {
         FieldBase(tag, value)
     }
     pub fn tag(&self) -> Tag {
         self.0
     }
-    pub fn value(&self) -> &String {
+    pub fn value(&self) -> &Vec<u8> {
         &self.1
     }
+    pub fn string_value(&self) -> String {
+        self.value().iter().map(|b| *b as char).collect()
+    }
     pub fn to_string_field(&self) -> String {
-        format!("{}={}", self.tag(), self.value())
+        format!("{}={}", self.tag(), self.string_value())
     }
     pub fn get_total(&self) -> u32 {
         self.to_string_field()
@@ -86,6 +92,14 @@ impl FieldBase {
     }
     pub fn bytes_len(&self) -> u32 {
         self.to_string_field().as_bytes().len() as u32 + 1 //incl SOH
+    }
+
+    pub(crate) fn to_usize(&self) -> Option<usize> {
+        println!("{}", self.to_string_field());
+        match self.string_value().parse::<usize>() {
+            Ok(value) => Some(value),
+            Err(_) => None
+        }
     }
 }
 
@@ -140,12 +154,17 @@ impl FieldMap {
     pub fn get_int(&self, tag: Tag) -> Result<u32, FieldMapError> {
         match self.fields.get(&tag) {
             None => Err(FieldMapError::FieldNotFound(tag)),
-            Some(value) => Ok(value.value().parse::<u32>().unwrap()),
+            Some(value) => Ok(value.string_value().parse::<u32>().unwrap()),
         }
     }
     pub fn get_string(&self, tag: Tag) -> String {
-        self.fields[&tag].value().into()
+        self.fields[&tag].string_value().into()
     }
+    pub fn get_bool(&self, tag: Tag) -> bool {
+        self.fields[&tag].string_value() == "Y"
+    }
+
+
     pub(crate) fn get_datetime(&self, tag: Tag) -> Instant {
         todo!()
     }
@@ -454,7 +473,7 @@ impl FieldMap {
             }
             //     sb.Append(field.Tag.ToString() + "=" + field.ToString());
             //     sb.Append(Message.SOH);
-            sb.push_str(format!("{}={}{}", field.tag(), field.value(), Message::SOH).as_str());
+            sb.push_str(format!("{}={}{}", field.tag(), field.string_value(), Message::SOH).as_str());
         }
 
         // foreach(int counterTag in _groups.Keys)

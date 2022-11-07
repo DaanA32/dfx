@@ -1,10 +1,17 @@
 use std::cmp;
 use std::time::Instant;
 
+use chrono::DateTime;
+use chrono::Utc;
+
 use crate::data_dictionary::DataDictionary;
 use crate::data_dictionary::MessageValidationError;
 use crate::data_dictionary_provider::DataDictionaryProvider;
+use crate::field_map::FieldBase;
+use crate::field_map::FieldMapError;
+use crate::field_map::Tag;
 use crate::fields::*;
+use crate::fix_values::BeginString;
 use crate::log::Log;
 use crate::log::NoLogger;
 use crate::log_factory::LogFactory;
@@ -22,6 +29,7 @@ use crate::session::SessionId;
 use crate::session::SessionSchedule;
 use crate::session::SessionState;
 use crate::tags;
+use crate::tags::SessionRejectReason;
 
 const _BUF_SIZE: usize = 4096;
 
@@ -213,7 +221,7 @@ impl Session {
 
             if !self.state.sent_logout() {
                 self.log.on_event("Initiated logout request");
-                self.generate_logout(self.state.logout_reason().cloned());
+                self.generate_logout(self.state.logout_reason().cloned(), None);
             }
         }
 
@@ -244,7 +252,7 @@ impl Session {
 
         if self.state.timed_out() {
             if self.send_logout_before_timeout_disconnect {
-                self.generate_logout(None);
+                self.generate_logout(None, None);
             }
             self.disconnect("Timed out waiting for heartbeat")
         } else if self.state.need_test_request() {
@@ -264,7 +272,7 @@ impl Session {
     fn is_new_session(&self) -> bool {
         self.state
             .creation_time()
-            .map(|ct| self.schedule.is_new_session(ct, Instant::now()))
+            .map(|ct| self.schedule.is_new_session(ct, Utc::now()))
             .unwrap_or(false)
     }
 
@@ -286,7 +294,7 @@ impl Session {
 
     fn reset(&mut self, logged_reason: Option<&str>, logout_message: Option<&str>) {
         if self.is_logged_on() {
-            self.generate_logout(logout_message.map(|v| v.into()));
+            self.generate_logout(logout_message.map(|v| v.into()), None);
         }
         self.disconnect("Resetting...");
         self.state.reset(logged_reason);
@@ -335,16 +343,79 @@ impl Session {
         self.state.set_sent_logon(true);
         self.send_raw(logon, 0).is_ok()
     }
+    fn generate_logon_other(&mut self, other: &Message) -> bool{
+        let mut logon = self
+            .msg_factory
+            .create(&self.session_id.begin_string, MsgType::LOGON)
+            .unwrap(); // TODO handle unwrap
+        logon.set_field(tags::EncryptMethod, "0");
+        if self.session_id.is_fixt {
+        //     logon.SetField(new Fields.DefaultApplVerID(this.SenderDefaultApplVerID));
+            todo!()
+        }
+        logon.set_field_base(other.get_field(tags::HeartBtInt).clone(), None);
 
-    fn generate_logout(&mut self, reason: Option<String>) {
-        todo!()
+        if self.enable_last_msg_seq_num_processed {
+        //     logon.Header.SetField(new Fields.LastMsgSeqNumProcessed(otherLogon.Header.GetInt(Tags.MsgSeqNum)));
+        }
+
+        self.initialize_header(&mut logon, None);
+        let sent_logon = self.send_raw(logon, 0).unwrap();
+        self.state.set_sent_logon(sent_logon);
+        self.state.sent_logon()
     }
 
-    fn generate_heartbeat(&mut self) {
-        todo!()
+    fn generate_logout(&mut self, reason: Option<String>, other: Option<Message>) -> bool {
+        let mut logout = self
+            .msg_factory
+            .create(&self.session_id.begin_string, MsgType::LOGOUT)
+            .unwrap(); // TODO handle unwrap
+        self.initialize_header(&mut logout, None);
+        if matches!(reason.as_ref(), Some(text) if !text.is_empty()) {
+            logout.set_field(tags::Text, reason.as_ref().unwrap().as_str());
+        }
+        if matches!(other.as_ref(), Some(_)) && self.enable_last_msg_seq_num_processed {
+            if other.as_ref().unwrap().is_field_set(tags::LastMsgSeqNumProcessed) {
+                let field = other.as_ref().unwrap().get_field(tags::LastMsgSeqNumProcessed);
+                logout.header_mut().set_field_base(field.clone(), Some(true));
+            }else{
+                self.log().on_event(format!("Error: No message sequence number: {:?}", other.as_ref()).as_str());
+            }
+        }
+        let sent_logout = matches!(self.send_raw(logout, 0), Ok(v) if v);
+        self.state.set_sent_logout(sent_logout);
+        sent_logout
     }
-    fn generate_test_request(&mut self, reason: &str) {
-        todo!()
+
+    fn generate_heartbeat(&mut self) -> bool {
+        let mut heartbeat = self
+            .msg_factory
+            .create(&self.session_id.begin_string, MsgType::HEARTBEAT)
+            .unwrap(); // TODO handle unwrap
+        self.initialize_header(&mut heartbeat, None);
+        matches!(self.send_raw(heartbeat, 0), Ok(v) if v)
+    }
+    fn generate_heartbeat_other(&mut self, message: &Message) -> bool {
+        let mut heartbeat = self
+            .msg_factory
+            .create(&self.session_id.begin_string, MsgType::TEST_REQUEST)
+            .unwrap(); // TODO handle unwrap
+        self.initialize_header(&mut heartbeat, None);
+        heartbeat.set_field_base(message.get_field(tags::TestReqID).clone(), None);
+        if self.enable_last_msg_seq_num_processed {
+            heartbeat.header_mut().set_field_base(message.get_field(tags::MsgSeqNum).clone(), None);
+        }
+        self.send_raw(heartbeat, 0).unwrap()
+    }
+
+    fn generate_test_request(&mut self, reason: &str) -> bool {
+        let mut heartbeat = self
+            .msg_factory
+            .create(&self.session_id.begin_string, MsgType::TEST_REQUEST)
+            .unwrap(); // TODO handle unwrap
+        self.initialize_header(&mut heartbeat, None);
+        heartbeat.set_field(tags::TestReqID, reason);
+        matches!(self.send_raw(heartbeat, 0), Ok(v) if v)
     }
 
     fn disconnect(&mut self, reason: &str) {
@@ -385,22 +456,22 @@ impl Session {
         let msg_type = message.header().get_string(tags::MsgType);
         self.initialize_header(&mut message, Some(seq_num));
         let message = if Message::is_admin_msg_type(msg_type.as_str()) {
-            let message = match self.application.to_admin(message, &self.session_id) {
+            let mut message = match self.application.to_admin(message, &self.session_id) {
                 Ok(message) => Ok(message),
                 Err(ApplicationError::DoNotSend(message)) => Ok(*message),
                 Err(e) => Err(e),
             }?;
             if MsgType::LOGON == msg_type && !self.state.received_reset() {
-                // Fields.ResetSeqNumFlag resetSeqNumFlag = new QuickFix.Fields.ResetSeqNumFlag(false);
-                // if (message.IsSetField(resetSeqNumFlag))
-                //     message.GetField(resetSeqNumFlag);
-                // if (resetSeqNumFlag.getValue())
-                // {
-                //     state_.Reset("ResetSeqNumFlag");
-                //     message.Header.SetField(new Fields.MsgSeqNum(state_.GetNextSenderMsgSeqNum()));
-                // }
-                // state_.SentReset = resetSeqNumFlag.Obj;
-                todo!()
+                let reset = if message.is_field_set(tags::ResetSeqNumFlag) {
+                    message.get_string(tags::ResetSeqNumFlag).as_str() == "Y"
+                }else{
+                    false
+                };
+                if reset {
+                    self.state.reset(Some("ResetSeqNumFlag".into()));
+                    message.header_mut().set_field_base(FieldBase::new(tags::MsgSeqNum, format!("{}", self.state.next_sender_msg_seq_num())), None);
+                }
+                self.state.set_sent_reset(reset);
             }
             Ok(message)
         } else {
@@ -428,7 +499,74 @@ impl Session {
 
     fn initialize_header(&mut self, message: &mut Message, seq_num: Option<u32>) {
         let seq_num = seq_num.unwrap_or(0);
-        todo!("{:?} {}", message, seq_num)
+        // state_.LastSentTimeDT = DateTime.UtcNow;
+        //self.state.set_last_received_time_dt(Utc::now()); // TODO?
+        self.state.set_last_received_time_dt(Instant::now());
+
+        // m.Header.SetField(new Fields.BeginString>(this.SessionID.BeginString));
+        // m.Header.SetField(new Fields.SenderCompID(this.SessionID.SenderCompID));
+        message.header_mut().set_field(tags::BeginString, &self.session_id.begin_string);
+        message.header_mut().set_field(tags::SenderCompID, &self.session_id.target_comp_id);
+        // if (SessionID.IsSet(this.SessionID.SenderSubID))
+        //     m.Header.SetField(new Fields.SenderSubID(this.SessionID.SenderSubID));
+        if !self.session_id.sender_sub_id.is_empty() {
+            message.header_mut().set_field(tags::SenderSubID, &self.session_id.sender_sub_id);
+        }
+        // if (SessionID.IsSet(this.SessionID.SenderLocationID))
+        //     m.Header.SetField(new Fields.SenderLocationID(this.SessionID.SenderLocationID));
+        if !self.session_id.sender_location_id.is_empty() {
+            message.header_mut().set_field(tags::SenderLocationID, &self.session_id.sender_location_id);
+        }
+        // m.Header.SetField(new Fields.TargetCompID(this.SessionID.TargetCompID));
+        // if (SessionID.IsSet(this.SessionID.TargetSubID))
+        //     m.Header.SetField(new Fields.TargetSubID(this.SessionID.TargetSubID));
+        if !self.session_id.target_sub_id.is_empty() {
+            message.header_mut().set_field(tags::TargetSubID, &self.session_id.target_sub_id);
+        }
+        // if (SessionID.IsSet(this.SessionID.TargetLocationID))
+        //     m.Header.SetField(new Fields.TargetLocationID(this.SessionID.TargetLocationID));
+        if !self.session_id.target_location_id.is_empty() {
+            message.header_mut().set_field(tags::TargetLocationID, &self.session_id.target_location_id);
+        }
+
+        // if (msgSeqNum > 0)
+        //     m.Header.SetField(new Fields.MsgSeqNum(msgSeqNum));
+        // else
+        //     m.Header.SetField(new Fields.MsgSeqNum(state_.GetNextSenderMsgSeqNum()));
+        let seq_num = format!("{}", if seq_num > 0 {
+            seq_num
+        }else{
+            self.state.get_next_sender_msg_seq_num()
+        });
+        message.header_mut().set_field(tags::MsgSeqNum, &seq_num);
+
+        // if (this.EnableLastMsgSeqNumProcessed && !m.Header.IsSetField(Tags.LastMsgSeqNumProcessed))
+        // {
+        //     m.Header.SetField(new LastMsgSeqNumProcessed(this.NextTargetMsgSeqNum - 1));
+        // }
+        if self.enable_last_msg_seq_num_processed && !message.header().is_field_set(tags::LastMsgSeqNumProcessed) {
+            let last_seq_num = format!("{}", self.state.next_target_msg_seq_num() - 1);
+            message.header_mut().set_field(tags::MsgSeqNum, &last_seq_num);
+        }
+
+        self.insert_sending_time(message)
+    }
+
+    fn insert_sending_time(&self, message: &mut Message) {
+        // bool fix42OrAbove = false;
+        // if (this.SessionID.BeginString == FixValues.BeginString.FIXT11)
+        //     fix42OrAbove = true;
+        // else
+        //     fix42OrAbove = this.SessionID.BeginString.CompareTo(FixValues.BeginString.FIX42) >= 0;
+        // TODO check if original is correct?
+        let fix42_or_above = self.session_id.begin_string == BeginString::FIXT11 || self.session_id.begin_string.as_str() >= BeginString::FIX42;
+        let _precision = if fix42_or_above {
+        }else{
+        };
+        // header.SetField(new Fields.SendingTime(System.DateTime.UtcNow, fix42OrAbove ? TimeStampPrecision : TimeStampPrecision.Second ) );
+        // TODO fix timeformatting
+        let send_time = format!("{}", Utc::now());
+        message.header_mut().set_field(tags::SendingTime, &send_time);
     }
 
     pub fn session_id(&self) -> &SessionId {
@@ -439,8 +577,8 @@ impl Session {
         &mut self.log
     }
 
-    pub fn next_msg(&mut self, msg: String) {
-        self.log.on_incoming(msg.as_str());
+    pub fn next_msg(&mut self, msg: Vec<u8>) {
+        self.log.on_incoming(&String::from_utf8_lossy(&msg));
 
         if !self.is_session_time() {
             self.reset(
@@ -463,6 +601,8 @@ impl Session {
                 HandleError::MessageParseError(_) => todo!(),
                 HandleError::MessageValidationError(_) => todo!(),
                 HandleError::String(_) => todo!(),
+                HandleError::ApplicationError(_) => todo!(),
+                HandleError::FieldMapError(_) => todo!(),
             }
         }
         // }
@@ -531,12 +671,12 @@ impl Session {
         self.next()
     }
 
-    fn next_msg_handler(&mut self, msg: String) -> Result<(), HandleError> {
-        let msg_type = Message::identify_type(msg.as_str())?;
-        let begin_string = Message::extract_begin_string(msg.as_str())?;
+    fn next_msg_handler(&mut self, msg: Vec<u8>) -> Result<(), HandleError> {
+        let msg_type = Message::identify_type(&msg)?;
+        let begin_string = Message::extract_begin_string(&msg)?;
         let mut message = self.msg_factory.create(begin_string.as_str(), msg_type)?;
         message.from_string(
-            msg.as_str(),
+            &msg,
             self.validate_length_and_checksum,
             Some(&self.session_data_dictionary),
             Some(&self.application_data_dictionary),
@@ -600,7 +740,7 @@ impl Session {
             self.next_sequence_reset(message)
         } else if MsgType::RESEND_REQUEST == msg_type {
             self.next_resend_request(message)
-        } else if !self.verify(message) {
+        } else if !self.verify(message)? {
             Ok(())
         } else {
             self.state.incr_next_target_msg_seq_num();
@@ -616,31 +756,235 @@ impl Session {
         self.state.incr_next_sender_msg_seq_num();
     }
 
-    fn next_logon(&self, message: Message) -> Result<(), HandleError> {
-        todo!()
+    fn next_logon(&mut self, logon: Message) -> Result<(), HandleError> {
+        let received_reset = logon.is_field_set(tags::ResetSeqNumFlag) && logon.get_bool(tags::ResetSeqNumFlag);
+        self.state.set_received_reset(received_reset);
+
+        if received_reset {
+            self.log().on_event("Sequence numbers reset due to ResetSeqNumFlag=Y");
+            if !self.state.sent_reset() {
+                self.state.reset(Some("Reset requested by counterparty"));
+            }
+        }
+
+        if !self.state.is_initiator() && self.reset_on_logon() {
+            self.state.reset(Some("ResetOnLogon"));
+        }
+        if self.refresh_on_logon() {
+            self.refresh();
+        }
+
+        //TODO no clone?
+        if !self.verify_opt(logon.clone(), false, true)? {
+            return Ok(());
+        }
+
+        if !self.is_good_time(&logon) {
+            self.log().on_event("Logon has bad sending time");
+            self.disconnect("bad sending time");
+            return Ok(());
+        }
+
+        self.state.set_received_logon(true);
+        self.log().on_event("Received logon");
+
+        if !self.state.is_initiator() {
+            let heartbeat_int = logon.get_int(tags::HeartBtInt)?;
+            self.state.set_heartbeat_int(heartbeat_int);
+            self.generate_logon_other(&logon);
+            self.log().on_event("Responding to logon request");
+        }
+
+        self.state.set_sent_reset(false);
+        self.state.set_received_reset(false);
+
+        let msg_seq_num = logon.header().get_int(tags::MsgSeqNum)?;
+        if self.is_target_too_high(msg_seq_num) && !received_reset {
+            self.do_target_too_high(logon, msg_seq_num);
+        } else {
+            self.state.incr_next_target_msg_seq_num()
+        }
+
+        if self.is_logged_on() {
+            self.application.on_logon(&self.session_id)?;
+        }
+        Ok(())
     }
-    fn next_logout(&self, message: Message) -> Result<(), HandleError> {
-        todo!()
+    fn next_logout(&mut self, logout: Message) -> Result<(), HandleError> {
+        //TODO cloned
+        if !self.verify_opt(logout.clone(), false, false)? {
+            return Ok(());
+        }
+
+        // string disconnectReason;
+
+        let reason = if !self.state.sent_logout() {
+            let reason = "Received logout request";
+            self.log().on_event(reason);
+            self.generate_logout(None, Some(logout));
+            reason
+        } else {
+            let reason = "Received logout response";
+            self.log().on_event(reason);
+            reason
+        };
+
+        self.state.incr_next_target_msg_seq_num();
+
+        if self.reset_on_logon() {
+            self.state.reset(Some("ResetOnLogout"));
+        }
+        self.disconnect(reason);
+        Ok(())
     }
-    fn next_heartbeat(&self, message: Message) -> Result<(), HandleError> {
-        todo!()
+    fn next_heartbeat(&mut self, message: Message) -> Result<(), HandleError> {
+        if !self.verify(message)? {
+            Ok(())
+        } else {
+            self.state.incr_next_sender_msg_seq_num();
+            Ok(())
+        }
     }
-    fn next_test_request(&self, message: Message) -> Result<(), HandleError> {
-        todo!()
+    fn next_test_request(&mut self, message: Message) -> Result<(), HandleError> {
+        // TODO cloned?
+        if !self.verify(message.clone())? {
+            return Ok(());
+        }
+        self.generate_heartbeat_other(&message);
+        self.state.incr_next_target_msg_seq_num();
+        Ok(())
     }
-    fn next_sequence_reset(&self, message: Message) -> Result<(), HandleError> {
-        todo!()
+
+    fn next_sequence_reset(&mut self, message: Message) -> Result<(), HandleError> {
+        let is_gap_fill = message.is_field_set(tags::GapFillFlag) && message.get_bool(tags::GapFillFlag);
+
+        // TODO clone?
+        if !self.verify_opt(message.clone(), is_gap_fill, is_gap_fill)? {
+            return Ok(());
+        }
+
+        if message.is_field_set(tags::NewSeqNo) {
+            let new_seq_no = message.get_int(tags::NewSeqNo)?;
+            self.log.on_event(format!("Received SequenceReset FROM: {} TO: {}", self.state.get_next_target_msg_seq_num(), new_seq_no).as_str());
+            if new_seq_no > self.state.get_next_target_msg_seq_num() {
+                self.state.set_next_target_msg_seq_num(new_seq_no);
+            }else if new_seq_no < self.state.get_next_target_msg_seq_num() {
+                self.generate_reject(message, SessionRejectReason::VALUE_IS_INCORRECT, None);
+            }
+        }
+
+        Ok(())
     }
+
     fn next_resend_request(&self, message: Message) -> Result<(), HandleError> {
+        // if (!Verify(resendReq, false, false))
+        //     return;
+        // try
+        // {
+        //     int msgSeqNum = 0;
+        //     if (!(this.IgnorePossDupResendRequests && resendReq.Header.IsSetField(Tags.PossDupFlag)))
+        //     {
+        //         int begSeqNo = resendReq.GetInt(Fields.Tags.BeginSeqNo);
+        //         int endSeqNo = resendReq.GetInt(Fields.Tags.EndSeqNo);
+        //         this.Log.OnEvent("Got resend request from " + begSeqNo + " to " + endSeqNo);
+
+        //         if ((endSeqNo == 999999) || (endSeqNo == 0))
+        //         {
+        //             endSeqNo = state_.GetNextSenderMsgSeqNum() - 1;
+        //         }
+
+        //         if (!PersistMessages)
+        //         {
+        //             endSeqNo++;
+        //             int next = state_.GetNextSenderMsgSeqNum();
+        //             if (endSeqNo > next)
+        //                 endSeqNo = next;
+        //             GenerateSequenceReset(resendReq, begSeqNo, endSeqNo);
+        //             msgSeqNum = resendReq.Header.GetInt(Tags.MsgSeqNum);
+        //             if (!IsTargetTooHigh(msgSeqNum) && !IsTargetTooLow(msgSeqNum))
+        //             {
+        //                 state_.IncrNextTargetMsgSeqNum();
+        //             }
+        //             return;
+        //         }
+
+        //         List<string> messages = new List<string>();
+        //         state_.Get(begSeqNo, endSeqNo, messages);
+        //         int current = begSeqNo;
+        //         int begin = 0;
+        //         foreach (string msgStr in messages)
+        //         {
+        //             Message msg = new Message();
+        //             msg.FromString(msgStr, true, this.SessionDataDictionary, this.ApplicationDataDictionary, msgFactory_);
+        //             msgSeqNum = msg.Header.GetInt(Tags.MsgSeqNum);
+
+        //             if ((current != msgSeqNum) && begin == 0)
+        //             {
+        //                 begin = current;
+        //             }
+
+        //             if (IsAdminMessage(msg) && !(this.ResendSessionLevelRejects && msg.Header.GetString(Tags.MsgType) == MsgType.REJECT))
+        //             {
+        //                 if (begin == 0)
+        //                 {
+        //                     begin = msgSeqNum;
+        //                 }
+        //             }
+        //             else
+        //             {
+
+        //                 initializeResendFields(msg);
+        //                 if(!ResendApproved(msg, SessionID))
+        //                 {
+        //                     continue;
+        //                 }
+
+        //                 if (begin != 0)
+        //                 {
+        //                     GenerateSequenceReset(resendReq, begin, msgSeqNum);
+        //                 }
+        //                 Send(msg.ToString());
+        //                 begin = 0;
+        //             }
+        //             current = msgSeqNum + 1;
+        //         }
+
+        //         int nextSeqNum = state_.GetNextSenderMsgSeqNum();
+        //         if (++endSeqNo > nextSeqNum)
+        //         {
+        //             endSeqNo = nextSeqNum;
+        //         }
+
+        //         if (begin == 0)
+        //         {
+        //             begin = current;
+        //         }
+
+        //         if (endSeqNo > begin)
+        //         {
+        //             GenerateSequenceReset(resendReq, begin, endSeqNo);
+        //         }
+        //     }
+        //     msgSeqNum = resendReq.Header.GetInt(Tags.MsgSeqNum);
+        //     if (!IsTargetTooHigh(msgSeqNum) && !IsTargetTooLow(msgSeqNum))
+        //     {
+        //         state_.IncrNextTargetMsgSeqNum();
+        //     }
+
+        // }
+        // catch (System.Exception e)
+        // {
+        //     this.Log.OnEvent("ERROR during resend request " + e.Message);
+        // }
         todo!()
     }
 
     /// This will pass the message into the from_admin / from_app methods from the Application
-    fn verify(&mut self, message: Message) -> bool {
+    fn verify(&mut self, message: Message) -> Result<bool, HandleError> {
         self.verify_opt(message, true, true)
     }
     /// This will pass the message into the from_admin / from_app methods from the Application
-    fn verify_opt(&mut self, message: Message, check_too_high: bool, check_too_low: bool) -> bool {
+    fn verify_opt(&mut self, message: Message, check_too_high: bool, check_too_low: bool) -> Result<bool, HandleError> {
         // int msgSeqNum = 0;
         // string msgType = "";
         let mut msg_seq_num = 0;
@@ -650,10 +994,9 @@ impl Session {
         let target_comp_id = message.header().get_string(tags::TargetCompID);
 
         if !self.is_correct_comp_id(sender_comp_id, target_comp_id) {
-            //TODO
-            //self.generate_reject(message, SessionRejectReason.COMPID_PROBLEM);
-            self.generate_logout(None);
-            return false;
+            self.generate_reject(message, SessionRejectReason::COMPID_PROBLEM, None);
+            self.generate_logout(None, None);
+            return Ok(false);
         }
         if check_too_high || check_too_low {
             msg_seq_num = message.header().get_int(tags::MsgSeqNum).unwrap();
@@ -661,11 +1004,11 @@ impl Session {
 
         if check_too_high && self.is_target_too_high(msg_seq_num) {
             self.do_target_too_high(message, msg_seq_num);
-            return false;
+            return Ok(false);
         }
         if check_too_low && self.is_target_too_low(msg_seq_num) {
             self.do_target_too_low(message, msg_seq_num);
-            return false;
+            return Ok(false);
         }
 
         if (check_too_high || check_too_low) && self.state.resend_requested() {
@@ -703,10 +1046,9 @@ impl Session {
 
         if !self.is_good_time(&message) {
             self.log().on_event("Sending time accuracy problem");
-            //TODO
-            //self.generate_reject(message, SessionRejectReason.SENDING_TIME_ACCURACY_PROBLEM);
-            self.generate_logout(None);
-            return false;
+            self.generate_reject(message, SessionRejectReason::SENDING_TIME_ACCURACY_PROBLEM, None);
+            self.generate_logout(None, None);
+            return Ok(false);
         }
         // }
         // catch (System.Exception e)
@@ -728,7 +1070,7 @@ impl Session {
                 .from_app(message, &self.session_id)
                 .unwrap();
         }
-        true
+        Ok(true)
     }
 
     fn is_correct_comp_id(&self, sender_comp_id: String, target_comp_id: String) -> bool {
@@ -743,12 +1085,36 @@ impl Session {
         msg_seq_num < self.state.next_target_msg_seq_num()
     }
 
-    fn do_target_too_high(&self, msg: Message, msg_seq_num: u32) -> () {
-        todo!()
+    fn do_target_too_high(&mut self, msg: Message, msg_seq_num: u32) -> () {
+        // string beginString = msg.Header.GetString(Fields.Tags.BeginString);
+        let begin_string = msg.header().get_string(tags::BeginString);
+
+        // this.Log.OnEvent("MsgSeqNum too high, expecting " + state_.GetNextTargetMsgSeqNum() + " but received " + msgSeqNum);
+        self.log.on_event(format!("MsgSeqNum too high, expecting {} but received {}", self.state.get_next_target_msg_seq_num(), msg_seq_num).as_str());
+        // state_.Queue(msgSeqNum, msg);
+        self.state.queue(msg_seq_num, msg);
+
+        if self.state.resend_requested() {
+            if let Some(range) = self.state.resend_range() {
+                if !self.send_redundant_resend_requests && msg_seq_num >= range.begin_seq_num {
+                    self.log.on_event(format!("Already sent ResendRequest FROM: {} TO: {}.  Not sending another.", range.begin_seq_num, range.end_seq_num).as_str());
+                    return;
+                }
+            }
+        }
+        self.generate_resend_request(begin_string, msg_seq_num)
     }
 
-    fn do_target_too_low(&self, message: Message, msg_seq_num: u32) -> () {
-        todo!()
+    fn do_target_too_low(&mut self, message: Message, msg_seq_num: u32) -> Result<(), HandleError> {
+        let poss_dup_flag = message.header().is_field_set(tags::PossDupFlag) && message.header().get_bool(tags::PossDupFlag);
+
+        if !poss_dup_flag {
+            let err = format!("MsgSeqNum too low, expecting {} but received {}", self.state.get_next_target_msg_seq_num(), msg_seq_num);
+            self.generate_logout(Some(err.clone()), None);
+            return Err(HandleError::String(err))
+        }
+
+        self.do_poss_dup(message)
     }
 
     fn is_good_time(&self, message: &Message) -> bool {
@@ -767,15 +1133,41 @@ impl Session {
     fn generate_resend_request_range(
         &mut self,
         beginstring: String,
-        chunk: u32,
-        new_chunk_end_seq_no: u32,
-    ) -> () {
+        start_seq_num: u32,
+        end_seq_num: u32,
+    ) -> Result<bool, HandleError> {
+        let mut resend_request = self
+            .msg_factory
+            .create(&self.session_id.begin_string, MsgType::RESEND_REQUEST)?;
+
+        resend_request.set_field(tags::BeginSeqNo, format!("{}", start_seq_num).as_str());
+        resend_request.set_field(tags::BeginSeqNo, format!("{}", end_seq_num).as_str());
+
+        self.initialize_header(&mut resend_request, None);
+        if self.send_raw(resend_request, 0)? {
+            self.log.on_event(format!("Sent ResendRequest FROM: {} TO: {}", start_seq_num, end_seq_num).as_str());
+            Ok(true)
+        }else{
+            self.log.on_event(format!("Error sending ResendRequest ({},{})", start_seq_num, end_seq_num).as_str());
+            Ok(false)
+        }
+    }
+
+    fn generate_reject(&self, message: Message, reason: &str, field: Option<Tag>) {
+        todo!()
+    }
+
+    fn generate_resend_request(&self, begin_string: String, msg_seq_num: u32) {
+        todo!()
+    }
+
+    fn do_poss_dup(&self, message: Message) -> Result<(), HandleError> {
         todo!()
     }
 }
 
 fn is_session_time(session_schedule: &SessionSchedule) -> bool {
-    todo!("{:?}", session_schedule)
+    session_schedule.is_session_time(Utc::now())
 }
 
 pub enum HandleError {
@@ -784,6 +1176,8 @@ pub enum HandleError {
     MessageParseError(MessageParseError),
     MessageValidationError(MessageValidationError),
     String(String),
+    ApplicationError(ApplicationError),
+    FieldMapError(FieldMapError),
 }
 
 impl From<MessageFactoryError> for HandleError {
@@ -804,5 +1198,15 @@ impl From<MessageValidationError> for HandleError {
 impl From<String> for HandleError {
     fn from(e: String) -> Self {
         HandleError::String(e)
+    }
+}
+impl From<ApplicationError> for HandleError {
+    fn from(e: ApplicationError) -> Self {
+        HandleError::ApplicationError(e)
+    }
+}
+impl From<FieldMapError> for HandleError {
+    fn from(e: FieldMapError) -> Self {
+        HandleError::FieldMapError(e)
     }
 }

@@ -216,13 +216,14 @@ impl Message {
 
     // public static StringField ExtractField(string msgstr, ref int pos, DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD)
     fn extract_field(
-        msgstr: &str,
+        msgstr: &[u8],
         pos: &mut usize,
         _session_dd: Option<&DataDictionary>,
         _app_dd: Option<&DataDictionary>,
+        size_hint: Option<usize>,
     ) -> Result<FieldBase, MessageParseError> {
         // int tagend = msgstr.IndexOf('=', pos);
-        let tagend = msgstr[*pos..].chars().position(|c| c == '=');
+        let tagend = msgstr[*pos..].iter().position(|c| *c == '=' as u8);
         if tagend.is_none() {
             return Err(MessageParseError::FailedToFindEqualsAt(*pos));
         }
@@ -233,10 +234,15 @@ impl Message {
         if *pos > tagend {
             return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
         }
-        let tag: Result<u32, _> = msgstr[*pos..tagend].parse();
+        let result = std::str::from_utf8(&msgstr[*pos..tagend]);
+        if let Err(e) = result {
+            println!("{:?}", &msgstr[*pos..tagend]);
+            panic!("{}", e);
+        }
+        let tag: Result<u32, _> = result.unwrap().parse();
         if tag.is_err() {
             return Err(MessageParseError::FailedToConvertTagToInt(
-                msgstr[*pos..tagend].into(),
+                std::str::from_utf8(&msgstr[*pos..tagend]).unwrap().into(),
             ));
         }
         let tag = tag.unwrap();
@@ -245,7 +251,11 @@ impl Message {
         *pos = tagend + 1;
 
         //     int fieldvalend = msgstr.IndexOf((char)1, pos);
-        let fieldend = msgstr[*pos..].chars().position(|c| c == Message::SOH);
+        let fieldend = if let Some(value) = size_hint {
+            Some(value)
+        } else {
+            msgstr[*pos..].iter().position(|c| *c == Message::SOH as u8)
+        };
         // println!("{}", msgstr[*pos..].chars().collect::<String>());
         if fieldend.is_none() {
             return Err(MessageParseError::FailedToFindSohAt(*pos));
@@ -253,7 +263,7 @@ impl Message {
         let fieldend = *pos + fieldend.unwrap();
         //     StringField field =  new StringField(tag, msgstr.Substring(pos, fieldvalend - pos));
         let value = &msgstr[*pos..fieldend];
-        let field = FieldBase::new(tag, value.into());
+        let field = FieldBase::from_bytes(tag, value.into());
 
         /*
          TODO data dict stuff
@@ -297,7 +307,7 @@ impl Message {
     /// > Intended for callers that only need rejection-related information from the header.
     pub fn from_string(
         &mut self,
-        msgstr: &str,
+        msgstr: &[u8],
         validate: bool,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
@@ -321,12 +331,18 @@ impl Message {
         let mut pos = 0;
         //      DataDictionary.IFieldMapSpec msgMap = null;
         let mut msg_map: Option<&DDMap> = None;
+        let mut size_hint = None;
 
         //      while (pos < msgstr.Length)
         while pos < msgstr.len() {
             // println!("{}", pos);
             //          StringField f = ExtractField(msgstr, ref pos, sessionDD, appDD);
-            let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd)?;
+            let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
+            match (session_dd, app_dd) {
+                (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                _ => size_hint = None
+            };
             // println!("{:?}", f);
 
             //          if (validate && (count < 3) && (Header.HEADER_FIELD_ORDER[count++] != f.Tag))
@@ -355,11 +371,11 @@ impl Message {
                 //              if (Tags.MsgType.Equals(f.Tag))
                 if tags::MsgType == f.tag() {
                     //                  msgType = string.Copy(f.Obj);
-                    msg_type = f.value();
+                    msg_type = f.string_value();
                     //                  if (appDD != null)
                     if let Some(app_dd) = app_dd {
                         //                      msgMap = appDD.GetMapForMessage(msgType);
-                        msg_map = app_dd.get_map_for_message(msg_type);
+                        msg_map = app_dd.get_map_for_message(msg_type.as_str());
                     }
                 }
 
@@ -461,7 +477,7 @@ impl Message {
 
     fn set_group(
         grp_no_fld: FieldBase,
-        msgstr: &str,
+        msgstr: &[u8],
         pos: usize,
         map: &mut FieldMap,
         group_dd: Option<&DDGroup>,
@@ -479,13 +495,19 @@ impl Message {
         let grp_pos = pos;
         // Group grp = null; // the group entry being constructed
         let mut group: Option<Group> = None;
+        let mut size_hint = None;
 
         // while (pos < msgstr.Length)
         while pos < msgstr.len() {
             // grpPos = pos;
             let grp_pos = pos;
             // StringField f = ExtractField(msgstr, ref pos, sessionDataDictionary, appDD);
-            let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd)?;
+            let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
+            match (session_dd, app_dd) {
+                (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                _ => size_hint = None
+            };
             // if (f.Tag == grpEntryDelimiterTag)
             if f.tag() == grp_entry_delimiter_tag {
                 // This is the start of a group entry.
@@ -664,16 +686,17 @@ impl Message {
         msg_type.len() == 1 && "0A12345n".contains(msg_type)
     }
 
-    pub(crate) fn extract_begin_string(msgstr: &str) -> Result<String, MessageParseError> {
+    pub(crate) fn extract_begin_string(msgstr: &[u8]) -> Result<String, MessageParseError> {
         let mut pos = 0;
-        let f = Message::extract_field(msgstr, &mut pos, None, None)?;
-        Ok(f.value().clone())
+        let f = Message::extract_field(msgstr, &mut pos, None, None, None)?;
+        Ok(f.string_value().clone())
     }
 
-    pub(crate) fn get_msg_type(msgstr: &str) -> Result<&str, MessageParseError> {
+    pub(crate) fn get_msg_type(msgstr: &[u8]) -> Result<&str, MessageParseError> {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"35=([^\x01])*\x01").unwrap();
         }
+        let msgstr = std::str::from_utf8(msgstr).unwrap();
         RE.captures(msgstr)
             .and_then(|cap| cap.get(1).map(|login| login.as_str()))
             .ok_or_else(|| {
@@ -684,7 +707,7 @@ impl Message {
             })
     }
 
-    pub(crate) fn identify_type(msg_str: &str) -> Result<&str, MessageParseError> {
+    pub(crate) fn identify_type(msg_str: &[u8]) -> Result<&str, MessageParseError> {
         //TODO wrap in MsgType field?
         Message::get_msg_type(msg_str)
     }
@@ -723,6 +746,10 @@ impl Message {
             fix_values::BeginString::FIX50SP2 => Ok(ApplVerID::FIX50SP2),
             _ => Err(format!("ApplVerID for {} not supported", begin_string)),
         }
+    }
+
+    pub(crate) fn reverse_route(other: &Message) {
+        todo!("reverse_route: {}", other)
     }
 }
 
@@ -779,9 +806,7 @@ mod tests {
     #[test]
     fn test_parse() {
         let reader = File::open("spec/FIXT11.xml").unwrap();
-        //let fd  = serde_xml_rs::from_reader(reader);
-        let jd = &mut serde_xml_rs::Deserializer::new_from_reader(reader);
-        let fd = serde_path_to_error::deserialize(jd);
+        let fd  = serde_xml_rs::from_reader(reader);
         //println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
@@ -794,7 +819,7 @@ mod tests {
         let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
 
         let msgstr = expected.replace('|', "\x01");
-        let result = message.from_string(&msgstr, true, Some(&dd), Some(&dd), None, false);
+        let result = message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         assert!(result.is_ok());
 
@@ -808,9 +833,7 @@ mod tests {
     #[test]
     fn test_validate() {
         let reader = File::open("spec/FIX44.xml").unwrap();
-        //let fd  = serde_xml_rs::from_reader(reader);
-        let jd = &mut serde_xml_rs::Deserializer::new_from_reader(reader);
-        let fd = serde_path_to_error::deserialize(jd);
+        let fd  = serde_xml_rs::from_reader(reader);
         //println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
@@ -822,7 +845,7 @@ mod tests {
         let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
 
         let msgstr = expected.replace('|', "\x01");
-        let result = message.from_string(&msgstr, true, Some(&dd), Some(&dd), None, false);
+        let result = message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         assert!(result.is_ok());
         assert!(message.is_admin());
@@ -843,7 +866,7 @@ mod tests {
     fn test_get_msg_type_success() {
         let msgstr = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
         let msgstr = msgstr.replace('|', "\x01");
-        let msg_type = Message::get_msg_type(&msgstr);
+        let msg_type = Message::get_msg_type(msgstr.as_bytes());
         assert!(msg_type.is_ok());
         assert!(msg_type.unwrap() == "A");
     }
@@ -852,11 +875,49 @@ mod tests {
     fn test_get_msg_type_failure() {
         let msgstr = "8=FIX.4.4|9=115|35=|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
         let msgstr = msgstr.replace('|', "\x01");
-        let msg_type = Message::get_msg_type(&msgstr);
+        let msg_type = Message::get_msg_type(msgstr.as_bytes());
         assert!(msg_type.is_err());
         assert!(matches!(
             msg_type.err().unwrap(),
             MessageParseError::Malformed(_)
         ));
+    }
+
+    #[test]
+    fn test_get_msg_type_raw_data() {
+        let reader = File::open("spec/FIX44.xml").unwrap();
+        let fd  = serde_xml_rs::from_reader(reader);
+        //println!("{:?}", fd);
+        assert!(fd.is_ok());
+        let fd: FixSpec = fd.unwrap();
+        let dd = DataDictionary::new(true, true, true, true, fd).unwrap();
+
+        let mut message = Message::default();
+
+        // let msgstr = "8=FIXT.1.1\x019=73\x0135=W\x0134=3\x0149=sender\x0152=20110909-09:09:09.999\x0156=target\x0155=sym\x01268=1\x01269=0\x01272=20111012\x01273=22:15:30.444\x0110=249\x01";
+        let expected = b"8=FIX.4.4|9=115|35=0|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|90=3|91=\xC1\x01\xC0|98=0|108=30|141=Y|553=username|554=password|10=159|";
+        let msgstr: Vec<u8> = expected.iter().map(|b| if *b == '|' as u8 { 1_u8 } else { *b }).collect();
+
+        let result = message.from_string(&msgstr, false, Some(&dd), Some(&dd), None, false);
+        println!("{:?}", result);
+        assert!(result.is_ok());
+        assert!(message.is_admin());
+
+        let actual = message.to_string_mut().replace(Message::SOH, "|");
+
+        let msgstr: String = expected.iter()
+            .map(|b| *b as char)
+            .map(|c| if c == Message::SOH { '|' } else { c })
+            .collect();
+
+        println!("{:?}", expected);
+        println!("{:?}", actual);
+
+        assert_eq!(msgstr, actual);
+
+        let result = DataDictionary::validate(&message, Some(&dd), &dd, "FIX.4.4", "A");
+        println!("{:?}", message);
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 }

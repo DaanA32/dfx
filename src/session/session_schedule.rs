@@ -1,4 +1,4 @@
-use datetime::{Weekday, Instant};
+use chrono::{DateTime, Utc, Weekday};
 
 #[derive(Debug)]
 pub struct SessionSchedule {
@@ -13,7 +13,7 @@ pub struct SessionSchedule {
 }
 
 impl SessionSchedule {
-    pub(crate) fn is_new_session(&self, old_time: Instant, test_time: Instant) -> bool {
+    pub(crate) fn is_new_session(&self, old_time: DateTime<Utc>, test_time: DateTime<Utc>) -> bool {
         if self.non_stop_session {
             return false;
         }
@@ -25,7 +25,7 @@ impl SessionSchedule {
     }
 
     //TODO convert to chrono::DateTime
-    fn next_end(&self, old_time: Instant) -> Instant {
+    fn next_end(&self, old_time: DateTime<Utc>) -> DateTime<Utc> {
         assert!(!self.non_stop_session);
         let mut  d = old_time;
         // DateTime d = AdjustUtcDateTime(utc);
@@ -47,5 +47,9 @@ impl SessionSchedule {
         // else
         // {
         // }
+    }
+
+    pub(crate) fn is_session_time(&self, now: DateTime<Utc>) -> bool {
+        todo!()
     }
 }

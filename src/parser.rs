@@ -4,7 +4,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn read_fix_message(&mut self) -> Result<Option<String>, ParserError> {
+    pub fn read_fix_message(&mut self) -> Result<Option<Vec<u8>>, ParserError> {
         todo!()
     }
 

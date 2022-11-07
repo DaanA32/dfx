@@ -1,3 +1,5 @@
+use chrono::{Utc, DateTime};
+
 use crate::log::Log;
 use crate::message::Message;
 use crate::message_store::MessageStore;
@@ -457,7 +459,7 @@ impl SessionState {
         self.logger = logger;
     }
 
-    pub(crate) fn creation_time(&self) -> Option<Instant> {
+    pub(crate) fn creation_time(&self) -> Option<DateTime<Utc>> {
         self.msg_store.creation_time()
     }
 
@@ -473,12 +475,20 @@ impl SessionState {
         self.msg_store.set_next_sender_msg_seq_num(seq_num)
     }
 
+    pub(crate) fn get_next_sender_msg_seq_num(&mut self) -> u32 {
+        todo!()
+    }
+
     pub(crate) fn incr_next_sender_msg_seq_num(&mut self) {
         self.msg_store.incr_next_sender_msg_seq_num()
     }
 
     pub(crate) fn next_target_msg_seq_num(&self) -> u32 {
         self.msg_store.next_target_msg_seq_num()
+    }
+
+    pub(crate) fn get_next_target_msg_seq_num(&mut self) -> u32 {
+        todo!()
     }
 
     pub(crate) fn set_next_target_msg_seq_num(&mut self, seq_num: u32) {
@@ -495,6 +505,10 @@ impl SessionState {
 
     pub(crate) fn set(&mut self, msg_seq_num: u32, message_string: &str) {
         self.msg_store.set(msg_seq_num, message_string)
+    }
+
+    pub(crate) fn queue(&self, msg_seq_num: u32, msg: Message) {
+        todo!()
     }
 }
 
