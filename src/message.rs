@@ -13,6 +13,7 @@ use crate::field_map::Tag;
 use crate::fields::ApplVerID;
 use crate::fix_values;
 use crate::message_factory::MessageFactory;
+use crate::session::SessionId;
 use crate::tags;
 use std::fmt::Display;
 use std::ops::Deref;
@@ -339,9 +340,11 @@ impl Message {
             //          StringField f = ExtractField(msgstr, ref pos, sessionDD, appDD);
             let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
             match (session_dd, app_dd) {
-                (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
+                    size_hint = f.to_usize()
+                }
                 (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
-                _ => size_hint = None
+                _ => size_hint = None,
             };
             // println!("{:?}", f);
 
@@ -504,9 +507,11 @@ impl Message {
             // StringField f = ExtractField(msgstr, ref pos, sessionDataDictionary, appDD);
             let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
             match (session_dd, app_dd) {
-                (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
+                    size_hint = f.to_usize()
+                }
                 (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
-                _ => size_hint = None
+                _ => size_hint = None,
             };
             // if (f.Tag == grpEntryDelimiterTag)
             if f.tag() == grp_entry_delimiter_tag {
@@ -667,7 +672,7 @@ impl Message {
         self.header
             .set_field_base(FieldBase::new(tags::BodyLength, len), Some(true));
         let checksum = self.checksum().to_string();
-        self.header
+        self.trailer
             .set_field_base(FieldBase::new(tags::CheckSum, checksum), Some(true));
         format!(
             "{}{}{}",
@@ -679,7 +684,7 @@ impl Message {
 
     pub fn is_admin(&self) -> bool {
         self.header.is_field_set(tags::MsgType)
-            && Message::is_admin_msg_type(&self.header.get_string(tags::MsgType))
+            && Message::is_admin_msg_type(&self.header.get_string(tags::MsgType).unwrap())
     }
 
     pub fn is_admin_msg_type(msg_type: &str) -> bool {
@@ -748,8 +753,130 @@ impl Message {
         }
     }
 
-    pub(crate) fn reverse_route(other: &Message) {
-        todo!("reverse_route: {}", other)
+    pub(crate) fn reverse_route(&mut self, header: &Header) {
+        // required routing tags
+        self.header.remove_field(tags::BeginString);
+        self.header.remove_field(tags::SenderCompID);
+        self.header.remove_field(tags::SenderSubID);
+        self.header.remove_field(tags::SenderLocationID);
+        self.header.remove_field(tags::TargetCompID);
+        self.header.remove_field(tags::TargetSubID);
+        self.header.remove_field(tags::TargetLocationID);
+
+        if header.is_field_set(tags::BeginString) {
+            let begin_string = header.get_string(tags::BeginString).unwrap();
+            if begin_string.len() > 0 {
+                self.header.set_field(tags::BeginString, &begin_string);
+            }
+
+            self.header.remove_field(tags::OnBehalfOfLocationID);
+            self.header.remove_field(tags::DeliverToLocationID);
+
+            if begin_string.as_str() >= "FIX.4.1" {
+                if self.header.is_field_set(tags::OnBehalfOfLocationID) {
+                    let on_behalf_of_location_id = header.get_string(tags::OnBehalfOfLocationID).unwrap();
+                    if on_behalf_of_location_id.len() > 0 {
+                        self.header.set_field(tags::DeliverToLocationID, &on_behalf_of_location_id);
+                    }
+                }
+
+                if self.header.is_field_set(tags::DeliverToLocationID) {
+                    let deliver_to_location_id = header.get_string(tags::DeliverToLocationID).unwrap();
+                    if deliver_to_location_id.len() > 0 {
+                        self.header.set_field(tags::OnBehalfOfLocationID, &deliver_to_location_id);
+                    }
+                }
+            }
+        }
+
+        if self.header.is_field_set(tags::SenderCompID) {
+            let sender_comp_id = header.get_string(tags::SenderCompID).unwrap();
+            if sender_comp_id.len() > 0 {
+                self.header.set_field(tags::TargetCompID, &sender_comp_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::SenderSubID) {
+            let sender_sub_id = header.get_string(tags::SenderSubID).unwrap();
+            if sender_sub_id.len() > 0 {
+                self.header.set_field(tags::TargetSubID, &sender_sub_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::SenderLocationID) {
+            let sender_location_id = header.get_string(tags::SenderLocationID).unwrap();
+            if sender_location_id.len() > 0 {
+                self.header.set_field(tags::TargetLocationID, &sender_location_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::TargetCompID) {
+            let target_comp_id = header.get_string(tags::TargetCompID).unwrap();
+            if target_comp_id.len() > 0 {
+                self.header.set_field(tags::SenderCompID, &target_comp_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::TargetSubID) {
+            let target_sub_id = header.get_string(tags::TargetSubID).unwrap();
+            if target_sub_id.len() > 0 {
+                self.header.set_field(tags::SenderSubID, &target_sub_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::TargetLocationID) {
+            let target_location_id = header.get_string(tags::TargetLocationID).unwrap();
+            if target_location_id.len() > 0 {
+                self.header.set_field(tags::SenderLocationID, &target_location_id);
+            }
+        }
+
+        // // optional routing tags
+        self.header.remove_field(tags::OnBehalfOfCompID);
+        self.header.remove_field(tags::OnBehalfOfSubID);
+        self.header.remove_field(tags::DeliverToCompID);
+        self.header.remove_field(tags::DeliverToSubID);
+
+        if self.header.is_field_set(tags::OnBehalfOfCompID) {
+            let on_behalf_of_comp_id = header.get_string(tags::OnBehalfOfCompID).unwrap();
+            if on_behalf_of_comp_id.len() > 0 {
+                self.header.set_field(tags::DeliverToCompID, &on_behalf_of_comp_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::OnBehalfOfSubID) {
+            let on_behalf_of_sub_id = header.get_string(tags::OnBehalfOfSubID).unwrap();
+            if on_behalf_of_sub_id.len() > 0 {
+                self.header.set_field(tags::DeliverToSubID, &on_behalf_of_sub_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::DeliverToCompID) {
+            let deliver_to_comp_id = header.get_string(tags::DeliverToCompID).unwrap();
+            if deliver_to_comp_id.len() > 0 {
+                self.header.set_field(tags::OnBehalfOfCompID, &deliver_to_comp_id);
+            }
+        }
+
+        if self.header.is_field_set(tags::DeliverToSubID) {
+            let deliver_to_sub_id = header.get_string(tags::DeliverToSubID).unwrap();
+            if deliver_to_sub_id.len() > 0 {
+                self.header.set_field(tags::OnBehalfOfSubID, &deliver_to_sub_id);
+            }
+        }
+        //todo!("reverse_route: {:?}", header)
+    }
+
+    pub(crate) fn extract_contra_session_id(&self) -> SessionId {
+        SessionId::new(
+            self.header.get_string(tags::BeginString).unwrap_or_default(),
+            self.header.get_string(tags::TargetCompID).unwrap_or_default(),
+            self.header.get_string(tags::TargetSubID).unwrap_or_default(),
+            self.header.get_string(tags::TargetLocationID).unwrap_or_default(),
+            self.header.get_string(tags::SenderCompID).unwrap_or_default(),
+            self.header.get_string(tags::SenderSubID).unwrap_or_default(),
+            self.header.get_string(tags::SenderLocationID).unwrap_or_default(),
+        )
     }
 }
 
@@ -806,7 +933,7 @@ mod tests {
     #[test]
     fn test_parse() {
         let reader = File::open("spec/FIXT11.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         //println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
@@ -819,7 +946,8 @@ mod tests {
         let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
 
         let msgstr = expected.replace('|', "\x01");
-        let result = message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
+        let result =
+            message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         assert!(result.is_ok());
 
@@ -833,7 +961,7 @@ mod tests {
     #[test]
     fn test_validate() {
         let reader = File::open("spec/FIX44.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         //println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
@@ -845,7 +973,8 @@ mod tests {
         let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
 
         let msgstr = expected.replace('|', "\x01");
-        let result = message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
+        let result =
+            message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         assert!(result.is_ok());
         assert!(message.is_admin());
@@ -886,7 +1015,7 @@ mod tests {
     #[test]
     fn test_get_msg_type_raw_data() {
         let reader = File::open("spec/FIX44.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         //println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
@@ -895,17 +1024,23 @@ mod tests {
         let mut message = Message::default();
 
         // let msgstr = "8=FIXT.1.1\x019=73\x0135=W\x0134=3\x0149=sender\x0152=20110909-09:09:09.999\x0156=target\x0155=sym\x01268=1\x01269=0\x01272=20111012\x01273=22:15:30.444\x0110=249\x01";
-        let expected = b"8=FIX.4.4|9=115|35=0|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|90=3|91=\xC1\x01\xC0|98=0|108=30|141=Y|553=username|554=password|10=159|";
-        let msgstr: Vec<u8> = expected.iter().map(|b| if *b == '|' as u8 { 1_u8 } else { *b }).collect();
+        let expected = b"8=FIX.4.4|9=138|35=0|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|90=3|91=\xC1\x01\xC0|98=0|108=30|141=Y|553=username|554=password|10=189|";
+        let msgstr: Vec<u8> = expected
+            .iter()
+            .map(|b| if *b == '|' as u8 { 1_u8 } else { *b })
+            .collect();
 
         let result = message.from_string(&msgstr, false, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
+        let actual = message.to_string().replace(Message::SOH, "|");
+        println!("{}", actual);
         assert!(result.is_ok());
         assert!(message.is_admin());
 
         let actual = message.to_string_mut().replace(Message::SOH, "|");
 
-        let msgstr: String = expected.iter()
+        let msgstr: String = expected
+            .iter()
             .map(|b| *b as char)
             .map(|c| if c == Message::SOH { '|' } else { c })
             .collect();

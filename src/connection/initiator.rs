@@ -1,31 +1,68 @@
-use std::{
-    io::Read,
-    net::{SocketAddr, TcpStream},
-};
+use std::{net::SocketAddr, sync::{atomic::AtomicBool, Arc}, thread::{JoinHandle, self}};
 
 use crate::{
     connection::StreamFactory,
-    parser::{Parser, ParserError},
-    session::{Session, SessionId},
+    parser::ParserError,
+    session::Session,
 };
 
-use super::{ConnectionError, SocketSettings};
+use super::{ConnectionError, SocketSettings, SocketReactor};
 
 pub struct SocketInitiator {
     session: Option<Session>,
-    parser: Parser,
-    state: ConnectionState,
     address: SocketAddr,
     socket_settings: SocketSettings,
-    stream: Option<TcpStream>,
-    buffer: [u8; SocketInitiator::BUF_SIZE],
+    thread: Option<JoinHandle<Session>>,
+    running: Arc<AtomicBool>,
 }
 
-pub enum ConnectionState {
-    Pending(SessionId),
-    Connected(SessionId),
-    Disconnected(SessionId),
-    NotStarted,
+impl SocketInitiator {
+    pub fn new(address: SocketAddr, socket_settings: SocketSettings) -> Self {
+        let session = None;
+        // TODO move this to a concurrent map > SessionState > Sender<Message>
+        SocketInitiator {
+            session,
+            address,
+            socket_settings,
+            thread: None,
+            running: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn set_session(&mut self, session: Session) {
+        self.session = Some(session)
+    }
+
+    pub fn start(&mut self) {
+        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
+        let ac = SocketInitiatorThread::new(
+            self.address.clone(),
+            self.socket_settings.clone(),
+            self.session.take()
+        );
+        let thread = ac.start(&self.running);
+        self.thread = Some(thread);
+    }
+    pub fn join(&mut self) {
+        if let Some(t) = self.thread.take() {
+            t.join().unwrap();
+        }else{
+            panic!();
+        }
+    }
+    pub fn stop(&mut self) {
+        self.running.store(false, std::sync::atomic::Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let session = t.join().unwrap();
+            self.session.replace(session);
+        }
+    }
+}
+
+pub struct SocketInitiatorThread {
+    session: Option<Session>,
+    address: SocketAddr,
+    socket_settings: SocketSettings,
 }
 
 #[derive(Debug)]
@@ -34,7 +71,9 @@ pub enum InitiatorError {
     ConnectionError(ConnectionError),
     ParserError(ParserError),
     IoError(std::io::Error),
+    Disconnect,
 }
+
 impl From<ConnectionError> for InitiatorError {
     fn from(e: ConnectionError) -> InitiatorError {
         InitiatorError::ConnectionError(e)
@@ -51,118 +90,44 @@ impl From<std::io::Error> for InitiatorError {
     }
 }
 
-impl SocketInitiator {
-    pub const BUF_SIZE: usize = 512;
+impl SocketInitiatorThread {
 
-    pub fn new(address: SocketAddr, socket_settings: SocketSettings) -> Self {
-        let session = None;
-        let parser = Parser::default();
-        let state = ConnectionState::NotStarted;
-        let stream = None;
-        let buffer = [0; Self::BUF_SIZE];
-        SocketInitiator {
+    pub fn new(address: SocketAddr, socket_settings: SocketSettings, session: Option<Session>) -> Self {
+        SocketInitiatorThread {
             session,
-            parser,
-            state,
             address,
             socket_settings,
-            stream,
-            buffer,
         }
     }
 
-    pub fn get_session_mut(&mut self) -> Option<&mut Session> {
-        self.session.as_mut()
+    pub(crate) fn start(mut self, _running: &Arc<AtomicBool>) -> JoinHandle<Session> {
+        thread::Builder::new()
+            .name("socket-initiator-thread".into())
+            .spawn(move || {
+            if let Err(e) = self.event_loop() {
+                match e {
+                    e => todo!("SocketInitiator::start: Error {:?}", e)
+                }
+            }
+            self.session.unwrap()
+        }).expect("socket-acceptor-thread started")
     }
 
-    pub fn start(&mut self) {
-        if let Err(e) = self.event_loop() {
-            println!("SocketInitiator::start: Error {:?}", e);
-        }
-    }
-
-    pub fn event_loop(&mut self) -> Result<(), InitiatorError> {
-        //let session: &mut Session = self.get_session_mut();
-        self.connect()?;
-        //  t.Initiator.SetConnected(t.Session.SessionID);
-        let session_id = self
-            .session
-            .as_ref()
-            .expect("Session not found!")
-            .session_id()
-            .clone();
-        self.set_connected(session_id);
-
-        let session = self.session.as_mut().expect("Session not found!");
-        session.log().on_event("Connection succeeded");
-        session.next();
-        while self.read()? {}
-        // if (t.Initiator.IsStopped)
-        //     t.Initiator.RemoveThread(t);
-        let session_id = self
-            .session
-            .as_ref()
-            .expect("Session not found!")
-            .session_id()
-            .clone();
-        self.set_disconnected(session_id);
-        Ok(())
-    }
-
-    fn set_connected(&mut self, session_id: SessionId) {
-        self.state = ConnectionState::Connected(session_id);
-    }
-
-    fn set_disconnected(&mut self, session_id: SessionId) {
-        self.state = ConnectionState::Disconnected(session_id);
-    }
-
-    fn connect(&mut self) -> Result<(), InitiatorError> {
-        assert!(self.stream.is_none());
-        self.stream = Some(StreamFactory::create_client_stream(
+    pub fn event_loop(&mut self,) -> Result<(), InitiatorError> {
+        let stream = StreamFactory::create_client_stream(
             &self.address,
             &self.socket_settings,
-        )?);
-        //TODO set responder (channels!?)
-        Ok(())
-    }
+        )?;
 
-    fn read(&mut self) -> Result<bool, InitiatorError> {
-        let read = self.read_some()?;
-        if read > 0 {
-            self.parser.add_to_stream(&self.buffer[..read]);
-        } else if let Some(session) = self.get_session_mut() {
-            session.next();
-        } else {
-            return Err(InitiatorError::Timeout(
-                "Initiator timed out while reading socket".into(),
-            ));
-        }
-
-        self.process_stream()?;
-        Ok(true)
-    }
-
-    pub fn read_some(&mut self) -> Result<usize, InitiatorError> {
-        // read bytes nonblocking from stream...
-        // add bytes to parser
-        // return bytes read
-        if let Some(stream) = self.stream.as_mut() {
-            let read = stream.read(&mut self.buffer)?;
-            Ok(read)
-        } else {
-            //TODO Error?
-            Ok(0)
-        }
-    }
-
-    pub fn process_stream(&mut self) -> Result<(), InitiatorError> {
-        while let Some(msg) = self.parser.read_fix_message()? {
-            self.session
-                .as_mut()
-                .expect("Session should not be None at this point.")
-                .next_msg(msg);
+        let session = self.session.take();
+        assert!(session.is_some(), "Expected existing session");
+        let reactor = SocketReactor::new(stream, session);
+        let session = reactor.start();
+        match session {
+            Some(session) => { self.session.replace(session); },
+            None => {},
         }
         Ok(())
     }
+
 }

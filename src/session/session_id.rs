@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
+//TODO partial match on sender + target comp?
+#[derive(Debug, Clone, Default, Hash, PartialEq)]
 pub struct SessionId {
     pub id: String,
     pub begin_string: String,
@@ -13,17 +14,33 @@ pub struct SessionId {
     // pub session_qualifier: String,
     pub is_fixt: bool,
 }
+
 impl SessionId {
-    pub fn new(
-        begin_string: String,
-        sender_comp_id: String,
-        sender_sub_id: String,
-        sender_location_id: String,
-        target_comp_id: String,
-        target_sub_id: String,
-        target_location_id: String,
+    pub fn new<A, B, C, D, E, F, G>(
+        begin_string: A,
+        sender_comp_id: B,
+        sender_sub_id: C,
+        sender_location_id: D,
+        target_comp_id: E,
+        target_sub_id: F,
+        target_location_id: G,
         // session_qualifier: String,
-    ) -> Self {
+    ) -> Self
+        where A: Into<String>,
+              B: Into<String>,
+              C: Into<String>,
+              D: Into<String>,
+              E: Into<String>,
+              F: Into<String>,
+              G: Into<String>,
+    {
+        let begin_string = begin_string.into();
+        let sender_comp_id = sender_comp_id.into();
+        let sender_sub_id = sender_sub_id.into();
+        let sender_location_id = sender_location_id.into();
+        let target_comp_id = target_comp_id.into();
+        let target_sub_id = target_sub_id.into();
+        let target_location_id = target_location_id.into();
         let id = format!(
             "{}:{}{}{}->{}{}{}",
             begin_string,
@@ -47,6 +64,10 @@ impl SessionId {
             // session_qualifier,
             is_fixt,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.sender_comp_id.len() + self.target_comp_id.len() == 0
     }
 }
 

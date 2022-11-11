@@ -1,3 +1,6 @@
+use std::marker::PhantomData;
+
+use crate::field_map::FieldMapError;
 use crate::message::Message;
 use crate::session::SessionId;
 
@@ -6,9 +9,16 @@ pub enum ApplicationError {
     DoNotAccept,
     LogonReject,
     DoNotSend(Box<Message>),
+    FieldMapError(FieldMapError)
 }
 
-pub trait Application {
+impl From<FieldMapError> for ApplicationError {
+    fn from(e: FieldMapError) -> Self {
+        ApplicationError::FieldMapError(e)
+    }
+}
+
+pub trait Application: Send {
     fn on_create(&mut self, session_id: &SessionId) -> Result<(), ApplicationError>;
     fn on_logon(&mut self, session_id: &SessionId) -> Result<(), ApplicationError>;
     fn on_logout(&mut self, session_id: &SessionId) -> Result<(), ApplicationError>;
@@ -19,7 +29,7 @@ pub trait Application {
     ) -> Result<Message, ApplicationError>;
     fn from_admin(
         &mut self,
-        message: Message,
+        message: &Message,
         session_id: &SessionId,
     ) -> Result<(), ApplicationError>;
     fn to_app(
@@ -29,39 +39,44 @@ pub trait Application {
     ) -> Result<Message, ApplicationError>;
     fn from_app(
         &mut self,
-        message: Message,
+        message: &Message,
         session_id: &SessionId,
     ) -> Result<(), ApplicationError>;
+
+}
+
+pub trait ApplicationExt: Application {
+    fn early_intercept(&mut self, message: Message, session_id: &SessionId, ) -> Result<Message, ApplicationError>;
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use session_id::SessionId;
 
-    use super::Application;
+    use super::{Application, ApplicationExt};
     use crate::message::Message;
-    use crate::session::session_id;
+    use crate::session::{session_id, self};
 
-    struct TestApplication;
+    pub struct TestApplication;
 
     impl Application for TestApplication {
         fn on_create(
             &mut self,
-            _session_id: &crate::session::SessionId,
+            _session_id: &session::SessionId,
         ) -> Result<(), super::ApplicationError> {
             Ok(())
         }
 
         fn on_logon(
             &mut self,
-            _session_id: &crate::session::SessionId,
+            _session_id: &session::SessionId,
         ) -> Result<(), super::ApplicationError> {
             Ok(())
         }
 
         fn on_logout(
             &mut self,
-            _session_id: &crate::session::SessionId,
+            _session_id: &session::SessionId,
         ) -> Result<(), super::ApplicationError> {
             Ok(())
         }
@@ -69,15 +84,15 @@ mod tests {
         fn to_admin(
             &mut self,
             message: Message,
-            _session_id: &crate::session::SessionId,
+            _session_id: &session::SessionId,
         ) -> Result<Message, super::ApplicationError> {
             Ok(message)
         }
 
         fn from_admin(
             &mut self,
-            _message: Message,
-            _session_id: &crate::session::SessionId,
+            _message: &Message,
+            _session_id: &session::SessionId,
         ) -> Result<(), super::ApplicationError> {
             Ok(())
         }
@@ -85,15 +100,15 @@ mod tests {
         fn to_app(
             &mut self,
             _message: Message,
-            _session_id: &crate::session::SessionId,
+            _session_id: &session::SessionId,
         ) -> Result<Message, super::ApplicationError> {
             Ok(_message)
         }
 
         fn from_app(
             &mut self,
-            _message: Message,
-            _session_id: &crate::session::SessionId,
+            _message: &Message,
+            _session_id: &session::SessionId,
         ) -> Result<(), super::ApplicationError> {
             Ok(())
         }
@@ -102,13 +117,13 @@ mod tests {
     #[test]
     fn test_inject() {
         let session_id = SessionId::new(
-            "".into(),
-            "".into(),
-            "".into(),
-            "".into(),
-            "".into(),
-            "".into(),
-            "".into(),
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
         );
         let mut app = TestApplication {};
         let msg = Message::default();
@@ -122,5 +137,20 @@ mod tests {
         assert!(res.is_ok());
         let _res = res.unwrap();
         //assert!(res.a == 1234);
+    }
+
+    impl ApplicationExt for TestApplication {
+        fn early_intercept(&mut self, message: Message, session_id: &SessionId, ) -> Result<Message, super::ApplicationError> {
+            todo!()
+        }
+    }
+    #[test]
+    fn test_ext() {
+        // let app = TestApplication {};
+        // let boxed: Box<dyn Application> = Box::new(app);
+        // let early = super::get_early_intercept(boxed.as_ref());
+        // let session_id = SessionId::default();
+        // let msg = Message::default();
+        // early.unwrap()(boxed.as_mut(), msg, &session_id);
     }
 }

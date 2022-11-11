@@ -1,3 +1,8 @@
+use chrono::DateTime;
+use chrono::Utc;
+
+use crate::fields::ConversionError;
+use crate::fields::converters::TryFrom;
 use crate::message::Message;
 use crate::tags;
 use std::collections::BTreeMap;
@@ -77,11 +82,16 @@ impl FieldBase {
         &self.1
     }
     pub fn string_value(&self) -> String {
-        self.value().iter().map(|b| *b as char).collect()
+        self.as_value().unwrap()
     }
     pub fn to_string_field(&self) -> String {
         format!("{}={}", self.tag(), self.string_value())
     }
+    pub fn as_value<'a, T>(&'a self) -> Result<T, ConversionError>
+    where T: TryFrom<&'a FieldValue, Error = ConversionError> {
+        TryFrom::try_from(&self.1)
+    }
+
     pub fn get_total(&self) -> u32 {
         self.to_string_field()
             .as_bytes()
@@ -95,10 +105,9 @@ impl FieldBase {
     }
 
     pub(crate) fn to_usize(&self) -> Option<usize> {
-        println!("{}", self.to_string_field());
         match self.string_value().parse::<usize>() {
             Ok(value) => Some(value),
-            Err(_) => None
+            Err(_) => None,
         }
     }
 }
@@ -123,7 +132,7 @@ impl FieldMap {
     }
 
     pub fn set_field_base(&mut self, field: FieldBase, overwrite: Option<bool>) -> bool {
-        if matches!(overwrite, Some(b) if b) {
+        if matches!(overwrite, Some(b) if !b) && self.fields.contains_key(&field.tag()) {
             return false;
         }
         self.fields.insert(field.tag(), field);
@@ -151,23 +160,32 @@ impl FieldMap {
     pub fn get_field(&self, tag: Tag) -> &FieldBase {
         &self.fields[&tag]
     }
+
+    // VALUES
     pub fn get_int(&self, tag: Tag) -> Result<u32, FieldMapError> {
         match self.fields.get(&tag) {
             None => Err(FieldMapError::FieldNotFound(tag)),
             Some(value) => Ok(value.string_value().parse::<u32>().unwrap()),
         }
     }
-    pub fn get_string(&self, tag: Tag) -> String {
+    pub fn get_string(&self, tag: Tag) -> Result<String, FieldMapError> {
+        match self.fields.get(&tag) {
+            None => Err(FieldMapError::FieldNotFound(tag)),
+            Some(value) => Ok(value.string_value()),
+        }
+
+    }
+    pub fn get_string_unchecked(&self, tag: Tag) -> String {
         self.fields[&tag].string_value().into()
     }
     pub fn get_bool(&self, tag: Tag) -> bool {
         self.fields[&tag].string_value() == "Y"
     }
-
-
-    pub(crate) fn get_datetime(&self, tag: Tag) -> Instant {
-        todo!()
+    pub fn get_datetime(&self, tag: Tag) -> DateTime<Utc> {
+        self.fields[&tag].as_value().unwrap()
     }
+    // VALUES
+
     pub fn get_field_mut(&mut self, tag: Tag) -> &mut FieldBase {
         self.fields.get_mut(&tag).unwrap()
     }
@@ -441,7 +459,7 @@ impl FieldMap {
                     format!(
                         "{}={}{}",
                         prefield,
-                        self.get_string(*prefield),
+                        self.get_string_unchecked(*prefield),
                         Message::SOH
                     )
                     .as_str(),
@@ -473,7 +491,9 @@ impl FieldMap {
             }
             //     sb.Append(field.Tag.ToString() + "=" + field.ToString());
             //     sb.Append(Message.SOH);
-            sb.push_str(format!("{}={}{}", field.tag(), field.string_value(), Message::SOH).as_str());
+            sb.push_str(
+                format!("{}={}{}", field.tag(), field.string_value(), Message::SOH).as_str(),
+            );
         }
 
         // foreach(int counterTag in _groups.Keys)

@@ -40,7 +40,7 @@ impl From<FieldMapError> for MessageValidationError {
 #[derive(Clone, Debug)]
 pub enum SpecError {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DataDictionary {
     check_fields_have_values: bool,
     check_fields_out_of_order: bool,
@@ -308,8 +308,8 @@ impl DataDictionary {
                         }
                         Ok(())
                     } else if !fld.enums().contains_key(&field.string_value()) {
-                        println!("{:?}", field);
-                        println!("{:?}", fld.enums());
+                        // println!("{:?}", field);
+                        // println!("{:?}", fld.enums());
                         Err(MessageValidationError::IncorrectTagValue(field.tag()))
                     } else {
                         Ok(())
@@ -1177,7 +1177,7 @@ mod tests {
     #[test]
     fn test_xml_fix40() {
         let reader = File::open("spec/FIX40.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1187,7 +1187,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fix41() {
         let reader = File::open("spec/FIX41.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1197,7 +1197,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fix42() {
         let reader = File::open("spec/FIX42.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1207,7 +1207,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fix43() {
         let reader = File::open("spec/FIX43.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1217,7 +1217,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fix44() {
         let reader = File::open("spec/FIX44.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1227,7 +1227,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fix50() {
         let reader = File::open("spec/FIX50.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1237,7 +1237,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fix50SP1() {
         let reader = File::open("spec/FIX50SP1.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1247,7 +1247,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fix50SP2() {
         let reader = File::open("spec/FIX50SP2.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1257,7 +1257,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fixT11() {
         let reader = File::open("spec/FIXT11.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         println!("{:?}", fd);
         assert!(fd.is_ok());
         let _fd: FixSpec = fd.unwrap();
@@ -1267,7 +1267,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_xml_fixT11_dd() {
         let reader = File::open("spec/FIXT11.xml").unwrap();
-        let fd  = serde_xml_rs::from_reader(reader);
+        let fd = serde_xml_rs::from_reader(reader);
         //println!("{:?}", fd);
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
