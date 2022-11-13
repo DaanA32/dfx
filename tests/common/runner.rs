@@ -33,9 +33,13 @@ lazy_static! {
 
 pub(crate) fn from_filename(filename: &str) -> (JoinHandle<()>, u32) {
     let steps = steps(filename);
-    let port = NEXT_PORT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let port = get_next_available_port();
     let runner_thread = create_thread(steps, 40000);
     (runner_thread, port)
+}
+
+pub fn get_next_available_port() -> u32 {
+    NEXT_PORT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
 }
 
 pub fn steps(filename: &str) -> Vec<TestStep> {

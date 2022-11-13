@@ -13,7 +13,8 @@ use common::TestApplication;
 
 #[test]
 pub fn test_accept() {
-    let addr: SocketAddr = "127.0.0.1:40000".parse().unwrap();
+    let port = runner::get_next_available_port();
+    let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
     println!("{}", addr);
     let session_settings = SocketSettings {};
 
@@ -29,7 +30,7 @@ pub fn test_accept() {
 
     let steps = runner::steps("tests/definitions/server/accept_logon.def");
     acceptor.start();
-    let runner_thread = runner::create_thread(steps, 40000);
+    let runner_thread = runner::create_thread(steps, port);
     //std::thread::sleep(Duration::from_millis(10));
     runner_thread.join().unwrap();
     acceptor.stop();

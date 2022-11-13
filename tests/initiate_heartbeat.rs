@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unused)]
 use dfx::{
     connection::{SocketInitiator, SocketSettings},
     session::{Session, SessionId},
@@ -28,4 +29,3 @@ pub fn test_client_heartbeat() {
     runner_thread.join().unwrap();
     initiator.stop();
 }
-

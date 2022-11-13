@@ -6,7 +6,7 @@ use std::{
 use crate::{
     connection::StreamFactory,
     parser::{Parser, ParserError},
-    session::{Session, SessionId, Responder, ChannelResponder, ResponderEvent, ResponderResponse},
+    session::{Session, SessionId, Responder, ChannelResponder, ResponderEvent, ResponderResponse}, message::Message,
 };
 
 use super::ConnectionError;
@@ -198,10 +198,26 @@ impl SocketReactor {
     fn process_stream(&mut self) -> Result<(), ReactorError> {
         while let Some(msg) = self.parser.read_fix_message()? {
             // println!("{}", msg.iter().map(|b| *b as char).collect::<String>());
-            self.session
-                .as_mut()
-                .expect("Session should not be None at this point.")
-                .next_msg(msg);
+            if let Some(session) = self.session.as_mut() {
+                self.session
+                    .as_mut()
+                    .expect("Session should not be None at this point.")
+                    .next_msg(msg);
+            } else {
+                let msg = Message::new(&msg[..])?;
+                let session = Session::lookup_session(msg.extract_contra_session_id());
+                match session {
+                    Some(session) => {
+
+                    },
+                    None => {
+                        // this.Log("ERROR: Disconnecting; received message for unknown session: " + msg);
+                        // DisconnectClient();
+                        // return;
+                        todo!();
+                    }
+                }
+            }
         }
         Ok(())
     }

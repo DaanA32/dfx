@@ -1221,9 +1221,9 @@ impl Session {
             return Ok(None);
         }
 
-        if self.session_id.is_empty() {
-            self.session_id = message.extract_contra_session_id();
-        }
+        // if self.session_id.is_empty() {
+        //     self.session_id = message.extract_contra_session_id();
+        // }
 
         if check_too_high || check_too_low {
             msg_seq_num = message.header().get_int(tags::MsgSeqNum).unwrap();
@@ -1302,7 +1302,6 @@ impl Session {
 
     fn is_correct_comp_id(&self, sender_comp_id: String, target_comp_id: String) -> bool {
         !self.check_comp_id
-            || self.session_id.is_empty()
             || (self.session_id.sender_comp_id == sender_comp_id
                 && self.session_id.target_comp_id == target_comp_id)
     }
@@ -1599,6 +1598,11 @@ impl Session {
         } else {
             reject.set_field(tags::Text, reason);
         }
+    }
+
+    //TODO move this?
+    pub(crate) fn lookup_session(session_id: SessionId) -> Option<Session> {
+        todo!()
     }
 }
 

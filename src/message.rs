@@ -106,6 +106,13 @@ impl std::fmt::Debug for Message {
 
 impl Message {
     pub const SOH: char = 1 as char;
+
+    pub fn new(msgstr: &[u8]) -> Result<Self, MessageParseError> {
+        let mut message = Message::default();
+        message.from_string(msgstr, true, None, None, None, false)?;
+        Ok(message)
+    }
+
     pub fn header(&self) -> &Header {
         &self.header
     }
