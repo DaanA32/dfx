@@ -1,70 +1,73 @@
 use std::{net::{SocketAddr, TcpListener}, thread::{self, JoinHandle}, time::Duration, sync::{atomic::AtomicBool, Arc}};
 
-use crate::{connection::SocketSettings, session::{self, Session, SessionBuilder}};
+use crate::{connection::SocketSettings, session::{self, Session, SessionBuilder, SessionSettings, Application, SessionSetting}};
 
-use super::{SocketReactor, StreamFactory};
+use super::{SocketReactor, StreamFactory, ConnectionError};
 
 type Builder = fn() -> Session;
 
-pub struct SocketAcceptorThread {
-    address: SocketAddr,
-    socket_settings: SocketSettings,
-    session_builder: Builder,
+pub struct SocketAcceptorThread<App> {
+    app: App,
+    addr: SocketAddr,
+    session_settings: Vec<SessionSetting>,
 }
 
 #[derive(Debug)]
 pub enum AcceptorError {
-    BindError(std::io::Error)
+    BindError(std::io::Error),
+    ConnectionError(ConnectionError),
 }
 
-pub struct SocketAcceptor {
-    address: SocketAddr,
-    socket_settings: SocketSettings,
-    session_builder: Builder,
-    thread: Option<JoinHandle<()>>,
+impl From<ConnectionError> for AcceptorError {
+    fn from(e: ConnectionError) -> Self {
+        AcceptorError::ConnectionError(e)
+    }
+}
+
+pub struct SocketAcceptor<App> {
+    app: App,
+    session_settings: SessionSettings,
+    thread: Vec<JoinHandle<()>>,
     running: Arc<AtomicBool>,
 }
 
 
-
-impl SocketAcceptor {
-    pub fn new<A: Into<SocketAddr>>(addr: A, socket_settings: SocketSettings, session_builder: Builder, ) -> Self {
+impl<App: Application + Clone + Sync + 'static> SocketAcceptor<App> {
+    pub fn new(session_settings: SessionSettings, app: App) -> Self {
         SocketAcceptor {
-            address: addr.into(),
-            socket_settings,
-            session_builder,
-            thread: None,
+            app,
+            session_settings,
+            thread: Vec::new(),
             running: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn start(&mut self) {
         self.running.store(true, std::sync::atomic::Ordering::SeqCst);
-        let ac = SocketAcceptorThread::new(self.address.clone(), self.socket_settings.clone(), self.session_builder);
-        let thread = ac.start(&self.running);
-        self.thread = Some(thread);
+
+        //TODO group by port => Vec<SessionSetting>
+        for (addr, session_settings) in self.session_settings.sessions_by_address() {
+            let ac = SocketAcceptorThread::new(self.app.clone(), addr, session_settings);
+            let thread = ac.start(&self.running);
+            self.thread.push(thread);
+        }
     }
 
     pub fn join(&mut self) {
-        if let Some(t) = self.thread.take() {
-            t.join().unwrap();
-        }else{
-            panic!();
+        while self.thread.iter().any(|t| !t.is_finished()) {
         }
     }
     pub fn stop(&mut self) {
         self.running.store(false, std::sync::atomic::Ordering::Relaxed);
-        if let Some(t) = self.thread.take() {
-            t.join().unwrap();
-        }
+        self.join()
     }
 }
 
-impl SocketAcceptorThread {
-    pub(crate) fn new<A: Into<SocketAddr>>(addr: A, socket_settings: SocketSettings, session_builder: Builder, ) -> Self {
+impl<App: Application + Clone + Sync + 'static> SocketAcceptorThread<App> {
+    pub(crate) fn new(app: App, addr: SocketAddr, session_settings: Vec<SessionSetting>) -> Self {
         SocketAcceptorThread {
-            address: addr.into(),
-            socket_settings,
-            session_builder,
+            app,
+            addr,
+            session_settings,
         }
     }
 
@@ -88,14 +91,14 @@ impl SocketAcceptorThread {
         //TODO static listener based on sessions/ports
         while running.load(std::sync::atomic::Ordering::Relaxed) {
             match listener.accept() {
-                Ok((s, _addr)) => {
-                    let s = StreamFactory::configure_stream(s, &self.socket_settings).expect("Setup stream");
-                    // TODO lookup session
-                    let session = (self.session_builder)();
+                Ok((stream, _addr)) => {
+                    let session_setting = &self.session_settings[0];
+                    let stream = StreamFactory::configure_stream(stream, &session_setting.socket_settings()).expect("Setup stream");
+                    let session_settings = self.session_settings.clone();
                     let t = thread::Builder::new()
-                        .name(format!("socket-connection-{n}"))
+                        .name(format!("socket-acceptor-connection-{n}"))
                         .spawn(move || {
-                            let reactor = SocketReactor::new(s, Some(session));
+                            let reactor = SocketReactor::new(stream, None, session_settings);
                             reactor.start()
                         }).unwrap();
                     threads.push(t);
@@ -113,7 +116,7 @@ impl SocketAcceptorThread {
     }
 
     fn bind(&self) -> Result<TcpListener, AcceptorError> {
-        let listener = TcpListener::bind(self.address).map_err(|e| AcceptorError::BindError(e))?;
+        let listener = TcpListener::bind(self.addr).map_err(|e| AcceptorError::BindError(e))?;
         listener.set_nonblocking(true).expect("Cannot set non-blocking");
         Ok(listener)
     }

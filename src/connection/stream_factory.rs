@@ -7,9 +7,9 @@ use std::time::Duration;
 pub struct StreamFactory;
 impl StreamFactory {
     pub fn create_client_stream(
-        endpoint: &SocketAddr,
         settings: &SocketSettings,
     ) -> Result<TcpStream, ConnectionError> {
+        let endpoint: SocketAddr = settings.get_endpoint()?;
         let stream = TcpStream::connect(endpoint)?;
         StreamFactory::configure_stream(stream, settings).map_err(|e| e.into())
     }

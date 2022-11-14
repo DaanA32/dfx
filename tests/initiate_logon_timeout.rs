@@ -1,6 +1,6 @@
 use dfx::{
-    connection::{SocketInitiator, SocketSettings},
-    session::{Session, SessionId},
+    connection::SocketInitiator,
+    session::SessionSettings,
 };
 
 mod common;
@@ -9,20 +9,13 @@ use common::TestApplication;
 
 #[test]
 pub fn test_logout_timeout() {
-    let (runner_thread, port) = runner::from_filename("tests/definitions/client/initiate_logon_timeout.def");
-    let addr = format!("127.0.0.1:{}", port).parse().unwrap();
-    println!("{}", addr);
-    let session_settings = SocketSettings {};
-    let mut initiator = SocketInitiator::new(addr, session_settings);
+    let runner_thread = runner::from_filename("tests/definitions/client/initiate_logon_timeout.def");
 
-    let app = Box::new(TestApplication);
-    let session_id = SessionId::new("FIX.4.4", "TEST", "", "", "LOGON", "", "");
-    let appl_ver_id = "FIX4.4";
-    let session = Session::builder(true, app, session_id, appl_ver_id)
-        .with_heartbeat_int(20)
-        .build();
-    initiator.set_session(session);
+    let app = TestApplication;
+    let session_settings = SessionSettings::from_file("tests/initiator.cfg").unwrap();
+    let mut initiator = SocketInitiator::new(session_settings, app);
+
     initiator.start();
     runner_thread.join().unwrap();
+    initiator.stop();
 }
-

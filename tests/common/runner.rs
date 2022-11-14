@@ -27,19 +27,10 @@ lazy_static! {
     static ref MESSAGE: Regex = Regex::new(r"(8=FIXT?\\.\\d\\.\\d\\001)(.*?\\001)(10=.*|)").unwrap();
 }
 
-lazy_static! {
-    static ref NEXT_PORT: AtomicU32 = AtomicU32::new(40000);
-}
-
-pub(crate) fn from_filename(filename: &str) -> (JoinHandle<()>, u32) {
+pub(crate) fn from_filename(filename: &str) -> JoinHandle<()> {
     let steps = steps(filename);
-    let port = get_next_available_port();
     let runner_thread = create_thread(steps, 40000);
-    (runner_thread, port)
-}
-
-pub fn get_next_available_port() -> u32 {
-    NEXT_PORT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    runner_thread
 }
 
 pub fn steps(filename: &str) -> Vec<TestStep> {

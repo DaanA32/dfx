@@ -6,7 +6,7 @@ use std::{
 use crate::{
     connection::StreamFactory,
     parser::{Parser, ParserError},
-    session::{Session, SessionId, Responder, ChannelResponder, ResponderEvent, ResponderResponse}, message::Message,
+    session::{Session, SessionId, Responder, ChannelResponder, ResponderEvent, ResponderResponse, SessionSetting}, message::{Message, MessageParseError},
 };
 
 use super::ConnectionError;
@@ -19,6 +19,7 @@ pub struct SocketReactor {
     buffer: [u8; SocketReactor::BUF_SIZE],
     rx: Option<Receiver<ResponderEvent>>,
     tx: Option<Sender<ResponderResponse>>,
+    settings: Vec<SessionSetting>,
 }
 
 pub enum ConnectionState {
@@ -33,6 +34,7 @@ pub enum ReactorError {
     Timeout(String),
     ConnectionError(ConnectionError),
     ParserError(ParserError),
+    MessageParseError(MessageParseError),
     IoError(std::io::Error),
     Disconnect,
 }
@@ -47,6 +49,11 @@ impl From<ParserError> for ReactorError {
         ReactorError::ParserError(e)
     }
 }
+impl From<MessageParseError> for ReactorError {
+    fn from(e: MessageParseError) -> ReactorError {
+        ReactorError::MessageParseError(e)
+    }
+}
 impl From<std::io::Error> for ReactorError {
     fn from(e: std::io::Error) -> ReactorError {
         ReactorError::IoError(e)
@@ -56,9 +63,7 @@ impl From<std::io::Error> for ReactorError {
 impl SocketReactor {
     pub const BUF_SIZE: usize = 512;
 
-    //TODO remove some if not needed
-    //TODO dynamic acceptor (ie set session id)
-    pub fn new(connection: TcpStream, mut session: Option<Session>) -> Self {
+    pub(crate) fn new(connection: TcpStream, mut session: Option<Session>, settings: Vec<SessionSetting>) -> Self {
         let parser = Parser::default();
         // TODO move this to a concurrent map > SessionState > Sender<Message>
         let state = ConnectionState::NotStarted;
@@ -74,6 +79,7 @@ impl SocketReactor {
         }
         SocketReactor {
             session,
+            settings,
             parser,
             state,
             stream,
@@ -107,10 +113,8 @@ impl SocketReactor {
     }
 
     fn event_loop(&mut self) -> Result<(), ReactorError> {
-        //let session: &mut Session = self.get_session_mut();
-        //TODO: session.log().on_event(format!("Connecting... {} {}", self.address).as_str());
-        // self.connect()?;
-        //  t.Reactor.SetConnected(t.Session.SessionID);
+
+        //TODO empty session
         let session_id = self
             .session
             .as_ref()
@@ -123,9 +127,6 @@ impl SocketReactor {
         session.log().on_event(format!("Connection succeeded {}", &session_id).as_str());
         session.next();
         while let Ok(()) = self.read() {}
-        println!("loop - break");
-        // if (t.Reactor.IsStopped)
-        //     t.Reactor.RemoveThread(t);
         let session_id = self
             .session
             .as_ref()
@@ -134,7 +135,6 @@ impl SocketReactor {
             .clone();
         self.set_disconnected(session_id);
         self.stream.as_mut().unwrap().shutdown(std::net::Shutdown::Both);
-        println!("stream - closed");
         Ok(())
     }
 
@@ -149,19 +149,6 @@ impl SocketReactor {
         self.session.as_mut().unwrap().set_disconnected(&session_id);
         self.state = ConnectionState::Disconnected(session_id);
     }
-
-    // fn connect(&mut self) -> Result<(), ReactorError> {
-    //     assert!(self.stream.is_none());
-    //     self.stream = Some(StreamFactory::create_client_stream(
-    //         &self.address,
-    //         &self.socket_settings,
-    //     )?);
-    //     let (responder, rx, tx) = ChannelResponder::new();
-    //     self.session.as_mut().unwrap().set_responder(Box::new(responder));
-    //     self.rx = Some(rx);
-    //     self.tx = Some(tx);
-    //     Ok(())
-    // }
 
     fn read(&mut self) -> Result<(), ReactorError> {
         let read = self.read_some()?;
@@ -199,9 +186,7 @@ impl SocketReactor {
         while let Some(msg) = self.parser.read_fix_message()? {
             // println!("{}", msg.iter().map(|b| *b as char).collect::<String>());
             if let Some(session) = self.session.as_mut() {
-                self.session
-                    .as_mut()
-                    .expect("Session should not be None at this point.")
+                session
                     .next_msg(msg);
             } else {
                 let msg = Message::new(&msg[..])?;

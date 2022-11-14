@@ -3,66 +3,57 @@ use std::{net::SocketAddr, sync::{atomic::AtomicBool, Arc}, thread::{JoinHandle,
 use crate::{
     connection::StreamFactory,
     parser::ParserError,
-    session::Session,
+    session::{Session, SessionSettings, Application, SessionSetting},
 };
 
 use super::{ConnectionError, SocketSettings, SocketReactor};
 
-pub struct SocketInitiator {
+pub struct SocketInitiator<App> {
     session: Option<Session>,
-    address: SocketAddr,
-    socket_settings: SocketSettings,
-    thread: Option<JoinHandle<Session>>,
+    app: App,
+    session_settings: SessionSettings,
+    thread: Vec<JoinHandle<()>>,
     running: Arc<AtomicBool>,
 }
 
-impl SocketInitiator {
-    pub fn new(address: SocketAddr, socket_settings: SocketSettings) -> Self {
+impl<App: Application + Clone + 'static> SocketInitiator<App> {
+    pub fn new(session_settings: SessionSettings, app: App) -> Self {
         let session = None;
         // TODO move this to a concurrent map > SessionState > Sender<Message>
         SocketInitiator {
             session,
-            address,
-            socket_settings,
-            thread: None,
+            app,
+            session_settings,
+            thread: Vec::new(),
             running: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn set_session(&mut self, session: Session) {
-        self.session = Some(session)
-    }
+    // pub fn set_session(&mut self, session: Session) {
+    //     self.session = Some(session)
+    // }
 
     pub fn start(&mut self) {
         self.running.store(true, std::sync::atomic::Ordering::SeqCst);
-        let ac = SocketInitiatorThread::new(
-            self.address.clone(),
-            self.socket_settings.clone(),
-            self.session.take()
-        );
-        let thread = ac.start(&self.running);
-        self.thread = Some(thread);
+        for session_settings in self.session_settings.sessions() {
+            let ac = SocketInitiatorThread::new(self.app.clone(), session_settings.clone());
+            let thread = ac.start(&self.running);
+            self.thread.push(thread);
+        }
     }
     pub fn join(&mut self) {
-        if let Some(t) = self.thread.take() {
-            t.join().unwrap();
-        }else{
-            panic!();
+        while self.thread.iter().any(|t| !t.is_finished()) {
         }
     }
-    pub fn stop(&mut self) {
+    pub fn stop(mut self) {
         self.running.store(false, std::sync::atomic::Ordering::Relaxed);
-        if let Some(t) = self.thread.take() {
-            let session = t.join().unwrap();
-            self.session.replace(session);
-        }
+        self.join()
     }
 }
 
-pub struct SocketInitiatorThread {
-    session: Option<Session>,
-    address: SocketAddr,
-    socket_settings: SocketSettings,
+pub struct SocketInitiatorThread<App> {
+    app: App,
+    session_settings: SessionSetting,
 }
 
 #[derive(Debug)]
@@ -90,17 +81,16 @@ impl From<std::io::Error> for InitiatorError {
     }
 }
 
-impl SocketInitiatorThread {
+impl<App: Application + Clone + 'static> SocketInitiatorThread<App> {
 
-    pub fn new(address: SocketAddr, socket_settings: SocketSettings, session: Option<Session>) -> Self {
+    pub(crate) fn new(app: App, session_settings: SessionSetting) -> Self {
         SocketInitiatorThread {
-            session,
-            address,
-            socket_settings,
+            app,
+            session_settings,
         }
     }
 
-    pub(crate) fn start(mut self, _running: &Arc<AtomicBool>) -> JoinHandle<Session> {
+    pub(crate) fn start(mut self, _running: &Arc<AtomicBool>) -> JoinHandle<()> {
         thread::Builder::new()
             .name("socket-initiator-thread".into())
             .spawn(move || {
@@ -109,24 +99,17 @@ impl SocketInitiatorThread {
                     e => todo!("SocketInitiator::start: Error {:?}", e)
                 }
             }
-            self.session.unwrap()
         }).expect("socket-acceptor-thread started")
     }
 
     pub fn event_loop(&mut self,) -> Result<(), InitiatorError> {
         let stream = StreamFactory::create_client_stream(
-            &self.address,
-            &self.socket_settings,
+            &self.session_settings.socket_settings(),
         )?;
 
-        let session = self.session.take();
-        assert!(session.is_some(), "Expected existing session");
-        let reactor = SocketReactor::new(stream, session);
+        let session = self.session_settings.create(Box::new(self.app.clone()));
+        let reactor = SocketReactor::new(stream, Some(session), Vec::new());
         let session = reactor.start();
-        match session {
-            Some(session) => { self.session.replace(session); },
-            None => {},
-        }
         Ok(())
     }
 

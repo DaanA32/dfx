@@ -1,5 +1,6 @@
 use dfx::{session::{ApplicationExt, Application, ApplicationError, Session}, message::Message, tags};
 
+#[derive(Clone)]
 pub struct TestApplication;
 impl TestApplication {}
 impl Application for TestApplication {
@@ -56,6 +57,7 @@ impl Application for TestApplication {
     }
 }
 
+#[derive(Clone)]
 pub struct SendTestApplication;
 impl ApplicationExt for SendTestApplication {
     fn early_intercept(&mut self, message: Message, _session_id: &dfx::session::SessionId, ) -> Result<Message, ApplicationError> {

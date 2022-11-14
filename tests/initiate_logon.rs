@@ -2,7 +2,7 @@
 #![allow(unused)]
 use dfx::{
     connection::{SocketInitiator, SocketSettings},
-    session::{Session, SessionId},
+    session::{Session, SessionId, SessionSettings},
 };
 
 mod common;
@@ -11,21 +11,14 @@ use common::TestApplication;
 
 #[test]
 pub fn test_client_receive_logon() {
-    let (runner_thread, port) = runner::from_filename("tests/definitions/client/initiate_logon.def");
-    let addr = format!("127.0.0.1:{}", port).parse().unwrap();
-    println!("{}", addr);
-    let session_settings = SocketSettings {};
-    let mut initiator = SocketInitiator::new(addr, session_settings);
+    let runner_thread = runner::from_filename("tests/definitions/client/initiate_logon.def");
 
-    let app = Box::new(TestApplication);
-    let session_id = SessionId::new("FIX.4.4", "TEST", "", "", "LOGON", "", "");
-    let appl_ver_id = "FIX4.4";
-    let session = Session::builder(true, app, session_id, appl_ver_id)
-        .with_heartbeat_int(20)
-        .build();
-    initiator.set_session(session);
+    let app = TestApplication;
+    let session_settings = SessionSettings::from_file("tests/logon.cfg").unwrap();
+    let mut initiator = SocketInitiator::new(session_settings, app);
 
     initiator.start();
     runner_thread.join().unwrap();
+    initiator.stop();
 }
 
