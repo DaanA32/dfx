@@ -1,5 +1,9 @@
 mod initiator;
-use std::{str::FromStr, net::{SocketAddr, AddrParseError}, fmt::Display};
+use std::{
+    fmt::Display,
+    net::{AddrParseError, SocketAddr},
+    str::FromStr,
+};
 
 pub use initiator::*;
 mod acceptor;
@@ -30,8 +34,12 @@ impl From<AddrParseError> for ConnectionError {
 impl Display for ConnectionError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConnectionError::IOError(err) => fmt.write_fmt(format_args!("Connection failed: {}", err)),
-            ConnectionError::AddrParseError(err) => fmt.write_fmt(format_args!("Failed to parse address: {}", err)),
+            ConnectionError::IOError(err) => {
+                fmt.write_fmt(format_args!("Connection failed: {}", err))
+            }
+            ConnectionError::AddrParseError(err) => {
+                fmt.write_fmt(format_args!("Failed to parse address: {}", err))
+            }
         }
     }
 }

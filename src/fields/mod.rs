@@ -1,6 +1,9 @@
 mod fields;
 pub(crate) mod limits;
-use std::{ops::Deref, borrow::{Cow, Borrow}};
+use std::{
+    borrow::{Borrow, Cow},
+    ops::Deref,
+};
 
 pub(crate) use fields::*;
 

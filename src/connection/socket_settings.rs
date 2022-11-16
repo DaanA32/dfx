@@ -1,4 +1,7 @@
-use std::{net::{SocketAddr, AddrParseError}, str::FromStr};
+use std::{
+    net::{AddrParseError, SocketAddr},
+    str::FromStr,
+};
 
 use super::ConnectionError;
 
@@ -12,10 +15,7 @@ pub(crate) struct SocketSettings {
 impl SocketSettings {
     /// Creates a new [`SocketSettings`].
     pub(crate) fn new(host: String, port: u32) -> Self {
-        Self {
-            host,
-            port
-        }
+        Self { host, port }
     }
 
     pub(crate) fn get_endpoint(&self) -> Result<SocketAddr, ConnectionError> {

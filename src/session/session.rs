@@ -1,12 +1,12 @@
 use std::cmp;
 use std::cmp::min;
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc::SyncSender;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::sync_channel;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -22,12 +22,12 @@ use crate::data_dictionary_provider::DefaultDataDictionaryProvider;
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMapError;
 use crate::field_map::Tag;
-use crate::fields::*;
 use crate::fields::converters::datetime;
+use crate::fields::*;
 use crate::fix_values::BeginString;
+use crate::logging::LogFactory;
 use crate::logging::Logger;
 use crate::logging::NoLogger;
-use crate::logging::LogFactory;
 use crate::logging::PrintlnLogFactory;
 use crate::message::Message;
 use crate::message::MessageParseError;
@@ -68,7 +68,12 @@ pub(crate) struct SessionBuilder {
 }
 
 impl SessionBuilder {
-    fn new<S: Into<String>>(is_initiator: bool, app: Box<dyn Application>, session_id: SessionId, sender_default_appl_ver_id: S) -> Self{
+    fn new<S: Into<String>>(
+        is_initiator: bool,
+        app: Box<dyn Application>,
+        session_id: SessionId,
+        sender_default_appl_ver_id: S,
+    ) -> Self {
         Self {
             is_initiator,
             app,
@@ -79,21 +84,27 @@ impl SessionBuilder {
             heartbeat_int: None,
             log_factory: None,
             msg_factory: None,
-            sender_default_appl_ver_id: sender_default_appl_ver_id.into()
+            sender_default_appl_ver_id: sender_default_appl_ver_id.into(),
         }
     }
 
-    pub fn with_store_factory(mut self, message_store_factory: Box<dyn MessageStoreFactory>) -> Self {
+    pub fn with_store_factory(
+        mut self,
+        message_store_factory: Box<dyn MessageStoreFactory>,
+    ) -> Self {
         self.store_factory = Some(message_store_factory);
         self
     }
 
-    pub fn with_data_dictionary_provider(mut self, data_dictionary_provider: Box<dyn DataDictionaryProvider>) -> Self {
+    pub fn with_data_dictionary_provider(
+        mut self,
+        data_dictionary_provider: Box<dyn DataDictionaryProvider>,
+    ) -> Self {
         self.data_dictionary_provider = Some(data_dictionary_provider);
         self
     }
 
-    pub fn with_session_schedule(mut self, session_schedule: SessionSchedule) -> Self{
+    pub fn with_session_schedule(mut self, session_schedule: SessionSchedule) -> Self {
         self.session_schedule = Some(session_schedule);
         self
     }
@@ -117,14 +128,18 @@ impl SessionBuilder {
         Session::new(
             self.is_initiator,
             self.app,
-            self.store_factory.unwrap_or_else(|| DefaultStoreFactory::new()),
-            self.data_dictionary_provider.unwrap_or_else(|| DefaultDataDictionaryProvider::new()),
+            self.store_factory
+                .unwrap_or_else(|| DefaultStoreFactory::new()),
+            self.data_dictionary_provider
+                .unwrap_or_else(|| DefaultDataDictionaryProvider::new()),
             self.session_id,
-            self.session_schedule.unwrap_or_else(|| SessionSchedule::NON_STOP),
+            self.session_schedule
+                .unwrap_or_else(|| SessionSchedule::NON_STOP),
             self.heartbeat_int.unwrap_or(0),
             self.log_factory.or_else(|| Some(PrintlnLogFactory::new())),
-            self.msg_factory.unwrap_or_else(|| DefaultMessageFactory::new()),
-            self.sender_default_appl_ver_id.as_str()
+            self.msg_factory
+                .unwrap_or_else(|| DefaultMessageFactory::new()),
+            self.sender_default_appl_ver_id.as_str(),
         )
     }
 }
@@ -161,7 +176,7 @@ pub struct Session {
     refresh_on_logon: bool,
     reset_on_logon: bool,
     reset_on_logout: bool,
-    outbound: Option<Receiver<Message>>
+    outbound: Option<Receiver<Message>>,
 }
 
 #[derive(Debug, Clone)]
@@ -184,7 +199,12 @@ pub(crate) enum Event {
 }
 
 impl Session {
-    pub(crate) fn builder<S: Into<String>>(is_initiator: bool, app: Box<dyn Application>, session_id: SessionId, sender_default_appl_ver_id: S) -> SessionBuilder {
+    pub(crate) fn builder<S: Into<String>>(
+        is_initiator: bool,
+        app: Box<dyn Application>,
+        session_id: SessionId,
+        sender_default_appl_ver_id: S,
+    ) -> SessionBuilder {
         SessionBuilder::new(is_initiator, app, session_id, sender_default_appl_ver_id)
     }
     // bool isInitiator, IApplication app, IMessageStoreFactory storeFactory, SessionID sessID, DataDictionaryProvider dataDictProvider,
@@ -222,7 +242,7 @@ impl Session {
             .unwrap_or_else(|| Box::new(NoLogger)); //TODO clone?
                                                     // Configuration defaults.
                                                     // Will be overridden by the SessionFactory with values in the user's configuration.
-        // TODO move these to session settings...
+                                                    // TODO move these to session settings...
         let persist_messages = true;
         let reset_on_disconnect = false;
         let send_redundant_resend_requests = false;
@@ -307,7 +327,10 @@ impl Session {
         self.responder = Some(responder);
     }
 
-    pub(crate) fn set_connected(&mut self, session_id: &SessionId) -> Result<(), InternalSessionError>{
+    pub(crate) fn set_connected(
+        &mut self,
+        session_id: &SessionId,
+    ) -> Result<(), InternalSessionError> {
         let receiver = Session::connect(&session_id);
         self.outbound = Some(receiver?);
         Ok(())
@@ -336,7 +359,7 @@ impl Session {
                 Ok(mut msg) => {
                     self.initialize_header(&mut msg, None);
                     self.send_raw(msg, 0).unwrap()
-                },
+                }
                 Err(_) => return,
             };
         }
@@ -388,7 +411,7 @@ impl Session {
             } else if self.state.sent_logon() && self.state.logon_timed_out() {
                 self.disconnect("Timed out waiting for logon response");
             }
-            return
+            return;
         }
 
         if self.state.logout_timed_out() {
@@ -884,9 +907,9 @@ impl Session {
         );
 
         if self.app_does_early_intercept {
-        // if let Some(func) = self.application.get_early_intercept() {
-        //     message = func(self.application.as_mut(), message, &self.session_id)?;
-        // }
+            // if let Some(func) = self.application.get_early_intercept() {
+            //     message = func(self.application.as_mut(), message, &self.session_id)?;
+            // }
             todo!("Do early intercept")
         }
 
@@ -1416,7 +1439,8 @@ impl Session {
         reason: &str,
         field: Option<Tag>,
     ) -> Result<bool, HandleError> {
-        self.log.on_event(format!("Temp: Reject: {}", reason).as_str());
+        self.log
+            .on_event(format!("Temp: Reject: {}", reason).as_str());
         let field = field.unwrap_or(0);
 
         let begin_string = &self.session_id.begin_string;

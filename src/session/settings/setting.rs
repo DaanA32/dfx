@@ -1,8 +1,11 @@
 use std::net::SocketAddr;
 
-use crate::{session::{SessionId, Application, Session}, connection::SocketSettings};
+use crate::{
+    connection::SocketSettings,
+    session::{Application, Session, SessionId},
+};
 
-use super::{SettingOption, SessionSettingsError};
+use super::{SessionSettingsError, SettingOption};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ConnectionType {
@@ -17,7 +20,10 @@ impl TryFrom<&str> for ConnectionType {
         match value {
             "initiator" => Ok(Self::Initiator),
             "acceptor" => Ok(Self::Acceptor),
-            e => Err(SessionSettingsError::InvalidValue { setting: SettingOption::ConnectionType, value: e.into() })
+            e => Err(SessionSettingsError::InvalidValue {
+                setting: SettingOption::ConnectionType,
+                value: e.into(),
+            }),
         }
     }
 }
@@ -119,7 +125,6 @@ pub(crate) struct SessionSetting {
 }
 
 impl SessionSetting {
-
     pub(crate) fn score(&self, session_id: &SessionId) -> u16 {
         let mut score = 0;
         score += match self.sender_comp_id.as_str() {
@@ -164,19 +169,22 @@ impl SessionSetting {
     }
 
     pub(crate) fn is_dynamic(&self) -> bool {
-        println!("is_dynamic: {:?} {:?} {:?}", self.is_dynamic, self.sender_comp_id, self.target_comp_id);
+        println!(
+            "is_dynamic: {:?} {:?} {:?}",
+            self.is_dynamic, self.sender_comp_id, self.target_comp_id
+        );
         self.is_dynamic
-            && (
-                self.sender_comp_id.as_str() == "*"
-                ||
-                self.target_comp_id.as_str() == "*"
-            )
+            && (self.sender_comp_id.as_str() == "*" || self.target_comp_id.as_str() == "*")
     }
 
     pub(crate) fn socket_settings(&self) -> SocketSettings {
         let is_initiator = self.connection_type == ConnectionType::Initiator;
         if is_initiator {
-            println!("{:?}:{:?}", self.socket_connect_host.as_ref(), self.socket_connect_port.as_ref());
+            println!(
+                "{:?}:{:?}",
+                self.socket_connect_host.as_ref(),
+                self.socket_connect_port.as_ref()
+            );
             let host = self.socket_connect_host.as_ref().expect("Some host");
             let port = self.socket_connect_port.as_ref().expect("Some port");
             SocketSettings::new(host.into(), *port)
@@ -190,7 +198,11 @@ impl SessionSetting {
     pub(crate) fn create(&self, app: Box<dyn Application>) -> Session {
         let is_initiator = self.connection_type == ConnectionType::Initiator;
         let session_id = self.session_id();
-        let sender_default_appl_ver_id = self.default_appl_ver_id.as_ref().map(|v| v.as_str()).unwrap_or("");
+        let sender_default_appl_ver_id = self
+            .default_appl_ver_id
+            .as_ref()
+            .map(|v| v.as_str())
+            .unwrap_or("");
         Session::builder(is_initiator, app, session_id, sender_default_appl_ver_id)
             .with_heartbeat_int(self.heart_bt_int.unwrap_or(30))
             //TODO other settings
@@ -201,17 +213,32 @@ impl SessionSetting {
         SessionId::new(
             self.begin_string.as_str(),
             self.sender_comp_id.as_str(),
-            self.sender_sub_id.as_ref().map(|v| v.as_str()).unwrap_or(""),
-            self.sender_location_id.as_ref().map(|v| v.as_str()).unwrap_or(""),
+            self.sender_sub_id
+                .as_ref()
+                .map(|v| v.as_str())
+                .unwrap_or(""),
+            self.sender_location_id
+                .as_ref()
+                .map(|v| v.as_str())
+                .unwrap_or(""),
             self.target_comp_id.as_str(),
-            self.target_sub_id.as_ref().map(|v| v.as_str()).unwrap_or(""),
-            self.target_location_id.as_ref().map(|v| v.as_str()).unwrap_or(""),
+            self.target_sub_id
+                .as_ref()
+                .map(|v| v.as_str())
+                .unwrap_or(""),
+            self.target_location_id
+                .as_ref()
+                .map(|v| v.as_str())
+                .unwrap_or(""),
         )
     }
 
     pub(crate) fn accepts(&self, session_id: &SessionId) -> bool {
         if self.is_dynamic() {
-            println!("dynamic accept: {:?} {:?} == {}", self.sender_comp_id, self.target_comp_id, session_id);
+            println!(
+                "dynamic accept: {:?} {:?} == {}",
+                self.sender_comp_id, self.target_comp_id, session_id
+            );
             let sender_comp_ok = match self.sender_comp_id.as_str() {
                 "*" => true,
                 s => s == session_id.sender_comp_id,

@@ -9,7 +9,7 @@ pub enum ApplicationError {
     DoNotAccept,
     LogonReject,
     DoNotSend(Box<Message>),
-    FieldMapError(FieldMapError)
+    FieldMapError(FieldMapError),
 }
 
 impl From<FieldMapError> for ApplicationError {
@@ -42,11 +42,14 @@ pub trait Application: Send {
         message: &Message,
         session_id: &SessionId,
     ) -> Result<(), ApplicationError>;
-
 }
 
 pub trait ApplicationExt: Application {
-    fn early_intercept(&mut self, message: Message, session_id: &SessionId, ) -> Result<Message, ApplicationError>;
+    fn early_intercept(
+        &mut self,
+        message: Message,
+        session_id: &SessionId,
+    ) -> Result<Message, ApplicationError>;
 }
 
 #[cfg(test)]
@@ -55,7 +58,7 @@ pub mod tests {
 
     use super::{Application, ApplicationExt};
     use crate::message::Message;
-    use crate::session::{session_id, self};
+    use crate::session::{self, session_id};
 
     pub struct TestApplication;
 
@@ -116,15 +119,7 @@ pub mod tests {
 
     #[test]
     fn test_inject() {
-        let session_id = SessionId::new(
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-        );
+        let session_id = SessionId::new("", "", "", "", "", "", "");
         let mut app = TestApplication {};
         let msg = Message::default();
         let res = app.to_admin(msg, &session_id);
@@ -140,7 +135,11 @@ pub mod tests {
     }
 
     impl ApplicationExt for TestApplication {
-        fn early_intercept(&mut self, message: Message, session_id: &SessionId, ) -> Result<Message, super::ApplicationError> {
+        fn early_intercept(
+            &mut self,
+            message: Message,
+            session_id: &SessionId,
+        ) -> Result<Message, super::ApplicationError> {
             todo!()
         }
     }

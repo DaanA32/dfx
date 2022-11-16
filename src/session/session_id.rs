@@ -26,13 +26,14 @@ impl SessionId {
         target_location_id: G,
         // session_qualifier: String,
     ) -> Self
-        where A: Into<String>,
-              B: Into<String>,
-              C: Into<String>,
-              D: Into<String>,
-              E: Into<String>,
-              F: Into<String>,
-              G: Into<String>,
+    where
+        A: Into<String>,
+        B: Into<String>,
+        C: Into<String>,
+        D: Into<String>,
+        E: Into<String>,
+        F: Into<String>,
+        G: Into<String>,
     {
         let begin_string = begin_string.into();
         let sender_comp_id = sender_comp_id.into();

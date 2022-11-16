@@ -1,8 +1,8 @@
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::fields::ConversionError;
 use crate::fields::converters::TryFrom;
+use crate::fields::ConversionError;
 use crate::message::Message;
 use crate::tags;
 use std::collections::BTreeMap;
@@ -88,7 +88,9 @@ impl Field {
         format!("{}={}", self.tag(), self.string_value())
     }
     pub fn as_value<'a, T>(&'a self) -> Result<T, ConversionError>
-    where T: TryFrom<&'a FieldValue, Error = ConversionError> {
+    where
+        T: TryFrom<&'a FieldValue, Error = ConversionError>,
+    {
         TryFrom::try_from(&self.1)
     }
 
@@ -173,7 +175,6 @@ impl FieldMap {
             None => Err(FieldMapError::FieldNotFound(tag)),
             Some(value) => Ok(value.string_value()),
         }
-
     }
     pub fn get_string_unchecked(&self, tag: Tag) -> String {
         self.fields[&tag].string_value().into()

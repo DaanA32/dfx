@@ -22,11 +22,11 @@ pub(crate) enum DateTimeFormat {
 }
 
 use chrono::format::parse;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, TimeZone, Utc};
 
 use crate::field_map::FieldValue;
-use crate::fields::ConversionError;
 use crate::fields::converters::TryFrom;
+use crate::fields::ConversionError;
 
 impl<'a> TryFrom<&'a FieldValue> for DateTime<Utc> {
     type Error = ConversionError;
@@ -34,10 +34,10 @@ impl<'a> TryFrom<&'a FieldValue> for DateTime<Utc> {
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let time: &str = TryFrom::try_from(value)?;
 
-        Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS).map_err(|e| todo!())
+        Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS)
+            .map_err(|e| todo!())
     }
 }
-
 
 // impl<'a> TryFrom<&'a FieldValue> for &'a str {
 //     type Error = ConversionError;

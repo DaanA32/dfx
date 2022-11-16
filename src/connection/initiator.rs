@@ -1,12 +1,16 @@
-use std::{net::SocketAddr, sync::{atomic::AtomicBool, Arc}, thread::{JoinHandle, self}};
+use std::{
+    net::SocketAddr,
+    sync::{atomic::AtomicBool, Arc},
+    thread::{self, JoinHandle},
+};
 
 use crate::{
     connection::StreamFactory,
     parser::ParserError,
-    session::{Session, SessionSettings, Application, SessionSetting},
+    session::{Application, Session, SessionSetting, SessionSettings},
 };
 
-use super::{ConnectionError, SocketSettings, SocketReactor};
+use super::{ConnectionError, SocketReactor, SocketSettings};
 
 pub struct SocketInitiator<App> {
     session: Option<Session>,
@@ -34,7 +38,8 @@ impl<App: Application + Clone + 'static> SocketInitiator<App> {
     // }
 
     pub fn start(&mut self) {
-        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         for session_settings in self.session_settings.sessions() {
             let ac = SocketInitiatorThread::new(self.app.clone(), session_settings.clone());
             let thread = ac.start(&self.running);
@@ -42,11 +47,11 @@ impl<App: Application + Clone + 'static> SocketInitiator<App> {
         }
     }
     pub fn join(&mut self) {
-        while self.thread.iter().any(|t| !t.is_finished()) {
-        }
+        while self.thread.iter().any(|t| !t.is_finished()) {}
     }
     pub fn stop(mut self) {
-        self.running.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.running
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         self.join()
     }
 }
@@ -82,7 +87,6 @@ impl From<std::io::Error> for InitiatorError {
 }
 
 impl<App: Application + Clone + 'static> SocketInitiatorThread<App> {
-
     pub(crate) fn new(app: App, session_settings: SessionSetting) -> Self {
         SocketInitiatorThread {
             app,
@@ -94,23 +98,21 @@ impl<App: Application + Clone + 'static> SocketInitiatorThread<App> {
         thread::Builder::new()
             .name("socket-initiator-thread".into())
             .spawn(move || {
-            if let Err(e) = self.event_loop() {
-                match e {
-                    e => todo!("SocketInitiator::start: Error {:?}", e)
+                if let Err(e) = self.event_loop() {
+                    match e {
+                        e => todo!("SocketInitiator::start: Error {:?}", e),
+                    }
                 }
-            }
-        }).expect("socket-acceptor-thread started")
+            })
+            .expect("socket-acceptor-thread started")
     }
 
-    fn event_loop(&mut self,) -> Result<(), InitiatorError> {
-        let stream = StreamFactory::create_client_stream(
-            &self.session_settings.socket_settings(),
-        )?;
+    fn event_loop(&mut self) -> Result<(), InitiatorError> {
+        let stream = StreamFactory::create_client_stream(&self.session_settings.socket_settings())?;
 
         let session = self.session_settings.create(Box::new(self.app.clone()));
         let reactor = SocketReactor::new(stream, Some(session), Vec::new(), self.app.clone());
         let session = reactor.start();
         Ok(())
     }
-
 }

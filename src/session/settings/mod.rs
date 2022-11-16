@@ -1,6 +1,11 @@
-use std::{fs::File, io::{BufReader, BufRead}, collections::BTreeMap, net::SocketAddr};
+use super::{Application, Session, SessionId};
 use crate::connection::SocketSettings;
-use super::{SessionId, Session, Application};
+use std::{
+    collections::BTreeMap,
+    fs::File,
+    io::{BufRead, BufReader},
+    net::SocketAddr,
+};
 
 mod builder;
 use builder::*;
@@ -92,8 +97,15 @@ pub enum SessionSettingsError {
     NoDefaultSection,
     DefaultSectionAlreadyDefined,
     ValidationErrors(Vec<String>),
-    InvalidValue { setting: SettingOption, value: String },
-    LineParseError { line: String, reason: String, line_number: usize },
+    InvalidValue {
+        setting: SettingOption,
+        value: String,
+    },
+    LineParseError {
+        line: String,
+        reason: String,
+        line_number: usize,
+    },
 }
 
 impl TryFrom<&str> for SettingOption {
@@ -150,7 +162,9 @@ impl TryFrom<&str> for SettingOption {
             "TimeStampPrecision" => Ok(Self::TimeStampPrecision),
             "EnableLastMsgSeqNumProcessed" => Ok(Self::EnableLastMsgSeqNumProcessed),
             "MaxMessagesInResendRequest" => Ok(Self::MaxMessagesInResendRequest),
-            "SendLogoutBeforeDisconnectFromTimeout" => Ok(Self::SendLogoutBeforeDisconnectFromTimeout),
+            "SendLogoutBeforeDisconnectFromTimeout" => {
+                Ok(Self::SendLogoutBeforeDisconnectFromTimeout)
+            }
             "SocketNodelay" => Ok(Self::SocketNodelay),
             "SocketSendBufferSize" => Ok(Self::SocketSendBufferSize),
             "SocketReceiveBufferSize" => Ok(Self::SocketReceiveBufferSize),
@@ -169,7 +183,7 @@ impl TryFrom<&str> for SettingOption {
             "SSLCertificatePassword" => Ok(Self::SSLCertificatePassword),
             "SSLRequireClientCertificate" => Ok(Self::SSLRequireClientCertificate),
             "SSLCACertificate" => Ok(Self::SSLCACertificate),
-            _ => Err(Self::Error::NoSuchSetting(value.into()))
+            _ => Err(Self::Error::NoSuchSetting(value.into())),
         }
     }
 }
@@ -181,14 +195,13 @@ impl From<std::io::Error> for SessionSettingsError {
 }
 
 impl SessionSettings {
-
     pub fn from_file(filename: &str) -> Result<Self, SessionSettingsError> {
         let lines = std::fs::read_to_string(filename)?;
         Self::from_string(&lines)
     }
 
     pub fn from_string(string: &str) -> Result<Self, SessionSettingsError> {
-        let delims: &[_] = &[ '[', ']' ];
+        let delims: &[_] = &['[', ']'];
 
         let mut default_started = false;
         let mut default_ended = false;
@@ -199,20 +212,43 @@ impl SessionSettings {
 
         let mut n = 0;
         for line in string.lines() {
-            n+=1;
+            n += 1;
             //Comment
             if line.trim().starts_with('#') {
-                continue
+                continue;
             }
-            if !default_started && !default_ended && line.trim().trim_matches(delims).eq_ignore_ascii_case("default") {
+            if !default_started
+                && !default_ended
+                && line
+                    .trim()
+                    .trim_matches(delims)
+                    .eq_ignore_ascii_case("default")
+            {
                 last_setting = Some(SessionSettingBuilder::default());
                 default_started = true;
-            } else if default_started && line.trim().trim_matches(delims).eq_ignore_ascii_case("default") {
+            } else if default_started
+                && line
+                    .trim()
+                    .trim_matches(delims)
+                    .eq_ignore_ascii_case("default")
+            {
                 return Err(SessionSettingsError::DefaultSectionAlreadyDefined);
-            } else if default_started && !default_ended && line.trim().trim_matches(delims).eq_ignore_ascii_case("session") {
+            } else if default_started
+                && !default_ended
+                && line
+                    .trim()
+                    .trim_matches(delims)
+                    .eq_ignore_ascii_case("session")
+            {
                 default = last_setting.replace(SessionSettingBuilder::default());
                 default_ended = true;
-            } else if default_started && default_ended && line.trim().trim_matches(delims).eq_ignore_ascii_case("session") {
+            } else if default_started
+                && default_ended
+                && line
+                    .trim()
+                    .trim_matches(delims)
+                    .eq_ignore_ascii_case("session")
+            {
                 if let Some(mut value) = last_setting.replace(SessionSettingBuilder::default()) {
                     if let Some(default) = default.as_ref() {
                         settings.push(value.merge(default).validate()?.build());
@@ -239,8 +275,8 @@ impl SessionSettings {
             (None, _) => Err(SessionSettingsError::NoDefaultSection),
             (Some(default), v) => Ok(Self {
                 // default,
-                sessions: v
-            })
+                sessions: v,
+            }),
         }
     }
 
@@ -249,11 +285,13 @@ impl SessionSettings {
     // }
 
     pub(crate) fn for_session_id(&self, session_id: &SessionId) -> Option<&SessionSetting> {
-        let best_match = self.sessions.iter()
-                .map(|s| (s.score(session_id), s))
-                .filter(|(score, _)| score > &0)
-                .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
-                .map(|(k,v )| v);
+        let best_match = self
+            .sessions
+            .iter()
+            .map(|s| (s.score(session_id), s))
+            .filter(|(score, _)| score > &0)
+            .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
+            .map(|(k, v)| v);
         best_match
     }
 
@@ -261,7 +299,7 @@ impl SessionSettings {
         self.sessions.as_ref()
     }
 
-    pub(crate) fn sessions_by_address(&self) -> BTreeMap<SocketAddr,Vec<SessionSetting>> {
+    pub(crate) fn sessions_by_address(&self) -> BTreeMap<SocketAddr, Vec<SessionSetting>> {
         let mut map = BTreeMap::new();
         for session in &self.sessions {
             let port = session.socket_settings().get_endpoint().unwrap();
@@ -269,12 +307,11 @@ impl SessionSettings {
         }
         map
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::session::{SessionSettingsError, SessionId};
+    use crate::session::{SessionId, SessionSettingsError};
 
     use super::SessionSettings;
 
@@ -332,15 +369,35 @@ TargetCompID=*
         assert_eq!(settings.sessions[1].target_comp_id, "target2");
 
         let session_id = SessionId::new("", "sender", "", "", "target1", "", "");
-        assert_eq!(Some(&settings.sessions[0].target_comp_id), settings.for_session_id(&session_id).map(|s| &s.target_comp_id));
+        assert_eq!(
+            Some(&settings.sessions[0].target_comp_id),
+            settings
+                .for_session_id(&session_id)
+                .map(|s| &s.target_comp_id)
+        );
         let session_id = SessionId::new("", "sender", "", "", "target2", "", "");
-        assert_eq!(Some(&settings.sessions[1].target_comp_id), settings.for_session_id(&session_id).map(|s| &s.target_comp_id));
+        assert_eq!(
+            Some(&settings.sessions[1].target_comp_id),
+            settings
+                .for_session_id(&session_id)
+                .map(|s| &s.target_comp_id)
+        );
         let session_id = SessionId::new("", "sender", "", "", "target3", "", "");
         assert_eq!(None, settings.for_session_id(&session_id));
         let session_id = SessionId::new("", "sender_any", "", "", "target_any_1", "", "");
-        assert_eq!(Some(&settings.sessions[2].target_comp_id), settings.for_session_id(&session_id).map(|s| &s.target_comp_id));
+        assert_eq!(
+            Some(&settings.sessions[2].target_comp_id),
+            settings
+                .for_session_id(&session_id)
+                .map(|s| &s.target_comp_id)
+        );
         let session_id = SessionId::new("", "sender_any", "", "", "target_any_2", "", "");
-        assert_eq!(Some(&settings.sessions[2].target_comp_id), settings.for_session_id(&session_id).map(|s| &s.target_comp_id));
+        assert_eq!(
+            Some(&settings.sessions[2].target_comp_id),
+            settings
+                .for_session_id(&session_id)
+                .map(|s| &s.target_comp_id)
+        );
     }
 
     #[test]
@@ -348,7 +405,10 @@ TargetCompID=*
         let data = r#"# Comment
 "#;
         let settings = SessionSettings::from_string(data);
-        assert!(matches!(settings, Err(SessionSettingsError::NoDefaultSection)));
+        assert!(matches!(
+            settings,
+            Err(SessionSettingsError::NoDefaultSection)
+        ));
     }
 
     #[test]
@@ -359,7 +419,10 @@ TargetCompID=*
 [DEFAULT]
 "#;
         let settings = SessionSettings::from_string(data);
-        assert!(matches!(settings, Err(SessionSettingsError::DefaultSectionAlreadyDefined)));
+        assert!(matches!(
+            settings,
+            Err(SessionSettingsError::DefaultSectionAlreadyDefined)
+        ));
     }
 
     #[test]
@@ -370,7 +433,10 @@ TargetCompID=*
 [SESSION]
 "#;
         let settings = SessionSettings::from_string(data);
-        assert!(matches!(settings, Err(SessionSettingsError::DefaultSectionAlreadyDefined)));
+        assert!(matches!(
+            settings,
+            Err(SessionSettingsError::DefaultSectionAlreadyDefined)
+        ));
     }
 
     #[test]
@@ -380,6 +446,9 @@ TargetCompID=*
 asdfasd=Y
 "#;
         let settings = SessionSettings::from_string(data);
-        assert!(matches!(settings, Err(SessionSettingsError::NoSuchSetting(_))));
+        assert!(matches!(
+            settings,
+            Err(SessionSettingsError::NoSuchSetting(_))
+        ));
     }
 }

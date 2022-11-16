@@ -1,10 +1,13 @@
-use dfx::{session::{ApplicationExt, Application, ApplicationError, Session}, message::Message, tags};
+use dfx::{
+    message::Message,
+    session::{Application, ApplicationError, ApplicationExt, Session},
+    tags,
+};
 
 #[derive(Clone)]
 pub struct TestApplication;
 impl TestApplication {}
 impl Application for TestApplication {
-
     fn on_create(&mut self, _session_id: &dfx::session::SessionId) -> Result<(), ApplicationError> {
         println!("TestApplication: {}", _session_id);
         Ok(())
@@ -60,13 +63,16 @@ impl Application for TestApplication {
 #[derive(Clone)]
 pub struct SendTestApplication;
 impl ApplicationExt for SendTestApplication {
-    fn early_intercept(&mut self, message: Message, _session_id: &dfx::session::SessionId, ) -> Result<Message, ApplicationError> {
+    fn early_intercept(
+        &mut self,
+        message: Message,
+        _session_id: &dfx::session::SessionId,
+    ) -> Result<Message, ApplicationError> {
         panic!("{}", message);
         //Ok(message)
     }
 }
 impl Application for SendTestApplication {
-
     fn on_create(&mut self, _session_id: &dfx::session::SessionId) -> Result<(), ApplicationError> {
         println!("TestApplication: {}", _session_id);
         Ok(())

@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 #![allow(unused)]
-use std::{net::SocketAddr, time::{Duration, Instant}};
+use std::{
+    net::SocketAddr,
+    time::{Duration, Instant},
+};
 
 use dfx::{
     connection::SocketAcceptor,

@@ -1,5 +1,5 @@
 use std::sync::mpsc;
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 pub(crate) trait Responder: Send {
@@ -31,13 +31,11 @@ impl ChannelResponder {
 impl Responder for ChannelResponder {
     fn send(&mut self, message: String) -> bool {
         match self.tx.send(ResponderEvent::Send(message)) {
-            Ok(_) => {
-                match self.rx.recv_timeout(Duration::from_millis(10)) {
-                    Ok(response) => match response {
-                        ResponderResponse::Sent(sent) => sent,
-                    },
-                    Err(_e) => false,
-                }
+            Ok(_) => match self.rx.recv_timeout(Duration::from_millis(10)) {
+                Ok(response) => match response {
+                    ResponderResponse::Sent(sent) => sent,
+                },
+                Err(_e) => false,
             },
             Err(_) => false,
         }

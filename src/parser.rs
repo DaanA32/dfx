@@ -21,13 +21,13 @@ impl Find<&[u8]> for Vec<u8> {
     fn find(&self, item: &[u8]) -> Option<usize> {
         let mut index = 0;
         for _c in self {
-            if item.len() >= self.len()-index {
+            if item.len() >= self.len() - index {
                 return None;
             }
-            if &self[index..index+item.len()] == item {
+            if &self[index..index + item.len()] == item {
                 return Some(index);
             }
-            index+=1;
+            index += 1;
         }
         None
     }
@@ -37,9 +37,9 @@ impl Find<char> for Vec<u8> {
         let mut index = 0;
         for c in self {
             if c == &(item as u8) {
-                return Some(index)
+                return Some(index);
             }
-            index+=1;
+            index += 1;
         }
         None
     }
@@ -48,13 +48,13 @@ impl Find<&[u8]> for [u8] {
     fn find(&self, item: &[u8]) -> Option<usize> {
         let mut index = 0;
         for _c in self {
-            if item.len() >= self.len()-index {
+            if item.len() >= self.len() - index {
                 return None;
             }
-            if &self[index..index+item.len()] == item {
+            if &self[index..index + item.len()] == item {
                 return Some(index);
             }
-            index+=1;
+            index += 1;
         }
         None
     }
@@ -64,9 +64,9 @@ impl Find<char> for [u8] {
         let mut index = 0;
         for c in self {
             if c == &(item as u8) {
-                return Some(index)
+                return Some(index);
             }
-            index+=1;
+            index += 1;
         }
         None
     }
@@ -126,7 +126,7 @@ pub fn read_fix(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
     if buffer.len() < 2 {
         return None;
     }
-    let pos: Option<usize> = buffer.find( "8=".as_bytes() );
+    let pos: Option<usize> = buffer.find("8=".as_bytes());
     if pos == None || pos == Some(usize::MAX) {
         return None;
     }
@@ -137,11 +137,11 @@ pub fn read_fix(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
         if buffer.len() < pos {
             return None;
         }
-        let found = buffer[pos-1..].find( "\x0110=".as_bytes());
-        pos = found? + pos-1;
+        let found = buffer[pos - 1..].find("\x0110=".as_bytes());
+        pos = found? + pos - 1;
         // TODO should we return err if position of found is too large?
         pos += 4;
-        let found = buffer[pos..].find( '\x01');
+        let found = buffer[pos..].find('\x01');
         pos += found?;
         pos += 1;
         return Some(buffer.drain(..pos).collect());
@@ -152,30 +152,29 @@ pub fn read_fix(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
 /// Returns `Option<(pos, len)>` if it can find the length in the fix message otherwise returns `None`.
 ///
 pub fn extract_length(buffer: &[u8]) -> Option<(usize, usize)> {
-    let start = buffer.find( "\x019=".as_bytes())? + 3;
+    let start = buffer.find("\x019=".as_bytes())? + 3;
     let end = buffer[start..].find('\x01')? + start;
     let str_len = &buffer[start..end];
     match std::str::from_utf8(str_len) {
         Ok(s) => {
             let out_len = s.parse::<usize>().ok()?;
             Some((end + 1, out_len))
-        },
-        Err(_) => None
+        }
+        Err(_) => None,
     }
-
 }
 
 pub fn read_version(buffer: &[u8]) -> Option<&str> {
-    let pos: Option<usize> = buffer.find( "8=".as_bytes() );
+    let pos: Option<usize> = buffer.find("8=".as_bytes());
     if pos == None || pos == Some(usize::MAX) {
         None
-    }else{
+    } else {
         let pos = pos.unwrap();
         let found = buffer[pos..].find('\x01');
         let end = found.unwrap();
-        match std::str::from_utf8(&buffer[pos+2..end]) {
+        match std::str::from_utf8(&buffer[pos + 2..end]) {
             Ok(s) => Some(s),
-            Err(_) => None
+            Err(_) => None,
         }
     }
 }
@@ -189,7 +188,6 @@ mod tests {
 
     #[test]
     pub fn two_in_one() {
-
         let buffer = b"8=FIX.4.4\x019=57\x0135=A\x0134=1\x0149=ISLD\x0152=00000000-00:00:00\x0156=TW\x0198=0\x01108=30\x0110=0\x018=FIX.4.4\x019=45\x0135=5\x0134=2\x0149=ISLD\x0152=00000000-00:00:00\x0156=TW\x0110=0\x01";
         println!("{}", buffer.iter().map(|b| *b as char).collect::<String>());
         let mut parser = Parser::default();
@@ -198,7 +196,10 @@ mod tests {
         assert!(msg.is_ok());
         assert!(msg.unwrap().is_some());
         assert!(!parser.buffer.is_empty());
-        println!("{}", parser.buffer.iter().map(|b| *b as char).collect::<String>());
+        println!(
+            "{}",
+            parser.buffer.iter().map(|b| *b as char).collect::<String>()
+        );
         let msg = parser.read_fix_message();
         assert!(msg.is_ok());
         assert!(msg.unwrap().is_some());

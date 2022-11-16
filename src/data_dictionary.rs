@@ -40,8 +40,7 @@ impl From<FieldMapError> for MessageValidationError {
 
 #[derive(Clone, Debug)]
 /// TODO
-pub enum DataDictionaryError {
-}
+pub enum DataDictionaryError {}
 
 #[derive(Clone, Debug, Default)]
 pub struct DataDictionary {
@@ -307,14 +306,20 @@ impl DataDictionary {
                         let splitted = string_value.split(' ');
                         for value in splitted {
                             if !fld.enums().contains_key(value) {
-                                return Err(MessageValidationError::IncorrectEnumValue(field.tag(), value.to_string()));
+                                return Err(MessageValidationError::IncorrectEnumValue(
+                                    field.tag(),
+                                    value.to_string(),
+                                ));
                             }
                         }
                         Ok(())
                     } else if !fld.enums().contains_key(&field.string_value()) {
                         // println!("{:?}", field);
                         // println!("{:?}", fld.enums());
-                        Err(MessageValidationError::IncorrectEnumValue(field.tag(), field.string_value()))
+                        Err(MessageValidationError::IncorrectEnumValue(
+                            field.tag(),
+                            field.string_value(),
+                        ))
                     } else {
                         Ok(())
                     }

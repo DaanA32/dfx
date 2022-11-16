@@ -35,10 +35,18 @@ pub(crate) struct PrintLnLogger {
 }
 impl Logger for PrintLnLogger {
     fn on_incoming(&self, incoming: &str) {
-        println!("{} [INCOMING] {}", self.session_id, incoming.replace("\x01", "|"));
+        println!(
+            "{} [INCOMING] {}",
+            self.session_id,
+            incoming.replace("\x01", "|")
+        );
     }
     fn on_outgoing(&self, outgoing: &str) {
-        println!("{} [OUTGOING] {}", self.session_id, outgoing.replace("\x01", "|"));
+        println!(
+            "{} [OUTGOING] {}",
+            self.session_id,
+            outgoing.replace("\x01", "|")
+        );
     }
     fn on_event(&self, event: &str) {
         println!("{} [EVENT   ] {}", self.session_id, event);
@@ -53,7 +61,9 @@ pub trait LogFactory {
 pub struct PrintlnLogFactory;
 impl PrintLnLogger {
     pub fn new(session_id: &SessionId) -> Box<dyn Logger> {
-        Box::new(PrintLnLogger { session_id: session_id.clone() })
+        Box::new(PrintLnLogger {
+            session_id: session_id.clone(),
+        })
     }
 }
 impl PrintlnLogFactory {

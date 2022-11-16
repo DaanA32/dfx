@@ -1,6 +1,6 @@
 use crate::field_map::FieldValue;
-use crate::fields::ConversionError;
 use crate::fields::converters::TryFrom;
+use crate::fields::ConversionError;
 
 impl<'a> TryFrom<&'a FieldValue> for String {
     type Error = ConversionError;
@@ -9,7 +9,6 @@ impl<'a> TryFrom<&'a FieldValue> for String {
         Ok(value.iter().map(|b| *b as char).collect())
     }
 }
-
 
 impl<'a> TryFrom<&'a FieldValue> for &'a str {
     type Error = ConversionError;

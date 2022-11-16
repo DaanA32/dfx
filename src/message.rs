@@ -781,16 +781,20 @@ impl Message {
 
             if begin_string.as_str() >= "FIX.4.1" {
                 if self.header.is_field_set(tags::OnBehalfOfLocationID) {
-                    let on_behalf_of_location_id = header.get_string(tags::OnBehalfOfLocationID).unwrap();
+                    let on_behalf_of_location_id =
+                        header.get_string(tags::OnBehalfOfLocationID).unwrap();
                     if on_behalf_of_location_id.len() > 0 {
-                        self.header.set_field(tags::DeliverToLocationID, &on_behalf_of_location_id);
+                        self.header
+                            .set_field(tags::DeliverToLocationID, &on_behalf_of_location_id);
                     }
                 }
 
                 if self.header.is_field_set(tags::DeliverToLocationID) {
-                    let deliver_to_location_id = header.get_string(tags::DeliverToLocationID).unwrap();
+                    let deliver_to_location_id =
+                        header.get_string(tags::DeliverToLocationID).unwrap();
                     if deliver_to_location_id.len() > 0 {
-                        self.header.set_field(tags::OnBehalfOfLocationID, &deliver_to_location_id);
+                        self.header
+                            .set_field(tags::OnBehalfOfLocationID, &deliver_to_location_id);
                     }
                 }
             }
@@ -813,7 +817,8 @@ impl Message {
         if self.header.is_field_set(tags::SenderLocationID) {
             let sender_location_id = header.get_string(tags::SenderLocationID).unwrap();
             if sender_location_id.len() > 0 {
-                self.header.set_field(tags::TargetLocationID, &sender_location_id);
+                self.header
+                    .set_field(tags::TargetLocationID, &sender_location_id);
             }
         }
 
@@ -834,7 +839,8 @@ impl Message {
         if self.header.is_field_set(tags::TargetLocationID) {
             let target_location_id = header.get_string(tags::TargetLocationID).unwrap();
             if target_location_id.len() > 0 {
-                self.header.set_field(tags::SenderLocationID, &target_location_id);
+                self.header
+                    .set_field(tags::SenderLocationID, &target_location_id);
             }
         }
 
@@ -847,28 +853,32 @@ impl Message {
         if self.header.is_field_set(tags::OnBehalfOfCompID) {
             let on_behalf_of_comp_id = header.get_string(tags::OnBehalfOfCompID).unwrap();
             if on_behalf_of_comp_id.len() > 0 {
-                self.header.set_field(tags::DeliverToCompID, &on_behalf_of_comp_id);
+                self.header
+                    .set_field(tags::DeliverToCompID, &on_behalf_of_comp_id);
             }
         }
 
         if self.header.is_field_set(tags::OnBehalfOfSubID) {
             let on_behalf_of_sub_id = header.get_string(tags::OnBehalfOfSubID).unwrap();
             if on_behalf_of_sub_id.len() > 0 {
-                self.header.set_field(tags::DeliverToSubID, &on_behalf_of_sub_id);
+                self.header
+                    .set_field(tags::DeliverToSubID, &on_behalf_of_sub_id);
             }
         }
 
         if self.header.is_field_set(tags::DeliverToCompID) {
             let deliver_to_comp_id = header.get_string(tags::DeliverToCompID).unwrap();
             if deliver_to_comp_id.len() > 0 {
-                self.header.set_field(tags::OnBehalfOfCompID, &deliver_to_comp_id);
+                self.header
+                    .set_field(tags::OnBehalfOfCompID, &deliver_to_comp_id);
             }
         }
 
         if self.header.is_field_set(tags::DeliverToSubID) {
             let deliver_to_sub_id = header.get_string(tags::DeliverToSubID).unwrap();
             if deliver_to_sub_id.len() > 0 {
-                self.header.set_field(tags::OnBehalfOfSubID, &deliver_to_sub_id);
+                self.header
+                    .set_field(tags::OnBehalfOfSubID, &deliver_to_sub_id);
             }
         }
         //todo!("reverse_route: {:?}", header)
@@ -876,13 +886,27 @@ impl Message {
 
     pub(crate) fn extract_contra_session_id(&self) -> SessionId {
         SessionId::new(
-            self.header.get_string(tags::BeginString).unwrap_or_default(),
-            self.header.get_string(tags::TargetCompID).unwrap_or_default(),
-            self.header.get_string(tags::TargetSubID).unwrap_or_default(),
-            self.header.get_string(tags::TargetLocationID).unwrap_or_default(),
-            self.header.get_string(tags::SenderCompID).unwrap_or_default(),
-            self.header.get_string(tags::SenderSubID).unwrap_or_default(),
-            self.header.get_string(tags::SenderLocationID).unwrap_or_default(),
+            self.header
+                .get_string(tags::BeginString)
+                .unwrap_or_default(),
+            self.header
+                .get_string(tags::TargetCompID)
+                .unwrap_or_default(),
+            self.header
+                .get_string(tags::TargetSubID)
+                .unwrap_or_default(),
+            self.header
+                .get_string(tags::TargetLocationID)
+                .unwrap_or_default(),
+            self.header
+                .get_string(tags::SenderCompID)
+                .unwrap_or_default(),
+            self.header
+                .get_string(tags::SenderSubID)
+                .unwrap_or_default(),
+            self.header
+                .get_string(tags::SenderLocationID)
+                .unwrap_or_default(),
         )
     }
 }

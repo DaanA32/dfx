@@ -1,11 +1,23 @@
-use chrono::{DateTime, Utc, Weekday, NaiveTime, Datelike, NaiveDateTime, TimeZone, FixedOffset};
 use chrono::naive::Days;
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, NaiveTime, TimeZone, Utc, Weekday};
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum SessionSchedule {
     NonStop,
-    Weekly { start_day: Weekday, end_day: Weekday, start_time: NaiveTime, end_time: NaiveTime, timezone: Option<FixedOffset>, use_localtime: bool },
-    Daily { start_time: NaiveTime, end_time: NaiveTime, timezone: Option<FixedOffset>, use_localtime: bool },
+    Weekly {
+        start_day: Weekday,
+        end_day: Weekday,
+        start_time: NaiveTime,
+        end_time: NaiveTime,
+        timezone: Option<FixedOffset>,
+        use_localtime: bool,
+    },
+    Daily {
+        start_time: NaiveTime,
+        end_time: NaiveTime,
+        timezone: Option<FixedOffset>,
+        use_localtime: bool,
+    },
 }
 
 // #[derive(Debug)]
@@ -47,19 +59,21 @@ impl SessionSchedule {
                 while &end.weekday() != end_day {
                     end + Days::new(1);
                 }
-                if d > end { // d is later than end
+                if d > end {
+                    // d is later than end
                     end + Days::new(7);
                 }
                 end
-            },
+            }
             SessionSchedule::Daily { .. } => {
                 let mut end = old_time.clone();
                 let d = old_time;
-                if d > end { // d is later than end
+                if d > end {
+                    // d is later than end
                     end + Days::new(1);
                 }
                 end
-            },
+            }
         }
     }
 
@@ -85,39 +99,72 @@ impl SessionSchedule {
         assert!(matches!(self, SessionSchedule::Weekly { .. }));
         match self {
             SessionSchedule::NonStop => unreachable!(),
-            SessionSchedule::Weekly { start_day, end_day, start_time, end_time, .. } => {
+            SessionSchedule::Weekly {
+                start_day,
+                end_day,
+                start_time,
+                end_time,
+                ..
+            } => {
                 if start_day.num_days_from_monday() < end_day.num_days_from_monday() {
-                    if datetime.weekday().num_days_from_monday() < start_day.num_days_from_monday() || datetime.weekday().num_days_from_monday() > end_day.num_days_from_monday() {
+                    if datetime.weekday().num_days_from_monday() < start_day.num_days_from_monday()
+                        || datetime.weekday().num_days_from_monday()
+                            > end_day.num_days_from_monday()
+                    {
                         false
-                    } else if datetime.weekday().num_days_from_monday() < end_day.num_days_from_monday() {
-                        start_day.num_days_from_monday() < datetime.weekday().num_days_from_monday() || start_time <= &datetime.time()
-                    } else  {
-                        end_day.num_days_from_monday() > datetime.weekday().num_days_from_monday() || end_time >= &datetime.time()
+                    } else if datetime.weekday().num_days_from_monday()
+                        < end_day.num_days_from_monday()
+                    {
+                        start_day.num_days_from_monday() < datetime.weekday().num_days_from_monday()
+                            || start_time <= &datetime.time()
+                    } else {
+                        end_day.num_days_from_monday() > datetime.weekday().num_days_from_monday()
+                            || end_time >= &datetime.time()
                     }
                 } else if end_day.num_days_from_monday() > start_day.num_days_from_monday() {
-                    if datetime.weekday().num_days_from_monday() < end_day.num_days_from_monday() || datetime.weekday().num_days_from_monday() > start_day.num_days_from_monday() {
+                    if datetime.weekday().num_days_from_monday() < end_day.num_days_from_monday()
+                        || datetime.weekday().num_days_from_monday()
+                            > start_day.num_days_from_monday()
+                    {
                         false
-                    } else if datetime.weekday().num_days_from_monday() < start_day.num_days_from_monday() {
-                        end_day.num_days_from_monday() < datetime.weekday().num_days_from_monday() || end_time <= &datetime.time()
-                    } else  {
-                        start_day.num_days_from_monday() > datetime.weekday().num_days_from_monday() || start_time >= &datetime.time()
+                    } else if datetime.weekday().num_days_from_monday()
+                        < start_day.num_days_from_monday()
+                    {
+                        end_day.num_days_from_monday() < datetime.weekday().num_days_from_monday()
+                            || end_time <= &datetime.time()
+                    } else {
+                        start_day.num_days_from_monday() > datetime.weekday().num_days_from_monday()
+                            || start_time >= &datetime.time()
                     }
                 } else if start_time >= end_time {
                     &datetime.weekday() != start_day || self.check_time(&datetime.time())
                 } else {
                     &datetime.weekday() == start_day && self.check_time(&datetime.time())
                 }
-            },
+            }
             SessionSchedule::Daily { .. } => unreachable!(),
         }
     }
 
     fn check_time(&self, time: &NaiveTime) -> bool {
-        assert!(matches!(self, SessionSchedule::Daily { .. }) || matches!(self, SessionSchedule::Weekly { .. }));
+        assert!(
+            matches!(self, SessionSchedule::Daily { .. })
+                || matches!(self, SessionSchedule::Weekly { .. })
+        );
         let (start_time, end_time) = match self {
             SessionSchedule::NonStop => unreachable!(),
-            SessionSchedule::Weekly { start_time, end_time, timezone, .. } => (start_time, start_time),
-            SessionSchedule::Daily { start_time, end_time, timezone, .. } => (start_time, end_time),
+            SessionSchedule::Weekly {
+                start_time,
+                end_time,
+                timezone,
+                ..
+            } => (start_time, start_time),
+            SessionSchedule::Daily {
+                start_time,
+                end_time,
+                timezone,
+                ..
+            } => (start_time, end_time),
         };
 
         if start_time < end_time {

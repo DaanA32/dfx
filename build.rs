@@ -38,7 +38,6 @@ macro_rules! client_test {
     }};
 }
 
-
 #[cfg(not(test))]
 fn main() {}
 

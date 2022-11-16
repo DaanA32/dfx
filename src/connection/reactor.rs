@@ -1,12 +1,18 @@
 use std::{
     io::{Read, Write},
-    net::{SocketAddr, TcpStream}, sync::mpsc::{Receiver, Sender}, time::Duration,
+    net::{SocketAddr, TcpStream},
+    sync::mpsc::{Receiver, Sender},
+    time::Duration,
 };
 
 use crate::{
     connection::StreamFactory,
+    message::{Message, MessageParseError},
     parser::{Parser, ParserError},
-    session::{Session, SessionId, Responder, ChannelResponder, ResponderEvent, ResponderResponse, SessionSetting, Application}, message::{Message, MessageParseError},
+    session::{
+        Application, ChannelResponder, Responder, ResponderEvent, ResponderResponse, Session,
+        SessionId, SessionSetting,
+    },
 };
 
 use super::ConnectionError;
@@ -63,8 +69,12 @@ impl From<std::io::Error> for ReactorError {
 }
 
 impl<App: Application + Clone + 'static> SocketReactor<App> {
-
-    pub(crate) fn new(connection: TcpStream, mut session: Option<Session>, settings: Vec<SessionSetting>, app: App) -> Self {
+    pub(crate) fn new(
+        connection: TcpStream,
+        mut session: Option<Session>,
+        settings: Vec<SessionSetting>,
+        app: App,
+    ) -> Self {
         let mut reactor = SocketReactor {
             session,
             settings,
@@ -79,7 +89,6 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
         };
         reactor.create_responder();
         reactor
-
     }
 
     fn create_responder(&mut self) {
@@ -100,22 +109,19 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
             match e {
                 ReactorError::Disconnect => {
                     if let Some(session) = self.session.as_ref() {
-                        let session_id = session
-                            .session_id()
-                            .clone();
+                        let session_id = session.session_id().clone();
                         self.set_disconnected(session_id);
                     } else {
                         // TODO
                     }
-                },
-                e => todo!("SocketReactor::start: Error {:?}", e)
+                }
+                e => todo!("SocketReactor::start: Error {:?}", e),
             }
         }
         self.session
     }
 
     fn event_loop(&mut self) -> Result<(), ReactorError> {
-
         while let None = self.session {
             self.read()?;
         }
@@ -130,7 +136,9 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
         self.set_connected(session_id.clone());
 
         let session = self.session.as_mut().expect("Session not found!");
-        session.log().on_event(format!("Connection succeeded {}", &session_id).as_str());
+        session
+            .log()
+            .on_event(format!("Connection succeeded {}", &session_id).as_str());
         session.next();
         while let Ok(()) = self.read() {}
         let session_id = self
@@ -140,13 +148,20 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
             .session_id()
             .clone();
         self.set_disconnected(session_id);
-        self.stream.as_mut().unwrap().shutdown(std::net::Shutdown::Both);
+        self.stream
+            .as_mut()
+            .unwrap()
+            .shutdown(std::net::Shutdown::Both);
         Ok(())
     }
 
     // TODO move this to a concurrent map > SessionState > Sender<Message>
     fn set_connected(&mut self, session_id: SessionId) {
-        self.session.as_mut().unwrap().set_connected(&session_id).unwrap();
+        self.session
+            .as_mut()
+            .unwrap()
+            .set_connected(&session_id)
+            .unwrap();
         self.state = ConnectionState::Connected(session_id);
     }
 
@@ -162,10 +177,10 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
             self.parser.add_to_stream(&self.buffer[..read]);
         } else if let Some(session) = self.get_session_mut() {
             session.next();
-        // } else {
-        //     return Err(ReactorError::Timeout(
-        //         "Reactor timed out while reading socket".into(),
-        //     ));
+            // } else {
+            //     return Err(ReactorError::Timeout(
+            //         "Reactor timed out while reading socket".into(),
+            //     ));
         }
 
         self.process_responder()?;
@@ -192,8 +207,7 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
         while let Some(msg) = self.parser.read_fix_message()? {
             // println!("{}", msg.iter().map(|b| *b as char).collect::<String>());
             if let Some(session) = self.session.as_mut() {
-                session
-                    .next_msg(msg);
+                session.next_msg(msg);
             } else {
                 let message = Message::new(&msg[..])?;
                 let session_id = message.extract_contra_session_id();
@@ -209,7 +223,7 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
                         } else {
                             return Err(ReactorError::Disconnect);
                         }
-                    },
+                    }
                     None => {
                         // TODO this.Log("ERROR: Disconnecting; received message for unknown session: " + msg);
                         return Err(ReactorError::Disconnect);
@@ -222,33 +236,33 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
 
     fn process_responder(&mut self) -> Result<(), ReactorError> {
         match (self.tx.as_mut(), self.rx.as_mut()) {
-            (Some(tx), Some(rx)) => {
-                match rx.recv_timeout(Duration::from_millis(1)) {
-                    Ok(event) => match event {
-                        ResponderEvent::Send(message) => {
-                            match self.stream.as_mut().unwrap().write_all(message.as_bytes()) {
-                                Ok(_) => Ok(tx.send(ResponderResponse::Sent(true)).unwrap_or(())),
-                                Err(_) => Ok(tx.send(ResponderResponse::Sent(false)).unwrap_or(())),
-                            }
-                        },
-                        ResponderEvent::Disconnect => {
-                            println!("Reactor: Disconnect");
-                            Err(ReactorError::Disconnect)
-                        },
-                    },
-                    Err(_) => Ok(()),
-                }
+            (Some(tx), Some(rx)) => match rx.recv_timeout(Duration::from_millis(1)) {
+                Ok(event) => match event {
+                    ResponderEvent::Send(message) => {
+                        match self.stream.as_mut().unwrap().write_all(message.as_bytes()) {
+                            Ok(_) => Ok(tx.send(ResponderResponse::Sent(true)).unwrap_or(())),
+                            Err(_) => Ok(tx.send(ResponderResponse::Sent(false)).unwrap_or(())),
+                        }
+                    }
+                    ResponderEvent::Disconnect => {
+                        println!("Reactor: Disconnect");
+                        Err(ReactorError::Disconnect)
+                    }
+                },
+                Err(_) => Ok(()),
             },
-            _ => Ok(()) //TODO should we just drop messages?
+            _ => Ok(()), //TODO should we just drop messages?
         }
     }
 
     fn for_session_id(&self, session_id: &SessionId) -> Option<&SessionSetting> {
-        let best_match = &self.settings.iter()
-                .map(|s| (s.score(session_id), s))
-                .filter(|(score, _)| score > &0)
-                .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
-                .map(|(k,v )| v);
+        let best_match = &self
+            .settings
+            .iter()
+            .map(|s| (s.score(session_id), s))
+            .filter(|(score, _)| score > &0)
+            .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
+            .map(|(k, v)| v);
         *best_match
     }
 }

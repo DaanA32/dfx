@@ -21,4 +21,3 @@ pub fn test_client_receive_logon() {
     runner_thread.join().unwrap();
     initiator.stop();
 }
-
