@@ -6,17 +6,15 @@
 
 pub mod connection;
 pub mod data_dictionary;
-pub mod data_dictionary_provider;
+mod data_dictionary_provider;
 pub mod field_map;
 pub mod fields;
-pub mod fix_values;
-pub mod log;
-pub mod log_factory;
+mod fix_values;
+pub mod logging;
 pub mod message;
-pub mod message_builder;
-pub mod message_factory;
+mod message_builder;
+mod message_factory;
 pub mod message_store;
-pub mod message_store_factory;
 pub mod parser;
 pub mod session;
 pub mod tags;

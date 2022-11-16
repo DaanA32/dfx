@@ -24,6 +24,7 @@ pub enum MessageValidationError {
     RequiredTagMissing(Tag),
     InvalidTagNumber(Tag),
     IncorrectTagValue(Tag),
+    IncorrectEnumValue(Tag, String),
     TagNotDefinedForMessage(Tag, String),
     RepeatingGroupCountMismatch(Tag),
     InvalidStructure(Tag),
@@ -38,7 +39,9 @@ impl From<FieldMapError> for MessageValidationError {
 }
 
 #[derive(Clone, Debug)]
-pub enum SpecError {}
+/// TODO
+pub enum DataDictionaryError {
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct DataDictionary {
@@ -56,13 +59,14 @@ pub struct DataDictionary {
 }
 
 impl DataDictionary {
+    // TODO change from FixSpec to str/file and use quick-xml instead
     pub fn new(
         check_fields_have_values: bool,
         check_fields_out_of_order: bool,
         check_user_defined_fields: bool,
         allow_unknown_message_fields: bool,
         spec: FixSpec,
-    ) -> Result<DataDictionary, SpecError> {
+    ) -> Result<DataDictionary, DataDictionaryError> {
         let dd_fields = spec.fields.values.values().map(|f| {
             let tag: Tag = f.number.parse().unwrap();
             let name = f.name.clone();
@@ -303,14 +307,14 @@ impl DataDictionary {
                         let splitted = string_value.split(' ');
                         for value in splitted {
                             if !fld.enums().contains_key(value) {
-                                return Err(MessageValidationError::IncorrectTagValue(field.tag()));
+                                return Err(MessageValidationError::IncorrectEnumValue(field.tag(), value.to_string()));
                             }
                         }
                         Ok(())
                     } else if !fld.enums().contains_key(&field.string_value()) {
                         // println!("{:?}", field);
                         // println!("{:?}", fld.enums());
-                        Err(MessageValidationError::IncorrectTagValue(field.tag()))
+                        Err(MessageValidationError::IncorrectEnumValue(field.tag(), field.string_value()))
                     } else {
                         Ok(())
                     }
@@ -948,7 +952,7 @@ impl Named for ComponentDefinition {
     }
 }
 
-pub trait Named {
+pub(crate) trait Named {
     fn name(&self) -> &str;
 }
 

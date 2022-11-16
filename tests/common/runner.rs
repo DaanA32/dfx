@@ -1,8 +1,27 @@
-use std::{fs::File, io::{BufReader, BufRead, Write, Read}, net::{TcpStream, TcpListener, Shutdown}, thread::{self, JoinHandle}, time::Duration, sync::atomic::AtomicU32};
+use std::{fs::File, io::{BufReader, BufRead, Write, Read}, net::{TcpStream, TcpListener, Shutdown}, thread::{self, JoinHandle}, time::Duration};
 use chrono::Utc;
-use dfx::{fields::converters::datetime::DATE_TIME_FORMAT_WITHOUT_MILLISECONDS, parser::Parser};
+use dfx::parser::Parser;
 use lazy_static::lazy_static;
 use regex::Regex;
+
+#[allow(unused)]
+const DATE_TIME_FORMAT_WITH_NANOSECONDS: &str = "%Y%m%d-%H:%M:%S.%f";
+#[allow(unused)]
+const DATE_TIME_FORMAT_WITH_MICROSECONDS: &str = "%Y%m%d-%H:%M:%S.%6f";
+#[allow(unused)]
+const DATE_TIME_FORMAT_WITH_MILLISECONDS: &str = "%Y%m%d-%H:%M:%S.%3f";
+#[allow(unused)]
+const DATE_TIME_FORMAT_WITHOUT_MILLISECONDS: &str = "%Y%m%d-%H:%M:%S";
+#[allow(unused)]
+const DATE_ONLY_FORMAT: &str = "%Y%m%d";
+#[allow(unused)]
+const TIME_ONLY_FORMAT_WITH_NANOSECONDS: &str = "%H:%M:%S.%f";
+#[allow(unused)]
+const TIME_ONLY_FORMAT_WITH_MICROSECONDS: &str = "%H:%M:%S.%6f";
+#[allow(unused)]
+const TIME_ONLY_FORMAT_WITH_MILLISECONDS: &str = "%H:%M:%S.%3f";
+#[allow(unused)]
+const TIME_ONLY_FORMAT_WITHOUT_MILLISECONDS: &str = "%H:%M:%S";
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum TestStep {
@@ -24,7 +43,7 @@ lazy_static! {
     static ref E_MESSAGE: Regex = Regex::new(r"^E(.*)").unwrap();
 
     // matches (FIXT?.X.X\x01)(body)(checksum);
-    static ref MESSAGE: Regex = Regex::new(r"(8=FIXT?\\.\\d\\.\\d\\001)(.*?\\001)(10=.*|)").unwrap();
+    static ref MESSAGE: Regex = Regex::new(r"((8=FIXT?\.\d\.\d\x01)(.*?\x01))(10=.*\x01)").unwrap(); // (9=\d+)?
 }
 
 pub(crate) fn from_filename(filename: &str) -> JoinHandle<()> {
@@ -174,17 +193,18 @@ fn do_send(message: String, s: &mut TcpStream) {
     let message = message.replace("|", "\x01");
     let message = message.replace(r"<TIME>", Utc::now().format(DATE_TIME_FORMAT_WITHOUT_MILLISECONDS).to_string().as_str());
     let checksum = do_checksum(&message);
-    let message = message.replace(r"10=...", format!("10={:3}", checksum).as_str());
+    let message = message.replace(r"10=0", format!("10={:03}", checksum).as_str());
     // println!("Runner: {}", message.replace("\x01", "|"));
     s.write_all(message.as_bytes()).expect("Sent message");
     s.flush().unwrap();
 }
 
 fn do_checksum(message: &str) -> u32 {
-    COMMENT.captures(&message)
+    // println!("{:?}", MESSAGE.captures(&message));
+    MESSAGE.captures(&message)
         .map(|cap| {
             // println!("{:?}", cap.get(3));
-            cap.get(3).map(|mg| checksum(mg.as_str())).unwrap_or(0)
+            cap.get(1).map(|mg| checksum(mg.as_str())).unwrap_or(0)
         }).unwrap_or(0)
 }
 
@@ -198,6 +218,7 @@ fn checksum(body: &str) -> u32 {
             _field_sum = 0;
         }
     }
+    // println!("{}", sum % 256);
     sum % 256
 }
 

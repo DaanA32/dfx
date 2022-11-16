@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use crate::log::Log;
+use crate::logging::Logger;
 use crate::message::Message;
 use crate::message_store::MessageStore;
 use std::collections::BTreeMap;
@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use crate::session::ResetRange;
 
-pub struct SessionState {
+pub(crate) struct SessionState {
     is_enabled: bool,
     is_initiator: bool,
     received_logon: bool,
@@ -29,13 +29,13 @@ pub struct SessionState {
     resend_range: Option<ResetRange>,
     message_queue: BTreeMap<u32, Message>,
     msg_store: Box<dyn MessageStore>,
-    logger: Box<dyn Log>,
+    logger: Box<dyn Logger>,
 }
 
 impl SessionState {
     pub fn new(
         is_initiator: bool,
-        logger: Box<dyn Log>,
+        logger: Box<dyn Logger>,
         heartbeat_int: u32,
         msg_store: Box<dyn MessageStore>,
     ) -> Self {
@@ -445,17 +445,17 @@ impl SessionState {
     }
 
     /// Get a reference to the session state's logger.
-    pub(crate) fn logger(&self) -> &dyn Log {
+    pub(crate) fn logger(&self) -> &dyn Logger {
         self.logger.as_ref()
     }
 
     /// Get a mutable reference to the session state's logger.
-    pub(crate) fn logger_mut(&mut self) -> &mut Box<dyn Log> {
+    pub(crate) fn logger_mut(&mut self) -> &mut Box<dyn Logger> {
         &mut self.logger
     }
 
     /// Set the session state's logger.
-    pub(crate) fn set_logger(&mut self, logger: Box<dyn Log>) {
+    pub(crate) fn set_logger(&mut self, logger: Box<dyn Logger>) {
         self.logger = logger;
     }
 

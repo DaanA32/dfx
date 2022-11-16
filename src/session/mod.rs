@@ -1,7 +1,7 @@
 mod session;
 pub use session::*;
-mod session_settings;
-pub use session_settings::*;
+mod settings;
+pub use settings::*;
 mod session_state;
 pub use session_state::*;
 mod session_schedule;

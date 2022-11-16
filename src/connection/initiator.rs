@@ -51,13 +51,13 @@ impl<App: Application + Clone + 'static> SocketInitiator<App> {
     }
 }
 
-pub struct SocketInitiatorThread<App> {
+pub(crate) struct SocketInitiatorThread<App> {
     app: App,
     session_settings: SessionSetting,
 }
 
 #[derive(Debug)]
-pub enum InitiatorError {
+pub(crate) enum InitiatorError {
     Timeout(String),
     ConnectionError(ConnectionError),
     ParserError(ParserError),
@@ -102,13 +102,13 @@ impl<App: Application + Clone + 'static> SocketInitiatorThread<App> {
         }).expect("socket-acceptor-thread started")
     }
 
-    pub fn event_loop(&mut self,) -> Result<(), InitiatorError> {
+    fn event_loop(&mut self,) -> Result<(), InitiatorError> {
         let stream = StreamFactory::create_client_stream(
             &self.session_settings.socket_settings(),
         )?;
 
         let session = self.session_settings.create(Box::new(self.app.clone()));
-        let reactor = SocketReactor::new(stream, Some(session), Vec::new());
+        let reactor = SocketReactor::new(stream, Some(session), Vec::new(), self.app.clone());
         let session = reactor.start();
         Ok(())
     }

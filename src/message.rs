@@ -12,7 +12,7 @@ use crate::field_map::Group;
 use crate::field_map::Tag;
 use crate::fields::ApplVerID;
 use crate::fix_values;
-use crate::message_factory::MessageFactory;
+pub use crate::message_factory::*;
 use crate::session::SessionId;
 use crate::tags;
 use std::fmt::Display;

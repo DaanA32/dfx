@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 #![allow(unused)]
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::{Duration, Instant}};
 
 use dfx::{
-    connection::{SocketSettings, SocketAcceptor},
+    connection::SocketAcceptor,
     session::{Session, SessionId, SessionSettings},
 };
 
@@ -19,8 +19,13 @@ pub fn test_accept() {
 
     let steps = runner::steps("tests/definitions/server/accept_logon.def");
     acceptor.start();
+
     let runner_thread = runner::create_thread(steps, 40000);
-    //std::thread::sleep(Duration::from_millis(10));
-    runner_thread.join().unwrap();
+    let start = Instant::now();
+    while !runner_thread.is_finished() {
+        if Instant::now() - start > Duration::from_secs(30) {
+            panic!("Timeout: {runner_thread:?}");
+        }
+    }
     acceptor.stop();
 }

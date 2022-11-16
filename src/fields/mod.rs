@@ -1,12 +1,12 @@
 mod fields;
-pub mod limits;
+pub(crate) mod limits;
 use std::{ops::Deref, borrow::{Cow, Borrow}};
 
-pub use fields::*;
+pub(crate) use fields::*;
 
 use crate::field_map::FieldValue;
 
-pub mod converters;
+pub(crate) mod converters;
 
 #[derive(Debug, Clone)]
 pub enum ConversionError {

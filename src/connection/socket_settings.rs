@@ -3,7 +3,7 @@ use std::{net::{SocketAddr, AddrParseError}, str::FromStr};
 use super::ConnectionError;
 
 #[derive(Debug, Clone)]
-pub struct SocketSettings {
+pub(crate) struct SocketSettings {
     host: String,
     port: u32,
     // TODO rest

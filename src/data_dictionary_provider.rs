@@ -1,11 +1,11 @@
 use crate::data_dictionary::DataDictionary;
 
-pub trait DataDictionaryProvider: Send {
+pub(crate) trait DataDictionaryProvider: Send {
     fn get_session_data_dictionary(&self, begin_string: &str) -> DataDictionary;
     fn get_application_data_dictionary(&self, begin_string: &str) -> DataDictionary;
 }
 
-pub struct DefaultDataDictionaryProvider;
+pub(crate) struct DefaultDataDictionaryProvider;
 impl DefaultDataDictionaryProvider {
     pub fn new() -> Box<dyn DataDictionaryProvider> {
         Box::new(DefaultDataDictionaryProvider)

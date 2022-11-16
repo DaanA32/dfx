@@ -13,7 +13,6 @@ use std::time::Instant;
 use chashmap::CHashMap;
 use chrono::DateTime;
 use chrono::Utc;
-use lockfreehashmap::LockFreeHashMap;
 use lazy_static::lazy_static;
 
 use crate::data_dictionary::DataDictionary;
@@ -26,20 +25,18 @@ use crate::field_map::Tag;
 use crate::fields::*;
 use crate::fields::converters::datetime;
 use crate::fix_values::BeginString;
-use crate::log::Log;
-use crate::log::NoLogger;
-use crate::log_factory::LogFactory;
-use crate::log_factory::PrintlnLogFactory;
+use crate::logging::Logger;
+use crate::logging::NoLogger;
+use crate::logging::LogFactory;
+use crate::logging::PrintlnLogFactory;
 use crate::message::Message;
 use crate::message::MessageParseError;
 use crate::message_builder::MessageBuilder;
 use crate::message_factory::DefaultMessageFactory;
 use crate::message_factory::MessageFactory;
 use crate::message_factory::MessageFactoryError;
-use crate::message_store::MessageStoreError;
-use crate::message_store_factory;
-use crate::message_store_factory::DefaultStoreFactory;
-use crate::message_store_factory::MessageStoreFactory;
+use crate::message_store::DefaultStoreFactory;
+use crate::message_store::MessageStoreFactory;
 use crate::session::Application;
 use crate::session::ApplicationError;
 use crate::session::Responder;
@@ -57,7 +54,7 @@ lazy_static! {
     static ref SESSION_MAP: CHashMap<SessionId, SyncSender<Message>> = CHashMap::new();
 }
 
-pub struct SessionBuilder {
+pub(crate) struct SessionBuilder {
     is_initiator: bool,
     app: Box<dyn Application>,
     store_factory: Option<Box<dyn MessageStoreFactory>>,
@@ -71,7 +68,7 @@ pub struct SessionBuilder {
 }
 
 impl SessionBuilder {
-    pub(crate) fn new<S: Into<String>>(is_initiator: bool, app: Box<dyn Application>, session_id: SessionId, sender_default_appl_ver_id: S) -> Self{
+    fn new<S: Into<String>>(is_initiator: bool, app: Box<dyn Application>, session_id: SessionId, sender_default_appl_ver_id: S) -> Self{
         Self {
             is_initiator,
             app,
@@ -144,7 +141,7 @@ pub struct Session {
     target_default_appl_ver_id: Option<u32>,
     session_data_dictionary: DataDictionary,     //Option?
     application_data_dictionary: DataDictionary, //Option?
-    log: Box<dyn Log>,
+    log: Box<dyn Logger>,
     state: SessionState,
     persist_messages: bool,
     reset_on_disconnect: bool,
@@ -168,7 +165,7 @@ pub struct Session {
 }
 
 #[derive(Debug, Clone)]
-pub enum Event {
+pub(crate) enum Event {
     /// Incoming  FIX message.
     Message(Vec<u8>),
     /// I/O error at the transport layer.
@@ -187,12 +184,12 @@ pub enum Event {
 }
 
 impl Session {
-    pub fn builder<S: Into<String>>(is_initiator: bool, app: Box<dyn Application>, session_id: SessionId, sender_default_appl_ver_id: S) -> SessionBuilder {
+    pub(crate) fn builder<S: Into<String>>(is_initiator: bool, app: Box<dyn Application>, session_id: SessionId, sender_default_appl_ver_id: S) -> SessionBuilder {
         SessionBuilder::new(is_initiator, app, session_id, sender_default_appl_ver_id)
     }
     // bool isInitiator, IApplication app, IMessageStoreFactory storeFactory, SessionID sessID, DataDictionaryProvider dataDictProvider,
     //      SessionSchedule sessionSchedule, int heartBtInt, ILogFactory logFactory, IMessageFactory msgFactory, string senderDefaultApplVerID
-    pub fn new(
+    fn new(
         is_initiator: bool,
         app: Box<dyn Application>,
         store_factory: Box<dyn MessageStoreFactory>,
@@ -310,7 +307,7 @@ impl Session {
         self.responder = Some(responder);
     }
 
-    pub(crate) fn set_connected(&mut self, session_id: &SessionId) -> Result<(), SessionError>{
+    pub(crate) fn set_connected(&mut self, session_id: &SessionId) -> Result<(), InternalSessionError>{
         let receiver = Session::connect(&session_id);
         self.outbound = Some(receiver?);
         Ok(())
@@ -321,9 +318,9 @@ impl Session {
         self.outbound = None;
     }
 
-    fn connect(session_id: &SessionId) -> Result<Receiver<Message>, SessionError> {
+    fn connect(session_id: &SessionId) -> Result<Receiver<Message>, InternalSessionError> {
         if SESSION_MAP.contains_key(session_id) {
-            return Err(SessionError::AlreadyConnected);
+            return Err(InternalSessionError::AlreadyConnected);
         }
         let (tx, rx) = sync_channel(512);
         SESSION_MAP.insert_new(session_id.clone(), tx);
@@ -344,7 +341,7 @@ impl Session {
             };
         }
     }
-    pub fn next(&mut self) {
+    pub(crate) fn next(&mut self) {
         if self.responder.is_none() {
             // panic!()
             return;
@@ -771,15 +768,15 @@ impl Session {
             .set_field(tags::SendingTime, &send_time);
     }
 
-    pub fn session_id(&self) -> &SessionId {
+    pub(crate) fn session_id(&self) -> &SessionId {
         &self.session_id
     }
 
-    pub fn log(&mut self) -> &mut Box<dyn Log> {
+    pub(crate) fn log(&mut self) -> &mut Box<dyn Logger> {
         &mut self.log
     }
 
-    pub fn next_msg(&mut self, msg: Vec<u8>) {
+    pub(crate) fn next_msg(&mut self, msg: Vec<u8>) {
         self.log.on_incoming(&String::from_utf8_lossy(&msg));
 
         if !self.is_session_time() {
@@ -1600,14 +1597,13 @@ impl Session {
         }
     }
 
-    //TODO move this?
-    pub(crate) fn lookup_session(session_id: SessionId) -> Option<Session> {
-        todo!()
+    pub(crate) fn set_session_id(&mut self, clone: SessionId) {
+        self.session_id = clone;
     }
 }
 
 fn is_session_time(session_schedule: &SessionSchedule) -> bool {
-    session_schedule.is_session_time(Utc::now())
+    session_schedule.is_session_time(&Utc::now())
 }
 
 #[derive(Debug, Clone)]
@@ -1615,10 +1611,17 @@ pub enum SessionError {
     NotConnected(SessionId),
     NotLoggedOn(SessionId),
     SessionNotFound,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum InternalSessionError {
+    NotConnected(SessionId),
+    NotLoggedOn(SessionId),
+    SessionNotFound,
     AlreadyConnected,
 }
 
-pub enum HandleError {
+pub(crate) enum HandleError {
     UnsupportedVersion { expected: String, actual: String },
     MessageFactoryError(MessageFactoryError),
     MessageParseError(MessageParseError),

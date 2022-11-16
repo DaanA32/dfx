@@ -2,20 +2,20 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Sender, Receiver};
 use std::time::Duration;
 
-pub trait Responder: Send {
+pub(crate) trait Responder: Send {
     fn send(&mut self, message: String) -> bool;
     fn disconnect(&mut self);
 }
 
-pub enum ResponderEvent {
+pub(crate) enum ResponderEvent {
     Send(String),
     Disconnect,
 }
-pub enum ResponderResponse {
+pub(crate) enum ResponderResponse {
     Sent(bool),
 }
 
-pub struct ChannelResponder {
+pub(crate) struct ChannelResponder {
     tx: Sender<ResponderEvent>,
     rx: Receiver<ResponderResponse>,
 }

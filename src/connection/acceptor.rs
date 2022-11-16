@@ -1,4 +1,4 @@
-use std::{net::{SocketAddr, TcpListener}, thread::{self, JoinHandle}, time::Duration, sync::{atomic::AtomicBool, Arc}};
+use std::{net::{SocketAddr, TcpListener}, thread::{self, JoinHandle}, time::Duration, sync::{atomic::AtomicBool, Arc}, fmt::Display};
 
 use crate::{connection::SocketSettings, session::{self, Session, SessionBuilder, SessionSettings, Application, SessionSetting}};
 
@@ -6,16 +6,25 @@ use super::{SocketReactor, StreamFactory, ConnectionError};
 
 type Builder = fn() -> Session;
 
-pub struct SocketAcceptorThread<App> {
+pub(crate) struct SocketAcceptorThread<App> {
     app: App,
     addr: SocketAddr,
     session_settings: Vec<SessionSetting>,
 }
 
 #[derive(Debug)]
-pub enum AcceptorError {
-    BindError(std::io::Error),
+pub(crate) enum AcceptorError {
+    BindError(std::io::Error, SocketAddr),
     ConnectionError(ConnectionError),
+}
+
+impl Display for AcceptorError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AcceptorError::BindError(err, socket) => fmt.write_fmt(format_args!("Failed to bind addr: {} error: {}", socket, err)),
+            AcceptorError::ConnectionError(err) => fmt.write_fmt(format_args!("{}", err)),
+        }
+    }
 }
 
 impl From<ConnectionError> for AcceptorError {
@@ -41,7 +50,8 @@ impl<App: Application + Clone + Sync + 'static> SocketAcceptor<App> {
             running: Arc::new(AtomicBool::new(false)),
         }
     }
-    pub fn start(&mut self) {
+
+    pub fn start(&mut self) -> &mut Self {
         self.running.store(true, std::sync::atomic::Ordering::SeqCst);
 
         //TODO group by port => Vec<SessionSetting>
@@ -50,12 +60,15 @@ impl<App: Application + Clone + Sync + 'static> SocketAcceptor<App> {
             let thread = ac.start(&self.running);
             self.thread.push(thread);
         }
+
+        self
     }
 
     pub fn join(&mut self) {
         while self.thread.iter().any(|t| !t.is_finished()) {
         }
     }
+
     pub fn stop(&mut self) {
         self.running.store(false, std::sync::atomic::Ordering::Relaxed);
         self.join()
@@ -75,13 +88,11 @@ impl<App: Application + Clone + Sync + 'static> SocketAcceptorThread<App> {
         let rt = running.clone();
         thread::Builder::new()
             .name("socket-acceptor-thread".into())
-            .spawn(move || {
-            if let Err(e) = self.event_loop(rt) {
-                match e {
-                    e => todo!("SocketInitiator::start: Error {:?}", e)
-                }
-            }
-        }).expect("socket-acceptor-thread started")
+            .spawn(move || { match self.event_loop(rt) {
+                Ok(()) => {},
+                Err(e) => println!("{e}"),
+            } }
+        ).expect("socket-acceptor-thread started")
     }
 
     fn event_loop(&self, running: Arc<AtomicBool>) -> Result<(), AcceptorError> {
@@ -92,13 +103,15 @@ impl<App: Application + Clone + Sync + 'static> SocketAcceptorThread<App> {
         while running.load(std::sync::atomic::Ordering::Relaxed) {
             match listener.accept() {
                 Ok((stream, _addr)) => {
+                    println!("Connected");
                     let session_setting = &self.session_settings[0];
-                    let stream = StreamFactory::configure_stream(stream, &session_setting.socket_settings()).expect("Setup stream");
+                    let stream = StreamFactory::configure_stream(stream, &session_setting.socket_settings())?;
                     let session_settings = self.session_settings.clone();
+                    let app = self.app.clone();
                     let t = thread::Builder::new()
                         .name(format!("socket-acceptor-connection-{n}"))
                         .spawn(move || {
-                            let reactor = SocketReactor::new(stream, None, session_settings);
+                            let reactor = SocketReactor::new(stream, None, session_settings, app);
                             reactor.start()
                         }).unwrap();
                     threads.push(t);
@@ -108,7 +121,7 @@ impl<App: Application + Clone + Sync + 'static> SocketAcceptorThread<App> {
                     thread::sleep(Duration::from_millis(1));
                     continue;
                 }
-                Err(e) => todo!("encountered IO error: {e}"),
+                Err(e) => panic!("encountered IO error: {e}"),
             }
         }
 
@@ -116,7 +129,7 @@ impl<App: Application + Clone + Sync + 'static> SocketAcceptorThread<App> {
     }
 
     fn bind(&self) -> Result<TcpListener, AcceptorError> {
-        let listener = TcpListener::bind(self.addr).map_err(|e| AcceptorError::BindError(e))?;
+        let listener = TcpListener::bind(self.addr).map_err(|e| AcceptorError::BindError(e, self.addr))?;
         listener.set_nonblocking(true).expect("Cannot set non-blocking");
         Ok(listener)
     }

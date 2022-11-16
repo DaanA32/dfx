@@ -139,6 +139,7 @@ pub fn read_fix(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
         }
         let found = buffer[pos-1..].find( "\x0110=".as_bytes());
         pos = found? + pos-1;
+        // TODO should we return err if position of found is too large?
         pos += 4;
         let found = buffer[pos..].find( '\x01');
         pos += found?;

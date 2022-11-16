@@ -3,16 +3,16 @@ use std::fmt::Display;
 //TODO partial match on sender + target comp?
 #[derive(Debug, Clone, Default, Hash, PartialEq)]
 pub struct SessionId {
-    pub id: String,
-    pub begin_string: String,
-    pub sender_comp_id: String,
-    pub sender_sub_id: String,
-    pub sender_location_id: String,
-    pub target_comp_id: String,
-    pub target_sub_id: String,
-    pub target_location_id: String,
-    // pub session_qualifier: String,
-    pub is_fixt: bool,
+    pub(crate) id: String,
+    pub(crate) begin_string: String,
+    pub(crate) sender_comp_id: String,
+    pub(crate) sender_sub_id: String,
+    pub(crate) sender_location_id: String,
+    pub(crate) target_comp_id: String,
+    pub(crate) target_sub_id: String,
+    pub(crate) target_location_id: String,
+    // pub(crate) session_qualifier: String,
+    pub(crate) is_fixt: bool,
 }
 
 impl SessionId {

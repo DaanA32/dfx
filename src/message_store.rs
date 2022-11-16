@@ -3,8 +3,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 
 use crate::message::Message;
-
-pub enum MessageStoreError {}
+use crate::session::SessionId;
 
 pub trait MessageStore: Send {
     fn reset(&mut self);
@@ -23,7 +22,7 @@ pub trait MessageStore: Send {
     fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<&String>;
 }
 
-pub struct MemoryMessageStore {
+pub(crate) struct MemoryMessageStore {
     messages: BTreeMap<u32, String>,
     next_sender_msg_seq_num: u32,
     next_target_msg_seq_num: u32,
@@ -87,5 +86,23 @@ impl MessageStore for MemoryMessageStore {
     fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<&String> {
         assert!(begin_seq_num < end_seq_num);
         self.messages.range(begin_seq_num..=end_seq_num).map(|(k, v)| v).collect()
+    }
+}
+
+pub trait MessageStoreFactory {
+    fn create(&self, session_id: &SessionId) -> Box<dyn MessageStore>;
+}
+
+pub struct DefaultStoreFactory;
+
+impl DefaultStoreFactory {
+    pub fn new() -> Box<dyn MessageStoreFactory> {
+        Box::new(DefaultStoreFactory)
+    }
+}
+
+impl MessageStoreFactory for DefaultStoreFactory {
+    fn create(&self, session_id: &SessionId) -> Box<dyn MessageStore> {
+        Box::new(MemoryMessageStore::new())
     }
 }

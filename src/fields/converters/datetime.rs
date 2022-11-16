@@ -14,6 +14,13 @@ pub const TIME_ONLY_FORMAT_WITH_MICROSECONDS: &str = "%H:%M:%S.%6f";
 pub const TIME_ONLY_FORMAT_WITH_MILLISECONDS: &str = "%H:%M:%S.%3f";
 pub const TIME_ONLY_FORMAT_WITHOUT_MILLISECONDS: &str = "%H:%M:%S";
 
+pub(crate) enum DateTimeFormat {
+    Nanoseconds,
+    Microseconds,
+    Milliseconds,
+    Seconds,
+}
+
 use chrono::format::parse;
 use chrono::{DateTime, Utc, TimeZone};
 

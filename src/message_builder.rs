@@ -1,6 +1,6 @@
 use crate::message_factory::MessageFactory;
 
-pub struct MessageBuilder {
+pub(crate) struct MessageBuilder {
     pub(crate) msg: String,
     pub(crate) sender_default_appl_ver_id: String,
     pub(crate) validate_length_and_checksum: bool,

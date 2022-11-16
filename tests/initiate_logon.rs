@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused)]
 use dfx::{
-    connection::{SocketInitiator, SocketSettings},
+    connection::SocketInitiator,
     session::{Session, SessionId, SessionSettings},
 };
 

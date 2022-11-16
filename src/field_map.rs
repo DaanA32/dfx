@@ -23,8 +23,8 @@ pub struct FieldMap {
 pub type Tag = u32;
 pub type Total = u32;
 pub type Length = u32;
-pub type FieldOrder = Vec<u32>;
-pub type Field = FieldBase;
+pub type FieldOrder = Vec<Tag>;
+pub(crate) type FieldBase = Field;
 pub type FieldValue = Vec<u8>;
 
 #[derive(Clone, Debug)]
@@ -66,14 +66,14 @@ impl DerefMut for Group {
     }
 }
 #[derive(Default, Clone, Debug)]
-pub struct FieldBase(Tag, FieldValue);
+pub struct Field(Tag, FieldValue);
 
-impl FieldBase {
+impl Field {
     pub fn new(tag: Tag, value: String) -> Self {
-        FieldBase(tag, value.into_bytes())
+        Field(tag, value.into_bytes())
     }
     pub fn from_bytes(tag: Tag, value: Vec<u8>) -> Self {
-        FieldBase(tag, value)
+        Field(tag, value)
     }
     pub fn tag(&self) -> Tag {
         self.0
@@ -131,7 +131,7 @@ impl FieldMap {
         src.clone()
     }
 
-    pub fn set_field_base(&mut self, field: FieldBase, overwrite: Option<bool>) -> bool {
+    pub fn set_field_base(&mut self, field: Field, overwrite: Option<bool>) -> bool {
         if matches!(overwrite, Some(b) if !b) && self.fields.contains_key(&field.tag()) {
             return false;
         }
@@ -139,7 +139,7 @@ impl FieldMap {
         true
     }
 
-    pub fn set_field_deref<F: Deref<Target = FieldBase> + Clone>(
+    pub fn set_field_deref<F: Deref<Target = Field> + Clone>(
         &mut self,
         field: F,
         overwrite: Option<bool>,
@@ -147,17 +147,17 @@ impl FieldMap {
         if matches!(overwrite, Some(b) if b) {
             return false;
         }
-        let field: &FieldBase = &field;
+        let field: &Field = &field;
         self.fields.insert(field.tag(), field.clone());
         true
     }
 
     pub fn set_field(&mut self, tag: Tag, value: &str) {
-        let field_base = FieldBase(tag, value.into());
+        let field_base = Field(tag, value.into());
         self.set_field_base(field_base, None);
     }
 
-    pub fn get_field(&self, tag: Tag) -> &FieldBase {
+    pub fn get_field(&self, tag: Tag) -> &Field {
         &self.fields[&tag]
     }
 
@@ -186,7 +186,7 @@ impl FieldMap {
     }
     // VALUES
 
-    pub fn get_field_mut(&mut self, tag: Tag) -> &mut FieldBase {
+    pub fn get_field_mut(&mut self, tag: Tag) -> &mut Field {
         self.fields.get_mut(&tag).unwrap()
     }
     pub fn is_field_set(&self, tag: Tag) -> bool {
@@ -217,7 +217,7 @@ impl FieldMap {
             let counttag = group.field();
             // IntField count = null;
             // count = new IntField(couttag, groupsize);
-            let count = FieldBase::new(counttag, format!("{}", groupsize));
+            let count = Field::new(counttag, format!("{}", groupsize));
 
             // this.SetField(count, true);
             self.set_field_base(count, Some(true));
@@ -427,15 +427,15 @@ impl FieldMap {
         total
     }
 
-    pub fn repeated_tags(&self) -> &Vec<FieldBase> {
+    pub fn repeated_tags(&self) -> &Vec<Field> {
         &self.repeated_tags
     }
 
-    pub fn repeated_tags_mut(&mut self) -> &mut Vec<FieldBase> {
+    pub fn repeated_tags_mut(&mut self) -> &mut Vec<Field> {
         &mut self.repeated_tags
     }
 
-    pub fn entries<'a>(&'a self) -> impl Iterator<Item = (&'a Tag, &FieldBase)> {
+    pub fn entries<'a>(&'a self) -> impl Iterator<Item = (&'a Tag, &Field)> {
         self.fields.iter()
     }
 
@@ -444,7 +444,7 @@ impl FieldMap {
         self.groups.clear();
     }
 
-    pub fn calculate_string(&self, prefields: Option<Vec<Tag>>) -> String {
+    pub fn calculate_string(&self, prefields: Option<FieldOrder>) -> String {
         // HashSet<int> groupCounterTags = new HashSet<int>(_groups.Keys);
         let group_counter_tags: HashSet<Tag> = HashSet::new();
         let prefields = prefields.unwrap_or_default();
