@@ -19,7 +19,10 @@ pub enum MessageFactoryError {
 #[derive(Clone, Debug)]
 pub struct DefaultMessageFactory;
 impl DefaultMessageFactory {
-    pub fn new() -> Box<dyn MessageFactory> {
+    pub fn new() -> Self {
+        DefaultMessageFactory
+    }
+    pub fn boxed() -> Box<dyn MessageFactory> {
         Box::new(DefaultMessageFactory)
     }
 }

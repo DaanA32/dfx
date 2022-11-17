@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     connection::SocketSettings,
-    session::{self, Application, Session, SessionBuilder, SessionSetting, SessionSettings},
+    session::{self, Application, Session, SessionBuilder, SessionSetting, SessionSettings}, message_store::MessageStoreFactory, data_dictionary_provider::DataDictionaryProvider, logging::LogFactory, message_factory::MessageFactory,
 };
 
 use super::{ConnectionError, SocketReactor, StreamFactory};
@@ -45,17 +45,31 @@ impl From<ConnectionError> for AcceptorError {
     }
 }
 
-pub struct SocketAcceptor<App> {
+pub struct SocketAcceptor<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
     app: App,
+    store_factory: StoreFactory,
+    data_dictionary_provider: DataDictionaryProvider,
+    log_factory: LogFactory,
+    message_factory: MessageFactory,
     session_settings: SessionSettings,
     thread: Vec<JoinHandle<()>>,
     running: Arc<AtomicBool>,
 }
 
-impl<App: Application + Clone + Sync + 'static> SocketAcceptor<App> {
-    pub fn new(session_settings: SessionSettings, app: App) -> Self {
+impl<App, SF, DDP, LF, MF> SocketAcceptor<App, SF, DDP, LF, MF>
+where App: Application + Sync + Clone + 'static,
+      SF: MessageStoreFactory + Send + Clone + 'static,
+      DDP: DataDictionaryProvider + Send + Clone + 'static,
+      LF: LogFactory + Send + Clone + 'static,
+      MF: MessageFactory + Send + Clone + 'static,
+{
+    pub fn new(session_settings: SessionSettings, app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF) -> Self {
         SocketAcceptor {
             app,
+            store_factory,
+            data_dictionary_provider,
+            log_factory,
+            message_factory,
             session_settings,
             thread: Vec::new(),
             running: Arc::new(AtomicBool::new(false)),

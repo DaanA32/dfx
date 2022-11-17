@@ -73,15 +73,15 @@ pub enum SettingOption {
     RequiresOrigSendingTime,
     CheckLatency,
     MaxLatency,
-    SSLEnable,
-    SSLServerName,
-    SSLProtocols,
-    SSLValidateCertificates,
-    SSLCheckCertificateRevocation,
-    SSLCertificate,
-    SSLCertificatePassword,
-    SSLRequireClientCertificate,
-    SSLCACertificate,
+    // SSLEnable,
+    // SSLServerName,
+    // SSLProtocols,
+    // SSLValidateCertificates,
+    // SSLCheckCertificateRevocation,
+    // SSLCertificate,
+    // SSLCertificatePassword,
+    // SSLRequireClientCertificate,
+    // SSLCACertificate,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -174,15 +174,15 @@ impl TryFrom<&str> for SettingOption {
             "RequiresOrigSendingTime" => Ok(Self::RequiresOrigSendingTime),
             "CheckLatency" => Ok(Self::CheckLatency),
             "MaxLatency" => Ok(Self::MaxLatency),
-            "SSLEnable" => Ok(Self::SSLEnable),
-            "SSLServerName" => Ok(Self::SSLServerName),
-            "SSLProtocols" => Ok(Self::SSLProtocols),
-            "SSLValidateCertificates" => Ok(Self::SSLValidateCertificates),
-            "SSLCheckCertificateRevocation" => Ok(Self::SSLCheckCertificateRevocation),
-            "SSLCertificate" => Ok(Self::SSLCertificate),
-            "SSLCertificatePassword" => Ok(Self::SSLCertificatePassword),
-            "SSLRequireClientCertificate" => Ok(Self::SSLRequireClientCertificate),
-            "SSLCACertificate" => Ok(Self::SSLCACertificate),
+            // "SSLEnable" => Ok(Self::SSLEnable),
+            // "SSLServerName" => Ok(Self::SSLServerName),
+            // "SSLProtocols" => Ok(Self::SSLProtocols),
+            // "SSLValidateCertificates" => Ok(Self::SSLValidateCertificates),
+            // "SSLCheckCertificateRevocation" => Ok(Self::SSLCheckCertificateRevocation),
+            // "SSLCertificate" => Ok(Self::SSLCertificate),
+            // "SSLCertificatePassword" => Ok(Self::SSLCertificatePassword),
+            // "SSLRequireClientCertificate" => Ok(Self::SSLRequireClientCertificate),
+            // "SSLCACertificate" => Ok(Self::SSLCACertificate),
             _ => Err(Self::Error::NoSuchSetting(value.into())),
         }
     }
@@ -224,7 +224,7 @@ impl SessionSettings {
                     .trim_matches(delims)
                     .eq_ignore_ascii_case("default")
             {
-                last_setting = Some(SessionSettingBuilder::default());
+                last_setting = Some(DynamicSessionSettingBuilder::default());
                 default_started = true;
             } else if default_started
                 && line
@@ -240,7 +240,7 @@ impl SessionSettings {
                     .trim_matches(delims)
                     .eq_ignore_ascii_case("session")
             {
-                default = last_setting.replace(SessionSettingBuilder::default());
+                default = last_setting.replace(DynamicSessionSettingBuilder::default());
                 default_ended = true;
             } else if default_started
                 && default_ended
@@ -249,7 +249,9 @@ impl SessionSettings {
                     .trim_matches(delims)
                     .eq_ignore_ascii_case("session")
             {
-                if let Some(mut value) = last_setting.replace(SessionSettingBuilder::default()) {
+                if let Some(mut value) =
+                    last_setting.replace(DynamicSessionSettingBuilder::default())
+                {
                     if let Some(default) = default.as_ref() {
                         settings.push(value.merge(default).validate()?.build());
                     } else {
@@ -322,6 +324,8 @@ mod tests {
 ConnectionType=acceptor
 BeginString=TEST
 SenderCompID=sender
+SocketAcceptHost=127.0.0.1
+SocketAcceptPort=5000
 [SESSION]
 TargetCompID=target1
 "#;
@@ -331,11 +335,11 @@ TargetCompID=target1
         let settings = settings.unwrap();
         assert!(settings.sessions.len() == 1);
 
-        assert_eq!(&settings.sessions[0].begin_string, "TEST");
+        assert_eq!(&settings.sessions[0].session_id().begin_string, "TEST");
 
-        assert_eq!(&settings.sessions[0].sender_comp_id, "sender");
+        assert_eq!(&settings.sessions[0].session_id().sender_comp_id, "sender");
 
-        assert_eq!(&settings.sessions[0].target_comp_id, "target1");
+        assert_eq!(&settings.sessions[0].session_id().target_comp_id, "target1");
     }
 
     #[test]
@@ -345,6 +349,9 @@ TargetCompID=target1
 ConnectionType=acceptor
 BeginString=TEST
 SenderCompID=sender
+SocketAcceptHost=127.0.0.1
+SocketAcceptPort=5000
+
 [SESSION]
 TargetCompID=target1
 [SESSION]
@@ -359,44 +366,44 @@ TargetCompID=*
         let settings = settings.unwrap();
         assert!(settings.sessions.len() == 3);
 
-        assert_eq!(settings.sessions[0].begin_string, "TEST");
-        assert_eq!(settings.sessions[1].begin_string, "TEST");
+        assert_eq!(settings.sessions[0].session_id().begin_string, "TEST");
+        assert_eq!(settings.sessions[1].session_id().begin_string, "TEST");
 
-        assert_eq!(settings.sessions[0].sender_comp_id, "sender");
-        assert_eq!(settings.sessions[1].sender_comp_id, "sender");
+        assert_eq!(settings.sessions[0].session_id().sender_comp_id, "sender");
+        assert_eq!(settings.sessions[1].session_id().sender_comp_id, "sender");
 
-        assert_eq!(settings.sessions[0].target_comp_id, "target1");
-        assert_eq!(settings.sessions[1].target_comp_id, "target2");
+        assert_eq!(settings.sessions[0].session_id().target_comp_id, "target1");
+        assert_eq!(settings.sessions[1].session_id().target_comp_id, "target2");
 
         let session_id = SessionId::new("", "sender", "", "", "target1", "", "");
         assert_eq!(
-            Some(&settings.sessions[0].target_comp_id),
+            Some(&settings.sessions[0].session_id().target_comp_id),
             settings
                 .for_session_id(&session_id)
-                .map(|s| &s.target_comp_id)
+                .map(|s| &s.session_id().target_comp_id)
         );
         let session_id = SessionId::new("", "sender", "", "", "target2", "", "");
         assert_eq!(
-            Some(&settings.sessions[1].target_comp_id),
+            Some(&settings.sessions[1].session_id().target_comp_id),
             settings
                 .for_session_id(&session_id)
-                .map(|s| &s.target_comp_id)
+                .map(|s| &s.session_id().target_comp_id)
         );
         let session_id = SessionId::new("", "sender", "", "", "target3", "", "");
         assert_eq!(None, settings.for_session_id(&session_id));
         let session_id = SessionId::new("", "sender_any", "", "", "target_any_1", "", "");
         assert_eq!(
-            Some(&settings.sessions[2].target_comp_id),
+            Some(&settings.sessions[2].session_id().target_comp_id),
             settings
                 .for_session_id(&session_id)
-                .map(|s| &s.target_comp_id)
+                .map(|s| &s.session_id().target_comp_id)
         );
         let session_id = SessionId::new("", "sender_any", "", "", "target_any_2", "", "");
         assert_eq!(
-            Some(&settings.sessions[2].target_comp_id),
+            Some(&settings.sessions[2].session_id().target_comp_id),
             settings
                 .for_session_id(&session_id)
-                .map(|s| &s.target_comp_id)
+                .map(|s| &s.session_id().target_comp_id)
         );
     }
 

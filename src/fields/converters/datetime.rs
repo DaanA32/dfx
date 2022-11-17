@@ -14,11 +14,45 @@ pub const TIME_ONLY_FORMAT_WITH_MICROSECONDS: &str = "%H:%M:%S.%6f";
 pub const TIME_ONLY_FORMAT_WITH_MILLISECONDS: &str = "%H:%M:%S.%3f";
 pub const TIME_ONLY_FORMAT_WITHOUT_MILLISECONDS: &str = "%H:%M:%S";
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum DateTimeFormat {
     Nanoseconds,
     Microseconds,
     Milliseconds,
     Seconds,
+}
+
+impl DateTimeFormat {
+    pub fn as_datetime_format(&self) -> &str {
+        match self {
+            DateTimeFormat::Nanoseconds => DATE_TIME_FORMAT_WITH_NANOSECONDS,
+            DateTimeFormat::Microseconds => DATE_TIME_FORMAT_WITH_MICROSECONDS,
+            DateTimeFormat::Milliseconds => DATE_TIME_FORMAT_WITH_MILLISECONDS,
+            DateTimeFormat::Seconds => DATE_TIME_FORMAT_WITH_MILLISECONDS,
+        }
+    }
+    pub fn as_time_format(&self) -> &str {
+        match self {
+            DateTimeFormat::Nanoseconds => TIME_ONLY_FORMAT_WITH_NANOSECONDS,
+            DateTimeFormat::Microseconds => TIME_ONLY_FORMAT_WITH_MICROSECONDS,
+            DateTimeFormat::Milliseconds => TIME_ONLY_FORMAT_WITH_MILLISECONDS,
+            DateTimeFormat::Seconds => TIME_ONLY_FORMAT_WITH_MILLISECONDS,
+        }
+    }
+}
+
+impl std::convert::TryFrom<String> for DateTimeFormat {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "Nanoseconds" => Ok(Self::Nanoseconds),
+            "Microseconds" => Ok(Self::Microseconds),
+            "Milliseconds" => Ok(Self::Milliseconds),
+            "Seconds" => Ok(Self::Seconds),
+            _ => Err("Valid format is ... TODO")
+        }
+    }
 }
 
 use chrono::format::parse;

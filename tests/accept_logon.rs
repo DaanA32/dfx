@@ -7,7 +7,7 @@ use std::{
 
 use dfx::{
     connection::SocketAcceptor,
-    session::{Session, SessionId, SessionSettings},
+    session::{Session, SessionId, SessionSettings}, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message::DefaultMessageFactory,
 };
 
 mod common;
@@ -15,10 +15,18 @@ use common::runner;
 use common::TestApplication;
 
 #[test]
+#[ignore]
 pub fn test_accept() {
     let app = TestApplication;
     let session_settings = SessionSettings::from_file("tests/acceptor.cfg").unwrap();
-    let mut acceptor = SocketAcceptor::new(session_settings, app);
+    let mut acceptor = SocketAcceptor::new(
+        session_settings,
+        app,
+        DefaultStoreFactory::new(),
+        DefaultDataDictionaryProvider::new(),
+        PrintlnLogFactory::new(),
+        DefaultMessageFactory::new(),
+    );
 
     let steps = runner::steps("tests/definitions/server/accept_logon.def");
     acceptor.start();

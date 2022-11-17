@@ -17,10 +17,17 @@ impl StreamFactory {
         mut stream: TcpStream,
         settings: &SocketSettings,
     ) -> Result<TcpStream, ConnectionError> {
+        stream.set_read_timeout(match settings.receive_timeout() {
+            0 => None,
+            v => Some(Duration::from_millis(v))
+        })?;
+        stream.set_write_timeout(match settings.send_timeout() {
+            0 => None,
+            v => Some(Duration::from_millis(v))
+        })?;
+        stream.set_nodelay(settings.no_delay())?;
         // This is only okay because there is a timeout due to heartbeats,
         // otherwise it would be necessary to disconnect if read n == 0
-        stream.set_read_timeout(Some(Duration::from_millis(1)));
-        stream.set_write_timeout(Some(Duration::from_millis(1)));
         stream.set_nonblocking(true)?;
         Ok(stream)
     }

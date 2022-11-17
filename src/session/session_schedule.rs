@@ -1,7 +1,8 @@
 use chrono::naive::Days;
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, NaiveTime, TimeZone, Utc, Weekday};
+use chrono_tz::Tz;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum SessionSchedule {
     NonStop,
     Weekly {
@@ -9,13 +10,13 @@ pub(crate) enum SessionSchedule {
         end_day: Weekday,
         start_time: NaiveTime,
         end_time: NaiveTime,
-        timezone: Option<FixedOffset>,
+        timezone: Option<Tz>,
         use_localtime: bool,
     },
     Daily {
         start_time: NaiveTime,
         end_time: NaiveTime,
-        timezone: Option<FixedOffset>,
+        timezone: Option<Tz>,
         use_localtime: bool,
     },
 }
@@ -57,11 +58,11 @@ impl SessionSchedule {
                 let mut end = old_time.clone();
                 let d = old_time;
                 while &end.weekday() != end_day {
-                    end + Days::new(1);
+                    end = end + Days::new(1);
                 }
                 if d > end {
                     // d is later than end
-                    end + Days::new(7);
+                    end = end + Days::new(7);
                 }
                 end
             }
@@ -70,14 +71,14 @@ impl SessionSchedule {
                 let d = old_time;
                 if d > end {
                     // d is later than end
-                    end + Days::new(1);
+                    end = end + Days::new(1);
                 }
                 end
             }
         }
     }
 
-    pub(crate) fn is_session_time(&self, now: &DateTime<Utc>) -> bool {
+    pub(crate) fn is_session_time(&self, time: &DateTime<Utc>) -> bool {
         // if (utc.Kind != System.DateTimeKind.Utc)
         //     throw new System.ArgumentException("Only UTC time is supported", "time");
 
@@ -87,7 +88,7 @@ impl SessionSchedule {
         //     return CheckDay(adjusted);
         // else
         //     return CheckTime(adjusted.TimeOfDay);
-        let now = self.adjust_utc_datetime(*now);
+        let now = self.adjust_utc_datetime(*time);
         match self {
             SessionSchedule::NonStop => true,
             SessionSchedule::Weekly { .. } => self.check_day(now),
@@ -182,7 +183,7 @@ impl SessionSchedule {
             now.naive_local()
         } else if let Some(timezone) = self.timezone() {
             // return System.TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZone);
-            now.with_timezone(timezone).naive_utc()
+            now.with_timezone(timezone).naive_local()
         } else {
             now.naive_utc()
         }
@@ -196,7 +197,7 @@ impl SessionSchedule {
         }
     }
 
-    fn timezone(&self) -> Option<&FixedOffset> {
+    fn timezone(&self) -> Option<&Tz> {
         match self {
             SessionSchedule::NonStop => None,
             SessionSchedule::Weekly { timezone, .. } => timezone.as_ref(),

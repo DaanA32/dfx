@@ -1,8 +1,14 @@
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
+
+use derive_builder::Builder;
 
 use crate::{
     connection::SocketSettings,
-    session::{Application, Session, SessionId},
+    fields::converters::datetime::DateTimeFormat,
+    session::{Application, Session, SessionId, SessionSchedule}, message_store::MessageStoreFactory, data_dictionary_provider::DataDictionaryProvider, logging::LogFactory, message_factory::MessageFactory,
 };
 
 use super::{SessionSettingsError, SettingOption};
@@ -29,7 +35,310 @@ impl TryFrom<&str> for ConnectionType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SettingsConnection {
+    Acceptor {
+        is_dynamic: bool,
+        session_qualifier: Option<String>,
+        accept_addr: SocketAddr,
+    },
+    Initiator {
+        connect_addr: SocketAddr,
+
+        // reconnect options
+        reconnect_interval: u32,
+        heart_bt_int: u32,
+        logon_timeout: u32,
+        logout_timeout: u32,
+    },
+}
+
+impl SettingsConnection {
+    /// Returns `true` if the settings connection is [`Initiator`].
+    ///
+    /// [`Initiator`]: SettingsConnection::Initiator
+    #[must_use]
+    pub(crate) fn is_initiator(&self) -> bool {
+        matches!(self, Self::Initiator { .. })
+    }
+
+    /// Returns `true` if the settings connection is [`Acceptor`].
+    ///
+    /// [`Acceptor`]: SettingsConnection::Acceptor
+    #[must_use]
+    pub(crate) fn is_acceptor(&self) -> bool {
+        matches!(self, Self::Acceptor { .. })
+    }
+
+    pub(crate) fn socket_addr(&self) -> &SocketAddr {
+        match self {
+            SettingsConnection::Acceptor { accept_addr, .. } => accept_addr,
+            SettingsConnection::Initiator { connect_addr, .. } => connect_addr,
+        }
+    }
+
+    pub(crate) fn heart_bt_int(&self) -> Option<u32> {
+        match self {
+            SettingsConnection::Acceptor { .. } => None,
+            SettingsConnection::Initiator { heart_bt_int, .. } => Some(*heart_bt_int),
+        }
+    }
+}
+
+#[derive(Builder, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SocketOptions {
+    no_delay: bool,
+    send_buffer_size: usize,
+    receive_buffer_size: usize,
+    send_timeout: u64,
+    receive_timeout: u64,
+}
+
+impl SocketOptions {
+
+    pub(crate) fn builder() -> SocketOptionsBuilder {
+        SocketOptionsBuilder::create_empty()
+    }
+
+    pub(crate) fn no_delay(&self) -> bool {
+        self.no_delay
+    }
+
+    pub(crate) fn send_buffer_size(&self) -> usize {
+        self.send_buffer_size
+    }
+
+    pub(crate) fn receive_buffer_size(&self) -> usize {
+        self.receive_buffer_size
+    }
+
+    pub(crate) fn send_timeout(&self) -> u64 {
+        self.send_timeout
+    }
+
+    pub(crate) fn receive_timeout(&self) -> u64 {
+        self.receive_timeout
+    }
+}
+
+#[derive(Builder, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SslOptions {}
+
+#[derive(Builder, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LoggingOptions {
+    file_log_path: Option<String>,
+    debug_file_log_path: Option<String>,
+}
+
+impl LoggingOptions {
+    pub(crate) fn builder() -> LoggingOptionsBuilder {
+        LoggingOptionsBuilder::create_empty()
+    }
+
+    pub(crate) fn file_log_path(&self) -> Option<&String> {
+        self.file_log_path.as_ref()
+    }
+
+    pub(crate) fn debug_file_log_path(&self) -> Option<&String> {
+        self.debug_file_log_path.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Persistence {
+    FileStore { path: PathBuf },
+    Memory,
+    None,
+}
+
+#[derive(Builder, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ValidationOptions {
+    milliseconds_in_time_stamp: bool,
+    refresh_on_logon: bool,
+    reset_on_logon: bool,
+    reset_on_logout: bool,
+    reset_on_disconnect: bool,
+    send_redundant_resend_requests: bool,
+    resend_session_level_rejects: bool,
+    time_stamp_precision: DateTimeFormat,
+    enable_last_msg_seq_num_processed: bool,
+    max_messages_in_resend_request: u32,
+    send_logout_before_disconnect_from_timeout: bool,
+    ignore_poss_dup_resend_requests: bool,
+    requires_orig_sending_time: bool,
+
+    // validation options
+    use_data_dictionary: bool,
+    data_dictionary: Option<String>,
+    transport_data_dictionary: Option<String>,
+    app_data_dictionary: Option<String>,
+    validate_fields_out_of_order: bool,
+    validate_fields_have_values: bool,
+    validate_user_defined_fields: bool,
+    validate_length_and_checksum: bool,
+    allow_unknown_msg_fields: bool,
+    check_latency: bool,
+    max_latency: u32,
+}
+
+impl ValidationOptions {
+    pub(crate) fn builder() -> ValidationOptionsBuilder {
+        ValidationOptionsBuilder::create_empty()
+    }
+
+    pub(crate) fn milliseconds_in_time_stamp(&self) -> bool {
+        self.milliseconds_in_time_stamp
+    }
+
+    pub(crate) fn refresh_on_logon(&self) -> bool {
+        self.refresh_on_logon
+    }
+
+    pub(crate) fn reset_on_logon(&self) -> bool {
+        self.reset_on_logon
+    }
+
+    pub(crate) fn reset_on_logout(&self) -> bool {
+        self.reset_on_logout
+    }
+
+    pub(crate) fn reset_on_disconnect(&self) -> bool {
+        self.reset_on_disconnect
+    }
+
+    pub(crate) fn send_redundant_resend_requests(&self) -> bool {
+        self.send_redundant_resend_requests
+    }
+
+    pub(crate) fn resend_session_level_rejects(&self) -> bool {
+        self.resend_session_level_rejects
+    }
+
+    pub(crate) fn time_stamp_precision(&self) -> &DateTimeFormat {
+        &self.time_stamp_precision
+    }
+
+    pub(crate) fn enable_last_msg_seq_num_processed(&self) -> bool {
+        self.enable_last_msg_seq_num_processed
+    }
+
+    pub(crate) fn max_messages_in_resend_request(&self) -> u32 {
+        self.max_messages_in_resend_request
+    }
+
+    pub(crate) fn send_logout_before_disconnect_from_timeout(&self) -> bool {
+        self.send_logout_before_disconnect_from_timeout
+    }
+
+    pub(crate) fn ignore_poss_dup_resend_requests(&self) -> bool {
+        self.ignore_poss_dup_resend_requests
+    }
+
+    pub(crate) fn requires_orig_sending_time(&self) -> bool {
+        self.requires_orig_sending_time
+    }
+
+    pub(crate) fn use_data_dictionary(&self) -> bool {
+        self.use_data_dictionary
+    }
+
+    pub(crate) fn data_dictionary(&self) -> Option<&String> {
+        self.data_dictionary.as_ref()
+    }
+
+    pub(crate) fn transport_data_dictionary(&self) -> Option<&String> {
+        self.transport_data_dictionary.as_ref()
+    }
+
+    pub(crate) fn app_data_dictionary(&self) -> Option<&String> {
+        self.app_data_dictionary.as_ref()
+    }
+
+    pub(crate) fn validate_fields_out_of_order(&self) -> bool {
+        self.validate_fields_out_of_order
+    }
+
+    pub(crate) fn validate_fields_have_values(&self) -> bool {
+        self.validate_fields_have_values
+    }
+
+    pub(crate) fn validate_user_defined_fields(&self) -> bool {
+        self.validate_user_defined_fields
+    }
+
+    pub(crate) fn validate_length_and_checksum(&self) -> bool {
+        self.validate_length_and_checksum
+    }
+
+    pub(crate) fn allow_unknown_msg_fields(&self) -> bool {
+        self.allow_unknown_msg_fields
+    }
+
+    pub(crate) fn check_latency(&self) -> bool {
+        self.check_latency
+    }
+
+    pub(crate) fn max_latency(&self) -> u32 {
+        self.max_latency
+    }
+}
+
+#[derive(Builder, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SessionSetting {
+    session_id: SessionId,
+    connection: SettingsConnection,
+    socket_options: SocketOptions,
+    ssl_options: Option<SslOptions>,
+    logging: LoggingOptions,
+    persistence: Persistence,
+    default_appl_ver_id: Option<String>,
+    schedule: SessionSchedule,
+    validation_options: ValidationOptions,
+}
+
+impl SessionSetting {
+    pub(crate) fn builder() -> SessionSettingBuilder {
+        SessionSettingBuilder::create_empty()
+    }
+
+    pub(crate) fn session_id(&self) -> &SessionId {
+        &self.session_id
+    }
+
+    pub(crate) fn connection(&self) -> &SettingsConnection {
+        &self.connection
+    }
+
+    pub(crate) fn socket_options(&self) -> &SocketOptions {
+        &self.socket_options
+    }
+
+    pub(crate) fn ssl_options(&self) -> Option<&SslOptions> {
+        self.ssl_options.as_ref()
+    }
+
+    pub(crate) fn logging(&self) -> &LoggingOptions {
+        &self.logging
+    }
+
+    pub(crate) fn persistence(&self) -> &Persistence {
+        &self.persistence
+    }
+
+    pub(crate) fn default_appl_ver_id(&self) -> Option<&String> {
+        self.default_appl_ver_id.as_ref()
+    }
+
+    pub(crate) fn schedule(&self) -> &SessionSchedule {
+        &self.schedule
+    }
+
+    pub(crate) fn validation_options(&self) -> &ValidationOptions {
+        &self.validation_options
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionSettingOld {
     pub(crate) connection_type: ConnectionType,
     pub(crate) is_dynamic: bool,
 
@@ -51,6 +360,7 @@ pub(crate) struct SessionSetting {
     pub(crate) end_day: Option<String>,
     pub(crate) start_time: Option<String>,
     pub(crate) end_time: Option<String>,
+
     pub(crate) milliseconds_in_time_stamp: bool,
     pub(crate) refresh_on_logon: bool,
     pub(crate) reset_on_logon: bool,
@@ -127,40 +437,32 @@ pub(crate) struct SessionSetting {
 impl SessionSetting {
     pub(crate) fn score(&self, session_id: &SessionId) -> u16 {
         let mut score = 0;
-        score += match self.sender_comp_id.as_str() {
+        score += match self.session_id().sender_comp_id.as_str() {
             "*" => 6,
             value if value == session_id.sender_comp_id => 7,
             _ => 0,
         };
-        if let Some(sender_sub_id) = self.sender_sub_id.as_ref() {
-            score += match sender_sub_id.as_str() {
-                value if value == session_id.sender_sub_id => 1,
-                _ => 0,
-            };
-        }
-        if let Some(sender_loc_id) = self.sender_location_id.as_ref() {
-            score += match sender_loc_id.as_str() {
-                value if value == &session_id.sender_location_id => 1,
-                _ => 0,
-            };
-        }
-        score += match self.target_comp_id.as_str() {
+        score += match self.session_id().sender_sub_id.as_str() {
+            value if value == session_id.sender_sub_id => 1,
+            _ => 0,
+        };
+        score += match self.session_id().sender_location_id.as_str() {
+            value if value == &session_id.sender_location_id => 1,
+            _ => 0,
+        };
+        score += match self.session_id().target_comp_id.as_str() {
             "*" => 6,
             value if value == session_id.target_comp_id => 7,
             _ => 0,
         };
-        if let Some(target_sub_id) = self.target_sub_id.as_ref() {
-            score += match target_sub_id.as_str() {
-                value if value == session_id.target_sub_id => 1,
-                _ => 0,
-            };
-        }
-        if let Some(target_loc_id) = self.target_location_id.as_ref() {
-            score += match target_loc_id.as_str() {
-                value if value == &session_id.target_location_id => 1,
-                _ => 0,
-            };
-        }
+        score += match self.session_id().target_sub_id.as_str() {
+            value if value == session_id.target_sub_id => 1,
+            _ => 0,
+        };
+        score += match self.session_id().target_location_id.as_str() {
+            value if value == &session_id.target_location_id => 1,
+            _ => 0,
+        };
         if score < 12 {
             0
         } else {
@@ -169,88 +471,60 @@ impl SessionSetting {
     }
 
     pub(crate) fn is_dynamic(&self) -> bool {
-        println!(
-            "is_dynamic: {:?} {:?} {:?}",
-            self.is_dynamic, self.sender_comp_id, self.target_comp_id
-        );
-        self.is_dynamic
-            && (self.sender_comp_id.as_str() == "*" || self.target_comp_id.as_str() == "*")
-    }
-
-    pub(crate) fn socket_settings(&self) -> SocketSettings {
-        let is_initiator = self.connection_type == ConnectionType::Initiator;
-        if is_initiator {
-            println!(
-                "{:?}:{:?}",
-                self.socket_connect_host.as_ref(),
-                self.socket_connect_port.as_ref()
-            );
-            let host = self.socket_connect_host.as_ref().expect("Some host");
-            let port = self.socket_connect_port.as_ref().expect("Some port");
-            SocketSettings::new(host.into(), *port)
-        } else {
-            let host = self.socket_accept_host.as_ref().expect("Some host");
-            let port = self.socket_accept_port.as_ref().expect("Some port");
-            SocketSettings::new(host.into(), *port)
+        // println!(
+        //     "is_dynamic: {:?} {:?} {:?}",
+        //     self.is_dynamic, self.sender_comp_id, self.target_comp_id
+        // );
+        // self.is_dynamic
+        //     && (self.sender_comp_id.as_str() == "*" || self.target_comp_id.as_str() == "*")
+        match self.connection {
+            SettingsConnection::Acceptor { is_dynamic, .. } => {
+                is_dynamic
+                    && (self.session_id.sender_comp_id.as_str() == "*"
+                        || self.session_id.target_comp_id.as_str() == "*")
+            }
+            SettingsConnection::Initiator { .. } => false,
         }
     }
 
-    pub(crate) fn create(&self, app: Box<dyn Application>) -> Session {
-        let is_initiator = self.connection_type == ConnectionType::Initiator;
-        let session_id = self.session_id();
-        let sender_default_appl_ver_id = self
-            .default_appl_ver_id
-            .as_ref()
-            .map(|v| v.as_str())
-            .unwrap_or("");
-        Session::builder(is_initiator, app, session_id, sender_default_appl_ver_id)
-            .with_heartbeat_int(self.heart_bt_int.unwrap_or(30))
-            //TODO other settings
-            .build()
+    pub(crate) fn socket_settings(&self) -> SocketSettings {
+        SocketSettings::new(self.connection.socket_addr().clone(), self.socket_options.clone())
     }
 
-    fn session_id(&self) -> SessionId {
-        SessionId::new(
-            self.begin_string.as_str(),
-            self.sender_comp_id.as_str(),
-            self.sender_sub_id
-                .as_ref()
-                .map(|v| v.as_str())
-                .unwrap_or(""),
-            self.sender_location_id
-                .as_ref()
-                .map(|v| v.as_str())
-                .unwrap_or(""),
-            self.target_comp_id.as_str(),
-            self.target_sub_id
-                .as_ref()
-                .map(|v| v.as_str())
-                .unwrap_or(""),
-            self.target_location_id
-                .as_ref()
-                .map(|v| v.as_str())
-                .unwrap_or(""),
-        )
+    pub(crate) fn create(&self,
+        app: Box<dyn Application>,
+    ) -> Session {
+        todo!()
     }
+    // pub(crate) fn create(&self,
+    //     app: Box<dyn Application>,
+    //     store_factory: Box<dyn MessageStoreFactory>,
+    //     data_dictionary_provider: Box<dyn DataDictionaryProvider>,
+    //     log_factory: Option<Box<dyn LogFactory>>,
+    //     msg_factory: Box<dyn MessageFactory>,
+    //     settings: SessionSetting,
+    // ) -> Session {
+    //     Session::from_settings(app, store_factory, data_dictionary_provider, log_factory, msg_factory, settings)
+    // }
 
     pub(crate) fn accepts(&self, session_id: &SessionId) -> bool {
         if self.is_dynamic() {
             println!(
                 "dynamic accept: {:?} {:?} == {}",
-                self.sender_comp_id, self.target_comp_id, session_id
+                self.session_id.sender_comp_id, self.session_id.target_comp_id, session_id
             );
-            let sender_comp_ok = match self.sender_comp_id.as_str() {
+            let sender_comp_ok = match self.session_id.sender_comp_id.as_str() {
                 "*" => true,
                 s => s == session_id.sender_comp_id,
             };
-            let target_comp_ok = match self.target_comp_id.as_str() {
+            let target_comp_ok = match self.session_id.target_comp_id.as_str() {
                 "*" => true,
                 s => s == session_id.target_comp_id,
             };
             sender_comp_ok && target_comp_ok
         } else {
             println!("accept: {} == {}", self.session_id(), session_id);
-            &self.session_id() == session_id
+            self.session_id() == session_id
         }
     }
 }

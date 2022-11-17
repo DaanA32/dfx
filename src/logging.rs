@@ -67,7 +67,10 @@ impl PrintLnLogger {
     }
 }
 impl PrintlnLogFactory {
-    pub fn new() -> Box<dyn LogFactory> {
+    pub fn new() -> Self {
+        PrintlnLogFactory
+    }
+    pub fn boxed() -> Box<dyn LogFactory> {
         Box::new(PrintlnLogFactory)
     }
 }

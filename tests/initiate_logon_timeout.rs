@@ -1,3 +1,7 @@
+use dfx::data_dictionary_provider::DefaultDataDictionaryProvider;
+use dfx::logging::PrintlnLogFactory;
+use dfx::message::DefaultMessageFactory;
+use dfx::message_store::DefaultStoreFactory;
 use dfx::{connection::SocketInitiator, session::SessionSettings};
 
 mod common;
@@ -11,7 +15,14 @@ pub fn test_logout_timeout() {
 
     let app = TestApplication;
     let session_settings = SessionSettings::from_file("tests/logon.cfg").unwrap();
-    let mut initiator = SocketInitiator::new(session_settings, app);
+    let mut initiator = SocketInitiator::new(
+        session_settings,
+        app,
+        DefaultStoreFactory::new(),
+        DefaultDataDictionaryProvider::new(),
+        PrintlnLogFactory::new(),
+        DefaultMessageFactory::new(),
+    );
 
     initiator.start();
     runner_thread.join().unwrap();

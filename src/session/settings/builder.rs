@@ -1,7 +1,13 @@
-use super::{ConnectionType, SessionSetting, SessionSettingsError, SettingOption};
+use chrono::{NaiveTime, FixedOffset, Weekday};
+
+use crate::{session::{SessionId, SessionSchedule}, fields::converters::datetime::DateTimeFormat};
+
+use super::{
+    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions,
+};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub(crate) struct SessionSettingBuilder {
+pub(crate) struct DynamicSessionSettingBuilder {
     is_dynamic: Option<String>,
     begin_string: Option<String>,
     sender_comp_id: Option<String>,
@@ -79,25 +85,25 @@ pub(crate) struct SessionSettingBuilder {
     socket_receive_timeout: Option<String>,
 
     // SSL options
-    ssl_enable: Option<String>,
-    ssl_server_name: Option<String>,
-    ssl_protocols: Option<String>,
-    ssl_validate_certificates: Option<String>,
-    ssl_check_certificate_revocation: Option<String>,
-    ssl_certificate: Option<String>,
-    ssl_certificate_password: Option<String>,
-    ssl_require_client_certificate: Option<String>,
-    ssl_ca_certificate: Option<String>,
+    // ssl_enable: Option<String>,
+    // ssl_server_name: Option<String>,
+    // ssl_protocols: Option<String>,
+    // ssl_validate_certificates: Option<String>,
+    // ssl_check_certificate_revocation: Option<String>,
+    // ssl_certificate: Option<String>,
+    // ssl_certificate_password: Option<String>,
+    // ssl_require_client_certificate: Option<String>,
+    // ssl_ca_certificate: Option<String>,
 }
 
-pub(crate) struct Validated(SessionSettingBuilder);
+pub(crate) struct Validated(DynamicSessionSettingBuilder);
 impl Validated {
     pub(crate) fn build(self) -> SessionSetting {
         self.0.build()
     }
 }
 
-impl SessionSettingBuilder {
+impl DynamicSessionSettingBuilder {
     fn set(&mut self, option: SettingOption, value: &str) {
         match option {
             SettingOption::IsDynamic => self.is_dynamic = Some(value.into()),
@@ -191,23 +197,23 @@ impl SessionSettingBuilder {
             }
             SettingOption::CheckLatency => self.check_latency = Some(value.into()),
             SettingOption::MaxLatency => self.max_latency = Some(value.into()),
-            SettingOption::SSLEnable => self.ssl_enable = Some(value.into()),
-            SettingOption::SSLServerName => self.ssl_server_name = Some(value.into()),
-            SettingOption::SSLProtocols => self.ssl_protocols = Some(value.into()),
-            SettingOption::SSLValidateCertificates => {
-                self.ssl_validate_certificates = Some(value.into())
-            }
-            SettingOption::SSLCheckCertificateRevocation => {
-                self.ssl_check_certificate_revocation = Some(value.into())
-            }
-            SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
-            SettingOption::SSLCertificatePassword => {
-                self.ssl_certificate_password = Some(value.into())
-            }
-            SettingOption::SSLRequireClientCertificate => {
-                self.ssl_require_client_certificate = Some(value.into())
-            }
-            SettingOption::SSLCACertificate => self.ssl_ca_certificate = Some(value.into()),
+            // SettingOption::SSLEnable => self.ssl_enable = Some(value.into()),
+            // SettingOption::SSLServerName => self.ssl_server_name = Some(value.into()),
+            // SettingOption::SSLProtocols => self.ssl_protocols = Some(value.into()),
+            // SettingOption::SSLValidateCertificates => {
+            //     self.ssl_validate_certificates = Some(value.into())
+            // }
+            // SettingOption::SSLCheckCertificateRevocation => {
+            //     self.ssl_check_certificate_revocation = Some(value.into())
+            // }
+            // SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
+            // SettingOption::SSLCertificatePassword => {
+            //     self.ssl_certificate_password = Some(value.into())
+            // }
+            // SettingOption::SSLRequireClientCertificate => {
+            //     self.ssl_require_client_certificate = Some(value.into())
+            // }
+            // SettingOption::SSLCACertificate => self.ssl_ca_certificate = Some(value.into()),
         }
     }
 
@@ -373,23 +379,23 @@ impl SessionSettingBuilder {
             .or(other.socket_receive_timeout.clone());
 
         // SSL options
-        self.ssl_enable = self.ssl_enable.or(other.ssl_enable.clone());
-        self.ssl_server_name = self.ssl_server_name.or(other.ssl_server_name.clone());
-        self.ssl_protocols = self.ssl_protocols.or(other.ssl_protocols.clone());
-        self.ssl_validate_certificates = self
-            .ssl_validate_certificates
-            .or(other.ssl_validate_certificates.clone());
-        self.ssl_check_certificate_revocation = self
-            .ssl_check_certificate_revocation
-            .or(other.ssl_check_certificate_revocation.clone());
-        self.ssl_certificate = self.ssl_certificate.or(other.ssl_certificate.clone());
-        self.ssl_certificate_password = self
-            .ssl_certificate_password
-            .or(other.ssl_certificate_password.clone());
-        self.ssl_require_client_certificate = self
-            .ssl_require_client_certificate
-            .or(other.ssl_require_client_certificate.clone());
-        self.ssl_ca_certificate = self.ssl_ca_certificate.or(other.ssl_ca_certificate.clone());
+        // self.ssl_enable = self.ssl_enable.or(other.ssl_enable.clone());
+        // self.ssl_server_name = self.ssl_server_name.or(other.ssl_server_name.clone());
+        // self.ssl_protocols = self.ssl_protocols.or(other.ssl_protocols.clone());
+        // self.ssl_validate_certificates = self
+        //     .ssl_validate_certificates
+        //     .or(other.ssl_validate_certificates.clone());
+        // self.ssl_check_certificate_revocation = self
+        //     .ssl_check_certificate_revocation
+        //     .or(other.ssl_check_certificate_revocation.clone());
+        // self.ssl_certificate = self.ssl_certificate.or(other.ssl_certificate.clone());
+        // self.ssl_certificate_password = self
+        //     .ssl_certificate_password
+        //     .or(other.ssl_certificate_password.clone());
+        // self.ssl_require_client_certificate = self
+        //     .ssl_require_client_certificate
+        //     .or(other.ssl_require_client_certificate.clone());
+        // self.ssl_ca_certificate = self.ssl_ca_certificate.or(other.ssl_ca_certificate.clone());
         self
     }
 
@@ -406,6 +412,7 @@ impl SessionSettingBuilder {
         }
 
         if let None = self.begin_string {
+            //TODO check valid begin strings
             errors.push("BeginString must be set.".into());
         }
 
@@ -426,139 +433,135 @@ impl SessionSettingBuilder {
 
     // TODO check if these are the correct default values
     fn build(self) -> SessionSetting {
-        SessionSetting {
-            connection_type: self.connection_type.unwrap().as_str().try_into().unwrap(),
-            begin_string: self.begin_string.unwrap(),
-            sender_comp_id: self.sender_comp_id.unwrap(),
-            is_dynamic: self.is_dynamic.map(|d| d == "Y").unwrap_or(false),
-            sender_sub_id: self.sender_sub_id,
-            sender_location_id: self.sender_location_id,
-            target_comp_id: self.target_comp_id.unwrap(),
-            target_sub_id: self.target_sub_id,
-            target_location_id: self.target_location_id,
-            session_qualifier: self.session_qualifier,
-            default_appl_ver_id: self.default_appl_ver_id,
-            non_stop_session: self.non_stop_session.map(|d| d == "Y").unwrap_or(false),
-            use_local_time: self.use_local_time.map(|d| d == "Y").unwrap_or(false),
-            time_zone: self.time_zone,
-            start_day: self.start_day,
-            end_day: self.end_day,
-            start_time: self.start_time,
-            end_time: self.end_time,
-            milliseconds_in_time_stamp: self
-                .milliseconds_in_time_stamp
-                .map(|d| d == "Y")
-                .unwrap_or(true),
-            refresh_on_logon: self.refresh_on_logon.map(|d| d == "Y").unwrap_or(false),
-            reset_on_logon: self.reset_on_logon.map(|d| d == "Y").unwrap_or(false),
-            reset_on_logout: self.reset_on_logout.map(|d| d == "Y").unwrap_or(false),
-            reset_on_disconnect: self.reset_on_disconnect.map(|d| d == "Y").unwrap_or(false),
-            send_redundant_resend_requests: self
-                .send_redundant_resend_requests
-                .map(|d| d == "Y")
-                .unwrap_or(false),
-            resend_session_level_rejects: self
-                .resend_session_level_rejects
-                .map(|d| d == "Y")
-                .unwrap_or(false),
-            time_stamp_precision: self.time_stamp_precision,
-            enable_last_msg_seq_num_processed: self
-                .enable_last_msg_seq_num_processed
-                .map(|d| d == "Y")
-                .unwrap_or(false),
-            max_messages_in_resend_request: self
-                .max_messages_in_resend_request
-                .map(|v| v.parse().ok())
-                .flatten()
-                .unwrap_or(0),
-            send_logout_before_disconnect_from_timeout: self
-                .send_logout_before_disconnect_from_timeout
-                .map(|d| d == "Y")
-                .unwrap_or(false),
-            ignore_poss_dup_resend_requests: self
-                .ignore_poss_dup_resend_requests
-                .map(|d| d == "Y")
-                .unwrap_or(false),
-            requires_orig_sending_time: self
-                .requires_orig_sending_time
-                .map(|d| d == "Y")
-                .unwrap_or(true),
-            use_data_dictionary: self.use_data_dictionary.map(|d| d == "Y").unwrap_or(true),
-            data_dictionary: self.data_dictionary,
-            transport_data_dictionary: self.transport_data_dictionary,
-            app_data_dictionary: self.app_data_dictionary,
-            validate_fields_out_of_order: self
-                .validate_fields_out_of_order
-                .map(|d| d == "Y")
-                .unwrap_or(true),
-            validate_fields_have_values: self
-                .validate_fields_have_values
-                .map(|d| d == "Y")
-                .unwrap_or(true),
-            validate_user_defined_fields: self
-                .validate_user_defined_fields
-                .map(|d| d == "Y")
-                .unwrap_or(true),
-            validate_length_and_checksum: self
-                .validate_length_and_checksum
-                .map(|d| d == "Y")
-                .unwrap_or(true),
-            allow_unknown_msg_fields: self
-                .allow_unknown_msg_fields
-                .map(|d| d == "Y")
-                .unwrap_or(false),
-            check_latency: self.check_latency.map(|d| d == "Y").unwrap_or(true),
-            max_latency: self
-                .max_latency
-                .map(|v| v.parse().ok())
-                .flatten()
-                .unwrap_or(120),
-            reconnect_interval: self
-                .reconnect_interval
-                .map(|v| v.parse().ok())
-                .flatten()
-                .unwrap_or(30),
-            heart_bt_int: self.heart_bt_int.map(|v| v.parse().ok()).flatten(),
-            logon_timeout: self
-                .logon_timeout
-                .map(|v| v.parse().ok())
-                .flatten()
-                .unwrap_or(10),
-            logout_timeout: self
-                .logout_timeout
-                .map(|v| v.parse().ok())
-                .flatten()
-                .unwrap_or(2),
 
-            socket_connect_host: self.socket_connect_host,
-            socket_connect_port: self.socket_connect_port.map(|v| v.parse().ok()).flatten(),
-            // socket_connect_hosts: self.socket_connect_hosts,
-            // socket_connect_ports: self.socket_connect_ports,
-            socket_accept_host: self.socket_accept_host.or(Some("0.0.0.0".into())),
-            socket_accept_port: self.socket_accept_port.map(|v| v.parse().ok()).flatten(),
+        let mut builder = SessionSetting::builder();
 
-            persist_messages: self.persist_messages.map(|d| d == "Y").unwrap_or(true),
-            file_store_path: self.file_store_path,
-            file_log_path: self.file_log_path.clone(),
-            debug_file_log_path: self.debug_file_log_path.or(self.file_log_path),
+        let session_id = SessionId::new(
+            self.begin_string.unwrap_or("".into()),
+            self.sender_comp_id.unwrap_or("".into()),
+            self.sender_sub_id.unwrap_or("".into()),
+            self.sender_location_id.unwrap_or("".into()),
+            self.target_comp_id.unwrap_or("".into()),
+            self.target_sub_id.unwrap_or("".into()),
+            self.target_location_id.unwrap_or("".into()),
+        );
+        builder.session_id(session_id);
 
-            //TODO?
-            socket_nodelay: self.socket_nodelay.map(|v| v == "Y").unwrap_or(true),
-            socket_send_buffer_size: self.socket_send_buffer_size,
-            socket_receive_buffer_size: self.socket_receive_buffer_size,
-            socket_send_timeout: self.socket_send_timeout,
-            socket_receive_timeout: self.socket_receive_timeout,
+        let connection = match self.connection_type.unwrap().as_str() {
+            "acceptor" => SettingsConnection::Acceptor {
+                is_dynamic: self.is_dynamic.map(|v| v == "Y").unwrap_or(false),
+                session_qualifier: self.session_qualifier,
+                accept_addr: format!(
+                    "{}:{}",
+                    self.socket_accept_host.unwrap(),
+                    self.socket_accept_port.unwrap()
+                )
+                .parse()
+                .unwrap(),
+            },
+            "initiator" => SettingsConnection::Initiator {
+                connect_addr: format!(
+                    "{}:{}",
+                    self.socket_connect_host.unwrap(),
+                    self.socket_connect_port.unwrap()
+                )
+                .parse()
+                .unwrap(),
+                reconnect_interval: self.reconnect_interval.map(|v| v.parse().ok()).flatten().unwrap_or(30),
+                heart_bt_int: self.heart_bt_int.map(|v| v.parse().ok()).flatten().unwrap_or(30),
+                logon_timeout: self.logon_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(10),
+                logout_timeout: self.logout_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(2),
+            },
+            _ => unreachable!(),
+        };
+        builder.connection(connection);
 
-            //TODO?
-            ssl_enable: self.ssl_enable.map(|d| d == "Y").unwrap_or(false),
-            ssl_server_name: self.ssl_server_name,
-            ssl_protocols: self.ssl_protocols,
-            ssl_validate_certificates: self.ssl_validate_certificates,
-            ssl_check_certificate_revocation: self.ssl_check_certificate_revocation,
-            ssl_certificate: self.ssl_certificate,
-            ssl_certificate_password: self.ssl_certificate_password,
-            ssl_require_client_certificate: self.ssl_require_client_certificate,
-            ssl_ca_certificate: self.ssl_ca_certificate,
-        }
+        let mut socket_options = SocketOptions::builder();
+        socket_options.no_delay(self.socket_nodelay.map(|v| v == "Y").unwrap_or(true));
+        socket_options.receive_buffer_size(self.socket_receive_buffer_size.map(|v| v.parse().ok()).flatten().unwrap_or(8192));
+        socket_options.send_buffer_size(self.socket_send_buffer_size.map(|v| v.parse().ok()).flatten().unwrap_or(8192));
+        socket_options.receive_timeout(self.socket_receive_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(0));
+        socket_options.send_timeout(self.socket_send_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(0));
+
+        builder.socket_options(socket_options.build().unwrap());
+
+        let logging = LoggingOptions::builder()
+            .file_log_path(self.file_log_path.clone())
+            .debug_file_log_path(self.file_log_path.clone())
+            .build()
+            .unwrap();
+
+        builder.logging(logging);
+
+        let persistence = if self.persist_messages.map(|v| v == "Y").unwrap_or(true) {
+            match self.file_store_path {
+                Some(value) => Persistence::FileStore { path: value.into() },
+                //TODO default to path log?
+                None => Persistence::Memory,
+            }
+        } else {
+            Persistence::None
+        };
+        builder.persistence(persistence);
+        builder.default_appl_ver_id(self.default_appl_ver_id);
+
+        let any_set = self.start_day.as_ref().or(self.end_day.as_ref()).or(self.end_time.as_ref()).or(self.start_time.as_ref()).is_some();
+        let schedule = if self.non_stop_session.map(|v| v == "Y").unwrap_or(true) && !any_set {
+            SessionSchedule::NonStop
+        } else {
+            match (self.start_day, self.end_day, self.start_time, self.end_time, self.time_zone) {
+                (Some(start_day), Some(end_day), Some(start_time), Some(end_time), timezone) => {
+                    let start_day = start_day.parse().unwrap();
+                    let end_day = end_day.parse().unwrap();
+                    let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
+                    let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
+                    let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
+                    let timezone = timezone.map(|tz| tz.parse().ok()).flatten();
+                    SessionSchedule::Weekly { start_day, end_day, start_time, end_time, timezone, use_localtime }
+                },
+                (None, None, Some(start_time), Some(end_time), timezone) => {
+                    let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
+                    let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
+                    let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
+                    let timezone = timezone.map(|tz| tz.parse().ok()).flatten();
+                    SessionSchedule::Daily { start_time, end_time, timezone, use_localtime }
+                },
+                (None, None, None, None, None) => SessionSchedule::NonStop,
+                _ => unreachable!(),
+            }
+        };
+        builder.schedule(schedule);
+
+        let validation_options = ValidationOptions::builder()
+            .milliseconds_in_time_stamp(self.milliseconds_in_time_stamp.map(|v| v == "Y").unwrap_or(false))
+            .refresh_on_logon(self.refresh_on_logon.map(|v| v == "Y").unwrap_or(false))
+            .reset_on_logon(self.reset_on_logon.map(|v| v == "Y").unwrap_or(false))
+            .reset_on_logout(self.reset_on_logout.map(|v| v == "Y").unwrap_or(false))
+            .reset_on_disconnect(self.reset_on_disconnect.map(|v| v == "Y").unwrap_or(false))
+            .send_redundant_resend_requests(self.send_redundant_resend_requests.map(|v| v == "Y").unwrap_or(false))
+            .resend_session_level_rejects(self.resend_session_level_rejects.map(|v| v == "Y").unwrap_or(false))
+            .time_stamp_precision(self.time_stamp_precision.map(|v| v.try_into().ok()).flatten().unwrap_or(DateTimeFormat::Seconds))
+            .enable_last_msg_seq_num_processed(self.enable_last_msg_seq_num_processed.map(|v| v == "Y").unwrap_or(false))
+            .max_messages_in_resend_request(self.max_messages_in_resend_request.map(|v| v.parse().ok()).flatten().unwrap_or(0))
+            .send_logout_before_disconnect_from_timeout(self.send_logout_before_disconnect_from_timeout.map(|v| v == "Y").unwrap_or(false))
+            .ignore_poss_dup_resend_requests(self.ignore_poss_dup_resend_requests.map(|v| v == "Y").unwrap_or(false))
+            .requires_orig_sending_time(self.requires_orig_sending_time.map(|v| v == "Y").unwrap_or(true))
+            .use_data_dictionary(self.use_data_dictionary.map(|v| v == "Y").unwrap_or(false))
+            .data_dictionary(self.data_dictionary)
+            .transport_data_dictionary(self.transport_data_dictionary)
+            .app_data_dictionary(self.app_data_dictionary)
+            .validate_fields_out_of_order(self.validate_fields_out_of_order.map(|v| v == "Y").unwrap_or(true))
+            .validate_fields_have_values(self.validate_fields_have_values.map(|v| v == "Y").unwrap_or(true))
+            .validate_user_defined_fields(self.validate_user_defined_fields.map(|v| v == "Y").unwrap_or(true))
+            .validate_length_and_checksum(self.validate_length_and_checksum.map(|v| v == "Y").unwrap_or(true))
+            .allow_unknown_msg_fields(self.allow_unknown_msg_fields.map(|v| v == "Y").unwrap_or(false))
+            .check_latency(self.check_latency.map(|v| v == "Y").unwrap_or(true))
+            .max_latency(self.max_latency.map(|v| v.parse().ok()).flatten().unwrap_or(120))
+            .build().unwrap();
+        builder.validation_options(validation_options);
+
+        // TODO
+        builder.ssl_options(None);
+        builder.build().unwrap()
     }
 }

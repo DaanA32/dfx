@@ -95,10 +95,14 @@ pub trait MessageStoreFactory {
     fn create(&self, session_id: &SessionId) -> Box<dyn MessageStore>;
 }
 
+#[derive(Clone, Debug)]
 pub struct DefaultStoreFactory;
 
 impl DefaultStoreFactory {
-    pub fn new() -> Box<dyn MessageStoreFactory> {
+    pub fn new() -> Self {
+        DefaultStoreFactory
+    }
+    pub fn boxed() -> Box<dyn MessageStoreFactory> {
         Box::new(DefaultStoreFactory)
     }
 }

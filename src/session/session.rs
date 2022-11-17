@@ -24,6 +24,7 @@ use crate::field_map::FieldMapError;
 use crate::field_map::Tag;
 use crate::fields::converters::datetime;
 use crate::fields::*;
+use crate::fields::converters::datetime::DateTimeFormat;
 use crate::fix_values::BeginString;
 use crate::logging::LogFactory;
 use crate::logging::Logger;
@@ -47,6 +48,8 @@ use crate::tags;
 use crate::tags::SessionRejectReason;
 
 use super::ApplicationExt;
+use super::Persistence;
+use super::SessionSetting;
 
 const _BUF_SIZE: usize = 4096;
 
@@ -129,16 +132,16 @@ impl SessionBuilder {
             self.is_initiator,
             self.app,
             self.store_factory
-                .unwrap_or_else(|| DefaultStoreFactory::new()),
+                .unwrap_or_else(|| DefaultStoreFactory::boxed()),
             self.data_dictionary_provider
-                .unwrap_or_else(|| DefaultDataDictionaryProvider::new()),
+                .unwrap_or_else(|| DefaultDataDictionaryProvider::boxed()),
             self.session_id,
             self.session_schedule
                 .unwrap_or_else(|| SessionSchedule::NON_STOP),
             self.heartbeat_int.unwrap_or(0),
-            self.log_factory.or_else(|| Some(PrintlnLogFactory::new())),
+            self.log_factory.or_else(|| Some(PrintlnLogFactory::boxed())),
             self.msg_factory
-                .unwrap_or_else(|| DefaultMessageFactory::new()),
+                .unwrap_or_else(|| DefaultMessageFactory::boxed()),
             self.sender_default_appl_ver_id.as_str(),
         )
     }
@@ -152,7 +155,7 @@ pub struct Session {
     schedule: SessionSchedule,
     msg_factory: Box<dyn MessageFactory>,
     app_does_early_intercept: bool,
-    sender_default_appl_ver_id: String,
+    sender_default_appl_ver_id: Option<String>,
     target_default_appl_ver_id: Option<u32>,
     session_data_dictionary: DataDictionary,     //Option?
     application_data_dictionary: DataDictionary, //Option?
@@ -164,7 +167,7 @@ pub struct Session {
     resend_session_level_rejects: bool,
     validate_length_and_checksum: bool,
     check_comp_id: bool,
-    time_stamp_precision: String,
+    time_stamp_precision: DateTimeFormat,
     enable_last_msg_seq_num_processed: bool,
     max_messages_in_resend_request: u32,
     send_logout_before_timeout_disconnect: bool,
@@ -249,7 +252,7 @@ impl Session {
         let resend_session_level_rejects = false;
         let validate_length_and_checksum = true;
         let check_comp_id = true;
-        let time_stamp_precision = datetime::DATE_TIME_FORMAT_WITH_MILLISECONDS.into(); //TODO
+        let time_stamp_precision = DateTimeFormat::Milliseconds;
         let enable_last_msg_seq_num_processed = false;
         let max_messages_in_resend_request = 0;
         let send_logout_before_timeout_disconnect = false;
@@ -287,7 +290,7 @@ impl Session {
             schedule,
             msg_factory,
             app_does_early_intercept,
-            sender_default_appl_ver_id: sender_default_appl_ver_id.into(),
+            sender_default_appl_ver_id: Some(sender_default_appl_ver_id.into()),
             target_default_appl_ver_id: None,
             session_data_dictionary,
             application_data_dictionary,
@@ -311,6 +314,89 @@ impl Session {
             refresh_on_logon: false,
             reset_on_logon: false,
             reset_on_logout: false,
+            outbound: None,
+        }
+    }
+
+    pub(crate) fn from_settings(
+        app: Box<dyn Application>,
+        store_factory: Box<dyn MessageStoreFactory>,
+        data_dictionary_provider: Box<dyn DataDictionaryProvider>,
+        log_factory: Option<Box<dyn LogFactory>>,
+        msg_factory: Box<dyn MessageFactory>,
+        settings: SessionSetting,
+    ) -> Self {
+
+        let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&settings.session_id().begin_string);
+        let application_data_dictionary = if settings.session_id().is_fixt {
+            data_dictionary_provider.get_application_data_dictionary(settings.default_appl_ver_id().unwrap())
+        } else {
+            session_data_dictionary.clone()
+        };
+        let log = log_factory
+            .as_ref()
+            .map(|l| l.create(settings.session_id()))
+            .unwrap_or_else(|| Box::new(NoLogger));
+        let msg_store = store_factory.create(settings.session_id());
+        let mut state = SessionState::new(settings.connection().is_initiator(), log, settings.connection().heart_bt_int().unwrap_or(30), msg_store);
+        let log = log_factory
+            .map(|l| l.create(settings.session_id()))
+            .unwrap_or_else(|| Box::new(NoLogger)); //TODO clone?
+
+        if !is_session_time(&settings.schedule().clone()) {
+            // Reset("Out of SessionTime (Session construction)")
+            // ---
+            // if(this.IsLoggedOn)
+            //     GenerateLogout(logoutMessage);
+            // Disconnect("Resetting...");
+            // state_.Reset(loggedReason);
+            state.reset(Some("Out of SessionTime (Session construction)"));
+        } else {
+            // Reset("New session")
+            // ---
+            // if(this.IsLoggedOn)
+            //     GenerateLogout(logoutMessage);
+            // Disconnect("Resetting...");
+            // state_.Reset(loggedReason);
+            state.reset(Some("New session"));
+        }
+
+        let mut application = app;
+        application.on_create(settings.session_id()).unwrap(); //TODO handle err
+        log.on_event("Created session");
+
+        Session {
+            application,
+            session_id: settings.session_id().clone(),
+            data_dictionary_provider,
+            schedule: settings.schedule().clone(),
+            msg_factory,
+            //TODO app is IApplicationExt
+            app_does_early_intercept: false,
+            sender_default_appl_ver_id: settings.default_appl_ver_id().cloned(),
+            target_default_appl_ver_id: None,
+            session_data_dictionary,
+            application_data_dictionary,
+            log,
+            state,
+            persist_messages: !matches!(settings.persistence(), Persistence::None),
+            reset_on_disconnect: settings.validation_options().reset_on_disconnect(),
+            send_redundant_resend_requests: settings.validation_options().send_redundant_resend_requests(),
+            resend_session_level_rejects: settings.validation_options().resend_session_level_rejects(),
+            validate_length_and_checksum: settings.validation_options().validate_length_and_checksum(),
+            check_comp_id: true,
+            time_stamp_precision: settings.validation_options().time_stamp_precision().clone(),
+            enable_last_msg_seq_num_processed: settings.validation_options().enable_last_msg_seq_num_processed(),
+            max_messages_in_resend_request: settings.validation_options().max_messages_in_resend_request(),
+            send_logout_before_timeout_disconnect: settings.validation_options().send_logout_before_disconnect_from_timeout(),
+            ignore_poss_dup_resend_requests: settings.validation_options().ignore_poss_dup_resend_requests(),
+            requires_orig_sending_time: settings.validation_options().requires_orig_sending_time(),
+            check_latency: settings.validation_options().check_latency(),
+            max_latency: settings.validation_options().max_latency(),
+            responder: None,
+            refresh_on_logon: settings.validation_options().refresh_on_logon(),
+            reset_on_logon: settings.validation_options().reset_on_logon(),
+            reset_on_logout: settings.validation_options().reset_on_logout(),
             outbound: None,
         }
     }
@@ -499,7 +585,7 @@ impl Session {
 
         if self.session_id.is_fixt {
             logon.set_field_deref(
-                DefaultApplVerID::new(self.sender_default_appl_ver_id.clone()),
+                DefaultApplVerID::new(self.sender_default_appl_ver_id.as_ref().unwrap().clone()),
                 None,
             );
         }
@@ -526,7 +612,7 @@ impl Session {
             .unwrap(); // TODO handle unwrap
         logon.set_field(tags::EncryptMethod, "0");
         if self.session_id.is_fixt {
-            logon.set_field(tags::DefaultApplVerID, &self.sender_default_appl_ver_id);
+            logon.set_field(tags::DefaultApplVerID, &self.sender_default_appl_ver_id.as_ref().unwrap());
         }
         logon.set_field_base(other.get_field(tags::HeartBtInt).clone(), None);
 
@@ -779,9 +865,9 @@ impl Session {
         let fix42_or_above = self.session_id.begin_string == BeginString::FIXT11
             || self.session_id.begin_string.as_str() >= BeginString::FIX42;
         let precision = if fix42_or_above {
-            self.time_stamp_precision.as_str()
+            self.time_stamp_precision.as_datetime_format()
         } else {
-            crate::fields::converters::datetime::DATE_TIME_FORMAT_WITHOUT_MILLISECONDS
+            DateTimeFormat::Seconds.as_datetime_format()
         };
         // header.SetField(new Fields.SendingTime(System.DateTime.UtcNow, fix42OrAbove ? TimeStampPrecision : TimeStampPrecision.Second ) );
         // TODO fix timeformatting

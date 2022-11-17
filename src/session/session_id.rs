@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 //TODO partial match on sender + target comp?
-#[derive(Debug, Clone, Default, Hash, PartialEq)]
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
 pub struct SessionId {
     pub(crate) id: String,
     pub(crate) begin_string: String,

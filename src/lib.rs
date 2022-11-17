@@ -6,7 +6,7 @@
 
 pub mod connection;
 pub mod data_dictionary;
-mod data_dictionary_provider;
+pub mod data_dictionary_provider;
 pub mod field_map;
 pub mod fields;
 mod fix_values;

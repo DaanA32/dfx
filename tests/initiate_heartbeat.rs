@@ -2,7 +2,7 @@
 #![allow(unused)]
 use dfx::{
     connection::SocketInitiator,
-    session::{Session, SessionId, SessionSettings},
+    session::{Session, SessionId, SessionSettings}, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message::DefaultMessageFactory,
 };
 
 mod common;
@@ -15,7 +15,14 @@ pub fn test_client_heartbeat() {
 
     let app = TestApplication;
     let session_settings = SessionSettings::from_file("tests/initiator.cfg").unwrap();
-    let mut initiator = SocketInitiator::new(session_settings, app);
+    let mut initiator = SocketInitiator::new(
+        session_settings,
+        app,
+        DefaultStoreFactory::new(),
+        DefaultDataDictionaryProvider::new(),
+        PrintlnLogFactory::new(),
+        DefaultMessageFactory::new(),
+    );
 
     initiator.start();
     runner_thread.join().unwrap();
