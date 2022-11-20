@@ -1,8 +1,7 @@
 mod initiator;
 use std::{
     fmt::Display,
-    net::{AddrParseError, SocketAddr},
-    str::FromStr,
+    net::AddrParseError,
 };
 
 pub use initiator::*;
@@ -10,11 +9,11 @@ mod acceptor;
 pub use acceptor::*;
 mod reactor;
 use openssl::error::ErrorStack;
-pub use reactor::*;
+pub(crate) use reactor::*;
 mod socket_settings;
-pub use socket_settings::*;
+pub(crate) use socket_settings::*;
 mod stream_factory;
-pub use stream_factory::*;
+pub(crate) use stream_factory::*;
 
 #[derive(Debug)]
 pub(crate) enum ConnectionError {

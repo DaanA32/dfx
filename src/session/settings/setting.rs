@@ -1,6 +1,7 @@
+#![allow(dead_code)]
 use std::{
     net::SocketAddr,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use derive_builder::Builder;
@@ -8,7 +9,7 @@ use derive_builder::Builder;
 use crate::{
     connection::SocketSettings,
     fields::converters::datetime::DateTimeFormat,
-    session::{Application, Session, SessionId, SessionSchedule}, message_store::MessageStoreFactory, data_dictionary_provider::DataDictionaryProvider, logging::LogFactory, message_factory::MessageFactory,
+    session::{SessionId, SessionSchedule},
 };
 
 use super::{SessionSettingsError, SettingOption};
@@ -27,7 +28,7 @@ impl TryFrom<&str> for ConnectionType {
             "initiator" => Ok(Self::Initiator),
             "acceptor" => Ok(Self::Acceptor),
             e => Err(SessionSettingsError::InvalidValue {
-                setting: SettingOption::ConnectionType,
+                setting: SettingOption::ConnectionType.into(),
                 value: e.into(),
             }),
         }
@@ -103,13 +104,13 @@ impl SocketOptions {
         self.no_delay
     }
 
-    pub(crate) fn send_buffer_size(&self) -> usize {
-        self.send_buffer_size
-    }
+    // pub(crate) fn send_buffer_size(&self) -> usize {
+    //     self.send_buffer_size
+    // }
 
-    pub(crate) fn receive_buffer_size(&self) -> usize {
-        self.receive_buffer_size
-    }
+    // pub(crate) fn receive_buffer_size(&self) -> usize {
+    //     self.receive_buffer_size
+    // }
 
     pub(crate) fn send_timeout(&self) -> u64 {
         self.send_timeout
@@ -491,11 +492,11 @@ impl SessionSetting {
         SocketSettings::new(self.connection.socket_addr().clone(), self.socket_options.clone())
     }
 
-    pub(crate) fn create(&self,
-        app: Box<dyn Application>,
-    ) -> Session {
-        todo!()
-    }
+    // pub(crate) fn create(&self,
+    //     app: Box<dyn Application>,
+    // ) -> Session {
+    //     todo!()
+    // }
     // pub(crate) fn create(&self,
     //     app: Box<dyn Application>,
     //     store_factory: Box<dyn MessageStoreFactory>,

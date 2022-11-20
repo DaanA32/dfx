@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use crate::field_map::FieldMapError;
 use crate::message::Message;
 use crate::session::SessionId;
@@ -137,8 +135,8 @@ pub mod tests {
     impl ApplicationExt for TestApplication {
         fn early_intercept(
             &mut self,
-            message: Message,
-            session_id: &SessionId,
+            _message: Message,
+            _session_id: &SessionId,
         ) -> Result<Message, super::ApplicationError> {
             todo!()
         }

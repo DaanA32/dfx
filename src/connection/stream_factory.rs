@@ -14,7 +14,7 @@ impl StreamFactory {
         StreamFactory::configure_stream(stream, settings).map_err(|e| e.into())
     }
     pub(crate) fn configure_stream(
-        mut stream: TcpStream,
+        stream: TcpStream,
         settings: &SocketSettings,
     ) -> Result<TcpStream, ConnectionError> {
         stream.set_read_timeout(match settings.receive_timeout() {

@@ -15,6 +15,13 @@ impl MsgType {
     pub const SEQUENCE_RESET: &'static str = "4"; //TODO
     pub const LOGOUT: &'static str = "5"; //TODO
     pub const LOGON: &'static str = "A";
+
+    pub fn new(msg_type: &str) -> Self {
+        Self(FieldBase::new(
+            Self::TAG,
+            msg_type.into()
+        ))
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -4,6 +4,7 @@ use crate::field_map::FieldMapError;
 use crate::field_map::Group;
 use crate::field_map::Tag;
 use crate::fields;
+use crate::fields::ConversionError;
 use crate::message::Message;
 use serde::Deserializer;
 use serde::Serializer;
@@ -30,11 +31,18 @@ pub enum MessageValidationError {
     InvalidStructure(Tag),
     FieldMapError(FieldMapError),
     DictionaryParseException(String),
+    ConversionError(ConversionError)
 }
 
 impl From<FieldMapError> for MessageValidationError {
     fn from(e: FieldMapError) -> Self {
         MessageValidationError::FieldMapError(e)
+    }
+}
+
+impl From<ConversionError> for MessageValidationError {
+    fn from(e: ConversionError) -> Self {
+        MessageValidationError::ConversionError(e)
     }
 }
 
@@ -302,7 +310,7 @@ impl DataDictionary {
             Some(fld) => {
                 if fld.has_enums() {
                     if fld.is_multiple_value_field_with_enums() {
-                        let string_value = field.string_value();
+                        let string_value = field.string_value()?;
                         let splitted = string_value.split(' ');
                         for value in splitted {
                             if !fld.enums().contains_key(value) {
@@ -313,12 +321,12 @@ impl DataDictionary {
                             }
                         }
                         Ok(())
-                    } else if !fld.enums().contains_key(&field.string_value()) {
+                    } else if !fld.enums().contains_key(&field.string_value()?) {
                         // println!("{:?}", field);
                         // println!("{:?}", fld.enums());
                         Err(MessageValidationError::IncorrectEnumValue(
                             field.tag(),
-                            field.string_value(),
+                            field.string_value()?,
                         ))
                     } else {
                         Ok(())
@@ -724,6 +732,11 @@ pub struct DDField {
     is_multiple_value_field_with_enums: bool,
 }
 impl DDField {
+
+    pub fn from_xml_str(xml_str: &str) -> Self {
+        todo!()
+    }
+
     pub fn new(
         // public int Tag;
         tag: Tag,
@@ -801,6 +814,8 @@ impl DerefMut for DDGroup {
         &mut self.map
     }
 }
+
+
 
 // ------------------------------
 //            FIX SPEC
@@ -1064,7 +1079,9 @@ pub struct FieldValue {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
+    use std::{fs::File, collections::BTreeMap};
+
+    use quick_xml::{Reader, events::{Event, BytesStart}};
 
     use crate::data_dictionary::*;
     #[test]
@@ -1281,5 +1298,321 @@ mod tests {
         assert!(fd.is_ok());
         let fd: FixSpec = fd.unwrap();
         let _dd = DataDictionary::new(false, false, false, false, fd);
+    }
+
+    #[test]
+    fn quick_xml_field_empty() {
+
+        let xml_str = "<field number='140' name='PrevClosePx' type='FLOAT' />";
+        let mut reader = Reader::from_str(xml_str);
+        reader.trim_text(true);
+
+        let start = BytesStart::new("field");
+        let end   = start.to_end().into_owned();
+
+        // First, we read a start event...
+        let event = reader.read_event();
+        assert!(event.is_ok());
+        let event = event.unwrap();
+        assert!(matches!(event, Event::Empty(_)));
+
+        let start = match event {
+            Event::Empty(start) => start, // no inner values!
+            _ => unreachable!()
+        };
+
+        let number = start.try_get_attribute("number");
+        assert!(number.is_ok());
+        assert!(matches!(number.unwrap(), Some(x) if x.unescape_value().unwrap() == "140"));
+
+        // ...then, we could read text content until close tag.
+        // This call will correctly handle nested <html> elements.
+    }
+
+    #[test]
+    fn quick_xml_field_with_values() {
+
+        let inner_str = b"   <value enum='1' description='REGULATORY' />
+   <value enum='2' description='TAX' />
+   <value enum='3' description='LOCAL_COMMISSION' />
+   <value enum='4' description='EXCHANGE_FEES' />
+   <value enum='5' description='STAMP' />
+   <value enum='6' description='LEVY' />
+   <value enum='7' description='OTHER' />
+";
+        let xml_str = "
+  <field number='139' name='MiscFeeType' type='CHAR'>
+   <value enum='1' description='REGULATORY' />
+   <value enum='2' description='TAX' />
+   <value enum='3' description='LOCAL_COMMISSION' />
+   <value enum='4' description='EXCHANGE_FEES' />
+   <value enum='5' description='STAMP' />
+   <value enum='6' description='LEVY' />
+   <value enum='7' description='OTHER' />
+  </field>
+";
+        let mut reader = Reader::from_str(xml_str);
+        reader.trim_text(true);
+
+        let start = BytesStart::new("field");
+        let end   = start.to_end().into_owned();
+
+        // First, we read a start event...
+        let event = reader.read_event();
+        assert!(event.is_ok());
+        let event = event.unwrap();
+        assert!(matches!(event, Event::Start(_)));
+
+        let start = match event {
+            Event::Start(start) => start, // no inner values!
+            _ => unreachable!()
+        };
+
+        let number = start.try_get_attribute("number");
+        assert!(number.is_ok());
+        assert!(matches!(number.unwrap(), Some(x) if x.unescape_value().unwrap() == "139"));
+
+        // ...then, we could read text content until close tag.
+        // This call will correctly handle nested <html> elements.
+        let span = reader.read_to_end(end.name()).unwrap();
+        let bytes = &xml_str.as_bytes()[span];
+
+        assert_eq!(bytes.iter().map(|b| *b as char).collect::<String>().trim(), inner_str.iter().map(|b| *b as char).collect::<String>().trim());
+    }
+
+    fn messages(bytes: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
+        let mut reader = Reader::from_reader(bytes);
+        reader.trim_text(true);
+        let mut map = Vec::new();
+        while let Ok(event) = reader.read_event() {
+            match event {
+                Event::Start(e) => {
+                    match e.name().as_ref() {
+                        b"message" => {
+                            // <message name='SequenceReset' msgtype='4' msgcat='admin'>
+                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?.to_string();
+                            let msgtype = e.try_get_attribute("msgtype")?.ok_or(XmlError::NoValue { name: "msgtype" })?.unescape_value()?.to_string();
+                            let msgcat = e.try_get_attribute("msgcat")?.ok_or(XmlError::NoValue { name: "msgcat" })?.unescape_value()?.to_string();
+                            let span = reader.read_to_end(e.to_end().name())?;
+                            let bytes = &bytes[span];
+                            let message = message(bytes, fields_by_name)?;
+                            // let message = MessageDefinition { name, msgtype, msgcat: Some(msgcat), fields  };
+                            map.push(message);
+                        },
+                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <message .../> or <message ...>...</message>" })?,
+                    }
+                },
+                Event::Empty(e) => {
+                    match e.name().as_ref() {
+                        b"message" => {
+                            // <message name='SequenceReset' msgtype='4' msgcat='admin' />
+                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?.to_string();
+                            let msgtype = e.try_get_attribute("msgtype")?.ok_or(XmlError::NoValue { name: "msgtype" })?.unescape_value()?.to_string();
+                            let msgcat = e.try_get_attribute("msgcat")?.ok_or(XmlError::NoValue { name: "msgcat" })?.unescape_value()?.to_string();
+                            let message = DDMap::default();
+                            map.push(message);
+                        },
+                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <message .../> or <message ...>...</message>" })?,
+                    }
+                },
+                Event::Eof => break,
+                _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <message .../> or <message ...>...</message>" })?,
+            }
+        }
+        Ok(map)
+    }
+
+    fn message(bytes: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<DDMap, XmlError> {
+        todo!()
+    }
+
+    fn read_data_dictionary(bytes: &[u8]) -> Result<DataDictionary, XmlError> {
+        let mut reader = Reader::from_reader(bytes);
+        if let Ok(event) = reader.read_event() {
+            match event {
+                Event::Start(e) => {
+                    if let b"fix" = e.name().as_ref() {
+                        let fix_type = e.try_get_attribute("type")?.ok_or(XmlError::NoValue { name: "type" })?.unescape_value()?;
+                        let major = e.try_get_attribute("major")?.ok_or(XmlError::NoValue { name: "major" })?.unescape_value()?;
+                        let minor = e.try_get_attribute("minor")?.ok_or(XmlError::NoValue { name: "minor" })?.unescape_value()?;
+                        let servicepack = e.try_get_attribute("servicepack")?.ok_or(XmlError::NoValue { name: "servicepack" })?.unescape_value()?;
+
+                        let span = reader.read_to_end(e.to_end().name())?;
+                        let bytes = &bytes[span];
+
+                        let mut reader = Reader::from_reader(bytes);
+                        let mut header_span = None;
+                        let mut messages_span = None;
+                        let mut components_span = None;
+                        let mut trailer_span = None;
+                        let mut fields_span = None;
+                        while let Ok(ie) = reader.read_event() {
+                            match ie {
+                                Event::Start(e) => match e.name().as_ref() {
+                                    b"header" => header_span = Some(reader.read_to_end(e.to_end().name())?),
+                                    b"messages" => messages_span = Some(reader.read_to_end(e.to_end().name())?),
+                                    b"components" => components_span = Some(reader.read_to_end(e.to_end().name())?),
+                                    b"trailer" => trailer_span = Some(reader.read_to_end(e.to_end().name())?),
+                                    b"fields" => fields_span = Some(reader.read_to_end(e.to_end().name())?),
+                                    _ => return Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <messages>...</messages>" }),
+                                },
+                                Event::Empty(empty) => match empty.name().as_ref() {
+                                    b"header" => {},
+                                    b"messages" => {},
+                                    b"components" => components_span = Some(reader.read_to_end(empty.to_end().name())?), // empty components
+                                    b"trailer" => {},
+                                    b"fields" => {},
+                                    _ => return Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <messages>...</messages>" }),
+                                },
+                                Event::Eof => break,
+                                _ => return Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <messages>...</messages>" }),
+                            }
+                        }
+
+                        let header_span = header_span.ok_or(XmlError::InvalidFormat { expected: "missing header section" })?;
+                        let messages_span = messages_span.ok_or(XmlError::InvalidFormat { expected: "missing messages section" })?;
+                        let components_span = components_span.ok_or(XmlError::InvalidFormat { expected: "missing components section" })?;
+                        let trailer_span = trailer_span.ok_or(XmlError::InvalidFormat { expected: "missing trailer section" })?;
+                        let fields_span = fields_span.ok_or(XmlError::InvalidFormat { expected: "missing fields section" })?;
+
+                        let fields = fields(&bytes[fields_span])?;
+                        let fields_by_name = fields.iter().map(|v| todo!()).collect();
+                        let components = components(&bytes[components_span], &fields_by_name/*, fields*/)?;
+
+                        let messages = messages(&bytes[messages_span], &fields_by_name/*, fields, components*/)?;
+                        let header = message(&bytes[header_span], &fields_by_name/*, fields, components*/)?;
+                        let trailer = message(&bytes[trailer_span], &fields_by_name/*, fields, components*/)?;
+
+                        let data_dictionary = DataDictionary {
+                            check_fields_have_values: todo!(),
+                            check_fields_out_of_order: todo!(),
+                            check_user_defined_fields: todo!(),
+                            allow_unknown_message_fields: todo!(),
+                            version: todo!(),
+                            fields_by_tag: todo!(),
+                            fields_by_name,
+                            messages: todo!(),
+                            header: todo!(),
+                            trailer: todo!()
+                        };
+                        todo!("{e:?}")
+                    } else {
+                        Err(XmlError::InvalidFormat { expected: "xml start event: eg: <fix ...>...</fix>" })
+                    }
+                },
+                Event::Eof => Err(XmlError::InvalidFormat { expected: "empty_file" }),
+                _ => Err(XmlError::InvalidFormat { expected: "xml start event: eg: <fix ...>...</fix>" }),
+            }
+        } else {
+            Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <fix ...>...</fix>" })
+        }
+    }
+
+    fn components(components_span: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
+        todo!()
+    }
+
+    fn component(component_span: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
+        todo!()
+    }
+
+    fn fields(bytes: &[u8]) -> Result<Vec<DDField>, XmlError> {
+        let mut reader = Reader::from_reader(bytes);
+        reader.trim_text(true);
+        let mut map = Vec::new();
+        while let Ok(event) = reader.read_event() {
+            match event {
+                Event::Start(e) => {
+                    match e.name().as_ref() {
+                        b"field" => {
+                            let number = e.try_get_attribute("number")?.ok_or(XmlError::NoValue { name: "number" })?.unescape_value()?;
+                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?;
+                            let field_type = e.try_get_attribute("type")?.ok_or(XmlError::NoValue { name: "type" })?.unescape_value()?;
+                            let span = reader.read_to_end(e.to_end().name())?;
+                            let bytes = &bytes[span];
+                            let enum_values = enum_values(bytes)?;
+                            let field = DDField::new(number.parse()?, name.to_string(), enum_values, field_type.to_string());
+                            map.push(field);
+                        },
+                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <field .../> or <field ...>...</field>" })?
+                    }
+                },
+                Event::Empty(e) => {
+                    match e.name().as_ref() {
+                        b"field" => {
+                            let number = e.try_get_attribute("number")?.ok_or(XmlError::NoValue { name: "number" })?.unescape_value()?;
+                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?;
+                            let field_type = e.try_get_attribute("type")?.ok_or(XmlError::NoValue { name: "type" })?.unescape_value()?;
+                            let enum_values = HashMap::new();
+                            let field = DDField::new(number.parse()?, name.to_string(), enum_values, field_type.to_string());
+                            map.push(field);
+                        },
+                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <field .../> or <field ...>...</field>" })?
+                    }
+                },
+                Event::Eof => break,
+                _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <field .../> or <field ...>...</field>" })?,
+            }
+        }
+        Ok(map)
+    }
+
+    fn enum_values(bytes: &[u8]) -> Result<HashMap<String, String>, XmlError> {
+        let mut values = HashMap::new();
+        let mut reader = Reader::from_reader(bytes);
+        reader.trim_text(true);
+
+        while let Ok(event) = reader.read_event() {
+            match event {
+                Event::Empty(e) => {
+                    match e.name().as_ref() {
+                        b"value" => Ok(()),
+                        _v => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <value/>" })
+                    }?;
+                    let enum_value = e.try_get_attribute("enum")?.ok_or(XmlError::NoValue { name: "enum" })?.unescape_value()?;
+                    let description = e.try_get_attribute("description")?.ok_or(XmlError::NoValue { name: "description" })?.unescape_value()?;
+                    values.insert(enum_value.into(), description.into());
+                }, // no inner values!
+                Event::Eof => break,
+                _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <value .../>" })?
+            }
+        }
+
+        Ok(values)
+    }
+
+    #[derive(Debug)]
+    enum XmlError {
+        QuickXmlError { error: quick_xml::Error },
+        NoValue { name: &'static str },
+        InvalidFormat { expected: &'static str },
+    }
+
+    impl From<quick_xml::Error> for XmlError {
+        fn from(error: quick_xml::Error) -> Self {
+            XmlError::QuickXmlError { error }
+        }
+    }
+
+    impl From<std::num::ParseIntError> for XmlError {
+        fn from(_error: std::num::ParseIntError) -> Self {
+            XmlError::InvalidFormat { expected: "Number in string" }
+        }
+    }
+
+    #[test]
+    fn quick_xml_values() {
+
+        let xml_str = b"   <value enum='1' description='REGULATORY' />
+   <value enum='2' description='TAX' />
+   <value enum='3' description='LOCAL_COMMISSION' />
+   <value enum='4' description='EXCHANGE_FEES' />
+   <value enum='5' description='STAMP' />
+   <value enum='6' description='LEVY' />
+   <value enum='7' description='OTHER' />
+";
+        let enum_values = enum_values(xml_str);
+        assert!(enum_values.is_ok());
+        assert!(enum_values.unwrap().len() == 7);
     }
 }

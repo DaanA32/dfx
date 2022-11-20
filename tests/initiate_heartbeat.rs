@@ -24,6 +24,7 @@ pub fn test_client_heartbeat() {
         DefaultMessageFactory::new(),
     );
 
+    std::thread::sleep(std::time::Duration::from_millis(2000));
     initiator.start();
     runner_thread.join().unwrap();
     initiator.stop();

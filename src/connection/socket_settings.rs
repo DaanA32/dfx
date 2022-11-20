@@ -1,7 +1,4 @@
-use std::{
-    net::{AddrParseError, SocketAddr},
-    str::FromStr,
-};
+use std::net::SocketAddr;
 
 use crate::session::SocketOptions;
 
@@ -11,8 +8,8 @@ use super::ConnectionError;
 pub(crate) struct SocketSettings {
     addr: SocketAddr,
     no_delay: bool,
-    send_buffer_size: usize,
-    receive_buffer_size: usize,
+    // send_buffer_size: usize,
+    // receive_buffer_size: usize,
     send_timeout: u64,
     receive_timeout: u64,
 }
@@ -23,8 +20,8 @@ impl SocketSettings {
         Self {
             addr: socket_addr,
             no_delay: socket_options.no_delay(),
-            send_buffer_size: socket_options.send_buffer_size(),
-            receive_buffer_size: socket_options.receive_buffer_size(),
+            // send_buffer_size: socket_options.send_buffer_size(),
+            // receive_buffer_size: socket_options.receive_buffer_size(),
             send_timeout: socket_options.send_timeout(),
             receive_timeout: socket_options.receive_timeout(),
         }
@@ -39,13 +36,13 @@ impl SocketSettings {
         self.no_delay
     }
 
-    pub(crate) fn send_buffer_size(&self) -> usize {
-        self.send_buffer_size
-    }
+    // pub(crate) fn send_buffer_size(&self) -> usize {
+    //     self.send_buffer_size
+    // }
 
-    pub(crate) fn receive_buffer_size(&self) -> usize {
-        self.receive_buffer_size
-    }
+    // pub(crate) fn receive_buffer_size(&self) -> usize {
+    //     self.receive_buffer_size
+    // }
 
     pub(crate) fn send_timeout(&self) -> u64 {
         self.send_timeout

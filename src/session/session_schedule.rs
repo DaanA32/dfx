@@ -1,5 +1,5 @@
 use chrono::naive::Days;
-use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, NaiveTime, TimeZone, Utc, Weekday};
+use chrono::{DateTime, Datelike, NaiveDateTime, NaiveTime, Utc, Weekday};
 use chrono_tz::Tz;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -34,7 +34,6 @@ pub(crate) enum SessionSchedule {
 // }
 
 impl SessionSchedule {
-    pub const NON_STOP: Self = Self::NonStop;
 
     pub(crate) fn is_new_session(&self, old_time: DateTime<Utc>, test_time: DateTime<Utc>) -> bool {
         match self {
@@ -157,13 +156,11 @@ impl SessionSchedule {
             SessionSchedule::Weekly {
                 start_time,
                 end_time,
-                timezone,
                 ..
-            } => (start_time, start_time),
+            } => (start_time, end_time),
             SessionSchedule::Daily {
                 start_time,
                 end_time,
-                timezone,
                 ..
             } => (start_time, end_time),
         };

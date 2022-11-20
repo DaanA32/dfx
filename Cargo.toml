@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
+quick-xml = "0.26.0"
 regex = "1.6.0"
 lazy_static = "1.4.0"
 chrono = "0.4.23"

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused)]
 pub const MICROS_PER_MILLIS: u32 = 1000;
 pub const NANOS_PER_MICRO: u32 = 1000;
 pub const TICKS_PER_MICROSECOND: u32 = 10;
@@ -55,7 +57,6 @@ impl std::convert::TryFrom<String> for DateTimeFormat {
     }
 }
 
-use chrono::format::parse;
 use chrono::{DateTime, TimeZone, Utc};
 
 use crate::field_map::FieldValue;
@@ -69,7 +70,7 @@ impl<'a> TryFrom<&'a FieldValue> for DateTime<Utc> {
         let time: &str = TryFrom::try_from(value)?;
 
         Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS)
-            .map_err(|e| todo!())
+            .map_err(|_e| todo!())
     }
 }
 

@@ -36,20 +36,20 @@ pub(crate) struct PrintLnLogger {
 impl Logger for PrintLnLogger {
     fn on_incoming(&self, incoming: &str) {
         println!(
-            "{} [INCOMING] {}",
+            "[INCOMING] {} {}",
             self.session_id,
             incoming.replace("\x01", "|")
         );
     }
     fn on_outgoing(&self, outgoing: &str) {
         println!(
-            "{} [OUTGOING] {}",
+            "[OUTGOING] {} {}",
             self.session_id,
             outgoing.replace("\x01", "|")
         );
     }
     fn on_event(&self, event: &str) {
-        println!("{} [EVENT   ] {}", self.session_id, event);
+        println!("[EVENT   ] {} {}", self.session_id, event);
     }
 }
 

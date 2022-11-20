@@ -1,5 +1,4 @@
 use std::{
-    net::SocketAddr,
     sync::{atomic::AtomicBool, Arc},
     thread::{self, JoinHandle},
 };
@@ -7,13 +6,12 @@ use std::{
 use crate::{
     connection::StreamFactory,
     parser::ParserError,
-    session::{Application, Session, SessionSetting, SessionSettings}, data_dictionary_provider::{self, DataDictionaryProvider}, message_factory::{self, MessageFactory}, message_store::MessageStoreFactory, logging::LogFactory,
+    session::{Application, SessionSetting, SessionSettings}, data_dictionary_provider::DataDictionaryProvider, message_factory::MessageFactory, message_store::MessageStoreFactory, logging::LogFactory,
 };
 
-use super::{ConnectionError, SocketReactor, SocketSettings};
+use super::{ConnectionError, SocketReactor};
 
 pub struct SocketInitiator<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
-    session: Option<Session>,
     app: App,
     store_factory: StoreFactory,
     data_dictionary_provider: DataDictionaryProvider,
@@ -32,10 +30,8 @@ where App: Application + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
 {
     pub fn new(session_settings: SessionSettings, app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF) -> Self {
-        let session = None;
         // TODO move this to a concurrent map > SessionState > Sender<Message>
         SocketInitiator {
-            session,
             app,
             store_factory,
             data_dictionary_provider,
@@ -81,11 +77,9 @@ pub(crate) struct SocketInitiatorThread<App, StoreFactory, DataDictionaryProvide
 
 #[derive(Debug)]
 pub(crate) enum InitiatorError {
-    Timeout(String),
     ConnectionError(ConnectionError),
     ParserError(ParserError),
     IoError(std::io::Error),
-    Disconnect,
 }
 
 impl From<ConnectionError> for InitiatorError {
@@ -137,11 +131,22 @@ where App: Application + Clone + 'static,
 
     fn event_loop(&mut self) -> Result<(), InitiatorError> {
         let stream = StreamFactory::create_client_stream(&self.session_settings.socket_settings())?;
+        let app = self.app.clone();
+        let store_factory = self.store_factory.clone();
+        let data_dictionary_provider = self.data_dictionary_provider.clone();
+        let log_factory = self.log_factory.clone();
+        let message_factory = self.message_factory.clone();
+        let reactor = SocketReactor::new(
+            stream,
+            vec!(self.session_settings.clone()),
+            app,
+            store_factory,
+            data_dictionary_provider,
+            log_factory,
+            message_factory
+        );
+        reactor.start();
 
-        let session = Session::from_settings(Box::new(self.app.clone()), Box::new(self.store_factory.clone()), Box::new(self.data_dictionary_provider.clone()), Some(Box::new(self.log_factory.clone())), Box::new(self.message_factory.clone()), self.session_settings.clone());
-
-        let reactor = SocketReactor::new(stream, Some(session), Vec::new(), self.app.clone());
-        let session = reactor.start();
         Ok(())
     }
 }

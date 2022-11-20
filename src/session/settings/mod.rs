@@ -1,19 +1,18 @@
-use super::{Application, Session, SessionId};
-use crate::connection::SocketSettings;
 use std::{
     collections::BTreeMap,
-    fs::File,
-    io::{BufRead, BufReader},
     net::SocketAddr,
 };
 
 mod builder;
 use builder::*;
 mod setting;
-pub use setting::*;
+pub(crate) use setting::*;
+
+#[cfg(test)]
+use super::SessionId;
 
 #[derive(Debug)]
-pub enum SettingOption {
+pub(crate) enum SettingOption {
     IsDynamic,
     BeginString,
     SenderCompID,
@@ -98,7 +97,7 @@ pub enum SessionSettingsError {
     DefaultSectionAlreadyDefined,
     ValidationErrors(Vec<String>),
     InvalidValue {
-        setting: SettingOption,
+        setting: String,
         value: String,
     },
     LineParseError {
@@ -188,6 +187,89 @@ impl TryFrom<&str> for SettingOption {
     }
 }
 
+impl Into<String> for SettingOption {
+    fn into(self) -> String {
+        let ref_str: &'static str = self.into();
+        ref_str.into()
+    }
+}
+
+impl Into<&'static str> for SettingOption {
+
+    fn into(self) -> &'static str {
+        match self {
+            Self::IsDynamic => "IsDynamic",
+            Self::BeginString => "BeginString",
+            Self::SenderCompID => "SenderCompID",
+            Self::SenderSubID => "SenderSubID",
+            Self::SenderLocationID => "SenderLocationID",
+            Self::TargetCompID => "TargetCompID",
+            Self::TargetSubID => "TargetSubID",
+            Self::TargetLocationID => "TargetLocationID",
+            Self::SessionQualifier => "SessionQualifier",
+            Self::DefaultApplVerID => "DefaultApplVerID",
+            Self::ConnectionType => "ConnectionType",
+            Self::UseDataDictionary => "UseDataDictionary",
+            Self::NonStopSession => "NonStopSession",
+            Self::UseLocalTime => "UseLocalTime",
+            Self::TimeZone => "TimeZone",
+            Self::StartDay => "StartDay",
+            Self::EndDay => "EndDay",
+            Self::StartTime => "StartTime",
+            Self::EndTime => "EndTime",
+            Self::HeartBtInt => "HeartBtInt",
+            Self::SocketAcceptHost => "SocketAcceptHost",
+            Self::SocketAcceptPort => "SocketAcceptPort",
+            Self::SocketConnectHost => "SocketConnectHost",
+            Self::SocketConnectPort => "SocketConnectPort",
+            Self::ReconnectInterval => "ReconnectInterval",
+            Self::FileLogPath => "FileLogPath",
+            Self::DebugFileLogPath => "DebugFileLogPath",
+            Self::FileStorePath => "FileStorePath",
+            Self::RefreshOnLogon => "RefreshOnLogon",
+            Self::ResetOnLogon => "ResetOnLogon",
+            Self::ResetOnLogout => "ResetOnLogout",
+            Self::ResetOnDisconnect => "ResetOnDisconnect",
+            Self::ValidateFieldsOutOfOrder => "ValidateFieldsOutOfOrder",
+            Self::ValidateFieldsHaveValues => "ValidateFieldsHaveValues",
+            Self::ValidateUserDefinedFields => "ValidateUserDefinedFields",
+            Self::ValidateLengthAndChecksum => "ValidateLengthAndChecksum",
+            Self::AllowUnknownMsgFields => "AllowUnknownMsgFields",
+            Self::DataDictionary => "DataDictionary",
+            Self::TransportDataDictionary => "TransportDataDictionary",
+            Self::AppDataDictionary => "AppDataDictionary",
+            Self::PersistMessages => "PersistMessages",
+            Self::LogonTimeout => "LogonTimeout",
+            Self::LogoutTimeout => "LogoutTimeout",
+            Self::SendRedundantResendRequests => "SendRedundantResendRequests",
+            Self::ResendSessionLevelRejects => "ResendSessionLevelRejects",
+            Self::MillisecondsInTimeStamp => "MillisecondsInTimeStamp",
+            Self::TimeStampPrecision => "TimeStampPrecision",
+            Self::EnableLastMsgSeqNumProcessed => "EnableLastMsgSeqNumProcessed",
+            Self::MaxMessagesInResendRequest => "MaxMessagesInResendRequest",
+            Self::SendLogoutBeforeDisconnectFromTimeout => "SendLogoutBeforeDisconnectFromTimeout",
+            Self::SocketNodelay => "SocketNodelay",
+            Self::SocketSendBufferSize => "SocketSendBufferSize",
+            Self::SocketReceiveBufferSize => "SocketReceiveBufferSize",
+            Self::SocketSendTimeout => "SocketSendTimeout",
+            Self::SocketReceiveTimeout => "SocketReceiveTimeout",
+            Self::IgnorePossDupResendRequests => "IgnorePossDupResendRequests",
+            Self::RequiresOrigSendingTime => "RequiresOrigSendingTime",
+            Self::CheckLatency => "CheckLatency",
+            Self::MaxLatency => "MaxLatency",
+            // Self::SSLEnable => "SSLEnable",
+            // Self::SSLServerName => "SSLServerName",
+            // Self::SSLProtocols => "SSLProtocols",
+            // Self::SSLValidateCertificates => "SSLValidateCertificates",
+            // Self::SSLCheckCertificateRevocation => "SSLCheckCertificateRevocation",
+            // Self::SSLCertificate => "SSLCertificate",
+            // Self::SSLCertificatePassword => "SSLCertificatePassword",
+            // Self::SSLRequireClientCertificate => "SSLRequireClientCertificate",
+            // Self::SSLCACertificate => "SSLCACertificate",
+        }
+    }
+}
+
 impl From<std::io::Error> for SessionSettingsError {
     fn from(error: std::io::Error) -> Self {
         SessionSettingsError::IoError(error)
@@ -249,7 +331,7 @@ impl SessionSettings {
                     .trim_matches(delims)
                     .eq_ignore_ascii_case("session")
             {
-                if let Some(mut value) =
+                if let Some(value) =
                     last_setting.replace(DynamicSessionSettingBuilder::default())
                 {
                     if let Some(default) = default.as_ref() {
@@ -264,7 +346,7 @@ impl SessionSettings {
         }
 
         if default_started && default_ended {
-            if let Some(mut value) = last_setting {
+            if let Some(value) = last_setting {
                 if let Some(default) = default.as_ref() {
                     settings.push(value.merge(default).validate()?.build());
                 } else {
@@ -275,7 +357,7 @@ impl SessionSettings {
 
         match (default, settings) {
             (None, _) => Err(SessionSettingsError::NoDefaultSection),
-            (Some(default), v) => Ok(Self {
+            (Some(_default), v) => Ok(Self {
                 // default,
                 sessions: v,
             }),
@@ -286,6 +368,7 @@ impl SessionSettings {
     //     &self.default
     // }
 
+    #[cfg(test)]
     pub(crate) fn for_session_id(&self, session_id: &SessionId) -> Option<&SessionSetting> {
         let best_match = self
             .sessions
@@ -293,7 +376,7 @@ impl SessionSettings {
             .map(|s| (s.score(session_id), s))
             .filter(|(score, _)| score > &0)
             .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
-            .map(|(k, v)| v);
+            .map(|(_, v)| v);
         best_match
     }
 

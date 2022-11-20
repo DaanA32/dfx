@@ -1,7 +1,26 @@
+//! # Tags by name.
+//!
+//! These are constants because there are collisions in the tag numbers.
 pub use intern::*;
 
+//
+// Alternative:
+// ```
+// enum TagNumber {
+//     Account,
+//     AdvId,
+//     // ...
+// }
+//
+// impl Into<Tag> for TagNumber{
+//     // ...
+// }
+// impl TryFrom<Tag> for TagNumber{
+//     // ... return multiple?
+// }
+// ```
+//
 #[allow(non_upper_case_globals)]
-#[allow(dead_code)]
 mod intern {
     use crate::field_map::Tag;
     pub const Account: Tag = 1;

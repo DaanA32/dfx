@@ -11,6 +11,7 @@ use crate::field_map::FieldMapError;
 use crate::field_map::Group;
 use crate::field_map::Tag;
 use crate::fields::ApplVerID;
+use crate::fields::ConversionError;
 use crate::fix_values;
 pub use crate::message_factory::*;
 use crate::session::SessionId;
@@ -385,7 +386,7 @@ impl Message {
                     //                  if (appDD != null)
                     if let Some(app_dd) = app_dd {
                         //                      msgMap = appDD.GetMapForMessage(msgType);
-                        msg_map = app_dd.get_map_for_message(msg_type.as_str());
+                        msg_map = app_dd.get_map_for_message(msg_type?.as_str());
                     }
                 }
 
@@ -701,7 +702,7 @@ impl Message {
     pub(crate) fn extract_begin_string(msgstr: &[u8]) -> Result<String, MessageParseError> {
         let mut pos = 0;
         let f = Message::extract_field(msgstr, &mut pos, None, None, None)?;
-        Ok(f.string_value().clone())
+        Ok(f.string_value().clone()?)
     }
 
     pub(crate) fn get_msg_type(msgstr: &[u8]) -> Result<&str, MessageParseError> {
@@ -946,11 +947,18 @@ pub enum MessageParseError {
     GroupDelimiterTagException(Tag, Tag),
     FieldMapError(FieldMapError),
     Malformed(String),
+    ConversionError(ConversionError)
 }
 
 impl From<FieldMapError> for MessageParseError {
     fn from(e: FieldMapError) -> MessageParseError {
         MessageParseError::FieldMapError(e)
+    }
+}
+
+impl From<ConversionError> for MessageParseError {
+    fn from(e: ConversionError) -> MessageParseError {
+        MessageParseError::ConversionError(e)
     }
 }
 
@@ -1055,7 +1063,7 @@ mod tests {
         let mut message = Message::default();
 
         // let msgstr = "8=FIXT.1.1\x019=73\x0135=W\x0134=3\x0149=sender\x0152=20110909-09:09:09.999\x0156=target\x0155=sym\x01268=1\x01269=0\x01272=20111012\x01273=22:15:30.444\x0110=249\x01";
-        let expected = b"8=FIX.4.4|9=138|35=0|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|90=3|91=\xC1\x01\xC0|98=0|108=30|141=Y|553=username|554=password|10=189|";
+        let expected = b"8=FIX.4.4|9=127|35=0|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|90=3|91=\xC1\x01\xC0|98=0|108=30|141=Y|553=username|554=password|10=149|";
         let msgstr: Vec<u8> = expected
             .iter()
             .map(|b| if *b == '|' as u8 { 1_u8 } else { *b })

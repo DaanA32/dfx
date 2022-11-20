@@ -1,45 +1,39 @@
 use std::{
     io::{Read, Write},
-    net::{SocketAddr, TcpStream},
+    net::TcpStream,
     sync::mpsc::{Receiver, Sender},
     time::Duration,
 };
 
 use crate::{
-    connection::StreamFactory,
     message::{Message, MessageParseError},
     parser::{Parser, ParserError},
     session::{
-        Application, ChannelResponder, Responder, ResponderEvent, ResponderResponse, Session,
+        Application, ChannelResponder, ResponderEvent, ResponderResponse, Session,
         SessionId, SessionSetting,
-    },
+    }, message_store::MessageStoreFactory, data_dictionary_provider::DataDictionaryProvider, logging::LogFactory, message_factory::MessageFactory,
 };
 
 use super::ConnectionError;
 
 pub(crate) const BUF_SIZE: usize = 512;
-pub(crate) struct SocketReactor<App> {
+pub(crate) struct SocketReactor<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
     session: Option<Session>,
     parser: Parser,
-    state: ConnectionState,
     stream: Option<TcpStream>,
     buffer: [u8; BUF_SIZE],
     rx: Option<Receiver<ResponderEvent>>,
     tx: Option<Sender<ResponderResponse>>,
     settings: Vec<SessionSetting>,
     app: App,
-}
-
-pub(crate) enum ConnectionState {
-    Pending(SessionId),
-    Connected(SessionId),
-    Disconnected(SessionId),
-    NotStarted,
+    store_factory: StoreFactory,
+    data_dictionary_provider: DataDictionaryProvider,
+    log_factory: LogFactory,
+    message_factory: MessageFactory,
 }
 
 #[derive(Debug)]
 pub(crate) enum ReactorError {
-    Timeout(String),
     ConnectionError(ConnectionError),
     ParserError(ParserError),
     MessageParseError(MessageParseError),
@@ -68,25 +62,39 @@ impl From<std::io::Error> for ReactorError {
     }
 }
 
-impl<App: Application + Clone + 'static> SocketReactor<App> {
+impl<App, SF, DDP, LF, MF> SocketReactor<App, SF, DDP, LF, MF>
+where App: Application + Clone + 'static,
+      SF: MessageStoreFactory + Send + Clone + 'static,
+      DDP: DataDictionaryProvider + Send + Clone + 'static,
+      LF: LogFactory + Send + Clone + 'static,
+      MF: MessageFactory + Send + Clone + 'static,
+{
     pub(crate) fn new(
         connection: TcpStream,
-        mut session: Option<Session>,
         settings: Vec<SessionSetting>,
         app: App,
+        store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF
     ) -> Self {
         let mut reactor = SocketReactor {
-            session,
+            session: None,
             settings,
             parser: Parser::default(),
             // TODO move this to a concurrent map > SessionState > Sender<Message>
-            state: ConnectionState::NotStarted,
             stream: Some(connection),
             buffer: [0; BUF_SIZE],
             rx: None,
             tx: None,
             app,
+            store_factory,
+            data_dictionary_provider,
+            log_factory,
+            message_factory,
         };
+        if reactor.settings.len() == 1 && reactor.settings[0].connection().is_initiator() {
+            reactor.session = Some(reactor.create_session(&reactor.settings[0]));
+        }
+        if reactor.settings.len() >= 1 && reactor.settings[0].connection().is_acceptor() {
+        }
         reactor.create_responder();
         reactor
     }
@@ -151,7 +159,8 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
         self.stream
             .as_mut()
             .unwrap()
-            .shutdown(std::net::Shutdown::Both);
+            .shutdown(std::net::Shutdown::Both)
+            .unwrap();
         Ok(())
     }
 
@@ -162,13 +171,11 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
             .unwrap()
             .set_connected(&session_id)
             .unwrap();
-        self.state = ConnectionState::Connected(session_id);
     }
 
     // TODO move this to a concurrent map > SessionState > Sender<Message>
     fn set_disconnected(&mut self, session_id: SessionId) {
         self.session.as_mut().unwrap().set_disconnected(&session_id);
-        self.state = ConnectionState::Disconnected(session_id);
     }
 
     fn read(&mut self) -> Result<(), ReactorError> {
@@ -215,7 +222,7 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
                 match session_settings {
                     Some(settings) => {
                         if settings.accepts(&session_id) {
-                            let mut session = settings.create(Box::new(self.app.clone()));
+                            let mut session = self.create_session(settings);
                             session.set_session_id(session_id.clone());
                             self.session = Some(session);
                             self.create_responder();
@@ -232,6 +239,17 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
             }
         }
         Ok(())
+    }
+
+    fn create_session(&self, settings: &SessionSetting) -> Session {
+        Session::from_settings(
+            Box::new(self.app.clone()),
+            Box::new(self.store_factory.clone()),
+            Box::new(self.data_dictionary_provider.clone()),
+            Some(Box::new(self.log_factory.clone())),
+            Box::new(self.message_factory.clone()),
+            settings.clone()
+        )
     }
 
     fn process_responder(&mut self) -> Result<(), ReactorError> {
@@ -262,7 +280,7 @@ impl<App: Application + Clone + 'static> SocketReactor<App> {
             .map(|s| (s.score(session_id), s))
             .filter(|(score, _)| score > &0)
             .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
-            .map(|(k, v)| v);
+            .map(|(_, v)| v);
         *best_match
     }
 }

@@ -1,42 +1,31 @@
 use std::cmp;
 use std::cmp::min;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::sync::mpsc::SyncSender;
-use std::sync::Arc;
-use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 
 use chashmap::CHashMap;
-use chrono::DateTime;
 use chrono::Utc;
 use lazy_static::lazy_static;
 
 use crate::data_dictionary::DataDictionary;
 use crate::data_dictionary::MessageValidationError;
 use crate::data_dictionary_provider::DataDictionaryProvider;
-use crate::data_dictionary_provider::DefaultDataDictionaryProvider;
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMapError;
 use crate::field_map::Tag;
-use crate::fields::converters::datetime;
 use crate::fields::*;
 use crate::fields::converters::datetime::DateTimeFormat;
 use crate::fix_values::BeginString;
 use crate::logging::LogFactory;
 use crate::logging::Logger;
 use crate::logging::NoLogger;
-use crate::logging::PrintlnLogFactory;
 use crate::message::Message;
 use crate::message::MessageParseError;
-use crate::message_builder::MessageBuilder;
-use crate::message_factory::DefaultMessageFactory;
 use crate::message_factory::MessageFactory;
 use crate::message_factory::MessageFactoryError;
-use crate::message_store::DefaultStoreFactory;
 use crate::message_store::MessageStoreFactory;
 use crate::session::Application;
 use crate::session::ApplicationError;
@@ -45,9 +34,7 @@ use crate::session::SessionId;
 use crate::session::SessionSchedule;
 use crate::session::SessionState;
 use crate::tags;
-use crate::tags::SessionRejectReason;
 
-use super::ApplicationExt;
 use super::Persistence;
 use super::SessionSetting;
 
@@ -57,101 +44,12 @@ lazy_static! {
     static ref SESSION_MAP: CHashMap<SessionId, SyncSender<Message>> = CHashMap::new();
 }
 
-pub(crate) struct SessionBuilder {
-    is_initiator: bool,
-    app: Box<dyn Application>,
-    store_factory: Option<Box<dyn MessageStoreFactory>>,
-    data_dictionary_provider: Option<Box<dyn DataDictionaryProvider>>,
-    session_id: SessionId,
-    session_schedule: Option<SessionSchedule>,
-    heartbeat_int: Option<u32>,
-    log_factory: Option<Box<dyn LogFactory>>,
-    msg_factory: Option<Box<dyn MessageFactory>>,
-    sender_default_appl_ver_id: String,
-}
-
-impl SessionBuilder {
-    fn new<S: Into<String>>(
-        is_initiator: bool,
-        app: Box<dyn Application>,
-        session_id: SessionId,
-        sender_default_appl_ver_id: S,
-    ) -> Self {
-        Self {
-            is_initiator,
-            app,
-            store_factory: None,
-            data_dictionary_provider: None,
-            session_id,
-            session_schedule: None,
-            heartbeat_int: None,
-            log_factory: None,
-            msg_factory: None,
-            sender_default_appl_ver_id: sender_default_appl_ver_id.into(),
-        }
-    }
-
-    pub fn with_store_factory(
-        mut self,
-        message_store_factory: Box<dyn MessageStoreFactory>,
-    ) -> Self {
-        self.store_factory = Some(message_store_factory);
-        self
-    }
-
-    pub fn with_data_dictionary_provider(
-        mut self,
-        data_dictionary_provider: Box<dyn DataDictionaryProvider>,
-    ) -> Self {
-        self.data_dictionary_provider = Some(data_dictionary_provider);
-        self
-    }
-
-    pub fn with_session_schedule(mut self, session_schedule: SessionSchedule) -> Self {
-        self.session_schedule = Some(session_schedule);
-        self
-    }
-
-    pub fn with_heartbeat_int(mut self, heartbeat_int: u32) -> Self {
-        self.heartbeat_int = Some(heartbeat_int);
-        self
-    }
-
-    pub fn with_log_factory(mut self, log_factory: Box<dyn LogFactory>) -> Self {
-        self.log_factory = Some(log_factory);
-        self
-    }
-
-    pub fn with_message_factory(mut self, message_factory: Box<dyn MessageFactory>) -> Self {
-        self.msg_factory = Some(message_factory);
-        self
-    }
-
-    pub fn build(self) -> Session {
-        Session::new(
-            self.is_initiator,
-            self.app,
-            self.store_factory
-                .unwrap_or_else(|| DefaultStoreFactory::boxed()),
-            self.data_dictionary_provider
-                .unwrap_or_else(|| DefaultDataDictionaryProvider::boxed()),
-            self.session_id,
-            self.session_schedule
-                .unwrap_or_else(|| SessionSchedule::NON_STOP),
-            self.heartbeat_int.unwrap_or(0),
-            self.log_factory.or_else(|| Some(PrintlnLogFactory::boxed())),
-            self.msg_factory
-                .unwrap_or_else(|| DefaultMessageFactory::boxed()),
-            self.sender_default_appl_ver_id.as_str(),
-        )
-    }
-}
 
 //TODO: dyn to generic?
 pub struct Session {
     application: Box<dyn Application>,
     session_id: SessionId,
-    data_dictionary_provider: Box<dyn DataDictionaryProvider>, // TODO: REMOVE candidate
+    _data_dictionary_provider: Box<dyn DataDictionaryProvider>, // TODO: REMOVE candidate
     schedule: SessionSchedule,
     msg_factory: Box<dyn MessageFactory>,
     app_does_early_intercept: bool,
@@ -164,14 +62,14 @@ pub struct Session {
     persist_messages: bool,
     reset_on_disconnect: bool,
     send_redundant_resend_requests: bool,
-    resend_session_level_rejects: bool,
+    _resend_session_level_rejects: bool,
     validate_length_and_checksum: bool,
     check_comp_id: bool,
     time_stamp_precision: DateTimeFormat,
     enable_last_msg_seq_num_processed: bool,
     max_messages_in_resend_request: u32,
     send_logout_before_timeout_disconnect: bool,
-    ignore_poss_dup_resend_requests: bool,
+    _ignore_poss_dup_resend_requests: bool,
     requires_orig_sending_time: bool,
     check_latency: bool,
     max_latency: u32,
@@ -182,142 +80,8 @@ pub struct Session {
     outbound: Option<Receiver<Message>>,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum Event {
-    /// Incoming  FIX message.
-    Message(Vec<u8>),
-    /// I/O error at the transport layer.
-    IoError,
-    /// Time to send a new `HeartBeat <0>` message.
-    Heartbeat,
-    /// The FIX counterparty has missed the `Heartbeat <0>` deadline by some
-    /// amount of time, and it's time to send a `Test Request <1>`
-    /// message to check what's going on.
-    TestRequest,
-    /// The FIX counterparty has missed the `Heartbeat <0>` deadline by some
-    /// amount of time, and it's stopped responding. It's time to
-    /// disconnect via a `Logout <5>` message.
-    Logout,
-    //Phanthom(&'a ()),
-}
 
 impl Session {
-    pub(crate) fn builder<S: Into<String>>(
-        is_initiator: bool,
-        app: Box<dyn Application>,
-        session_id: SessionId,
-        sender_default_appl_ver_id: S,
-    ) -> SessionBuilder {
-        SessionBuilder::new(is_initiator, app, session_id, sender_default_appl_ver_id)
-    }
-    // bool isInitiator, IApplication app, IMessageStoreFactory storeFactory, SessionID sessID, DataDictionaryProvider dataDictProvider,
-    //      SessionSchedule sessionSchedule, int heartBtInt, ILogFactory logFactory, IMessageFactory msgFactory, string senderDefaultApplVerID
-    fn new(
-        is_initiator: bool,
-        app: Box<dyn Application>,
-        store_factory: Box<dyn MessageStoreFactory>,
-        data_dictionary_provider: Box<dyn DataDictionaryProvider>,
-        session_id: SessionId,
-        session_schedule: SessionSchedule,
-        heartbeat_int: u32,
-        log_factory: Option<Box<dyn LogFactory>>,
-        msg_factory: Box<dyn MessageFactory>,
-        sender_default_appl_ver_id: &str,
-    ) -> Self {
-        let schedule = session_schedule;
-        let mut application = app;
-        let app_does_early_intercept = false; //TODO app is IApplicationExt
-        let session_data_dictionary =
-            data_dictionary_provider.get_session_data_dictionary(&session_id.begin_string);
-        let application_data_dictionary = if session_id.is_fixt {
-            data_dictionary_provider.get_application_data_dictionary(sender_default_appl_ver_id)
-        } else {
-            session_data_dictionary.clone()
-        };
-        let log = log_factory
-            .as_ref()
-            .map(|l| l.create(&session_id))
-            .unwrap_or_else(|| Box::new(NoLogger));
-        let msg_store = store_factory.create(&session_id);
-        let mut state = SessionState::new(is_initiator, log, heartbeat_int, msg_store);
-        let log = log_factory
-            .map(|l| l.create(&session_id))
-            .unwrap_or_else(|| Box::new(NoLogger)); //TODO clone?
-                                                    // Configuration defaults.
-                                                    // Will be overridden by the SessionFactory with values in the user's configuration.
-                                                    // TODO move these to session settings...
-        let persist_messages = true;
-        let reset_on_disconnect = false;
-        let send_redundant_resend_requests = false;
-        let resend_session_level_rejects = false;
-        let validate_length_and_checksum = true;
-        let check_comp_id = true;
-        let time_stamp_precision = DateTimeFormat::Milliseconds;
-        let enable_last_msg_seq_num_processed = false;
-        let max_messages_in_resend_request = 0;
-        let send_logout_before_timeout_disconnect = false;
-        let ignore_poss_dup_resend_requests = false;
-        let requires_orig_sending_time = true;
-        let check_latency = true;
-        let max_latency = 120;
-
-        if !is_session_time(&schedule) {
-            // Reset("Out of SessionTime (Session construction)")
-            // ---
-            // if(this.IsLoggedOn)
-            //     GenerateLogout(logoutMessage);
-            // Disconnect("Resetting...");
-            // state_.Reset(loggedReason);
-            state.reset(Some("Out of SessionTime (Session construction)"));
-        } else {
-            // Reset("New session")
-            // ---
-            // if(this.IsLoggedOn)
-            //     GenerateLogout(logoutMessage);
-            // Disconnect("Resetting...");
-            // state_.Reset(loggedReason);
-            state.reset(Some("New session"));
-        }
-
-        // TODO register session
-        application.on_create(&session_id).unwrap(); //TODO handle err
-        log.on_event("Created session");
-
-        Session {
-            application,
-            session_id,
-            data_dictionary_provider,
-            schedule,
-            msg_factory,
-            app_does_early_intercept,
-            sender_default_appl_ver_id: Some(sender_default_appl_ver_id.into()),
-            target_default_appl_ver_id: None,
-            session_data_dictionary,
-            application_data_dictionary,
-            log,
-            state,
-            persist_messages,
-            reset_on_disconnect,
-            send_redundant_resend_requests,
-            resend_session_level_rejects,
-            validate_length_and_checksum,
-            check_comp_id,
-            time_stamp_precision,
-            enable_last_msg_seq_num_processed,
-            max_messages_in_resend_request,
-            send_logout_before_timeout_disconnect,
-            ignore_poss_dup_resend_requests,
-            requires_orig_sending_time,
-            check_latency,
-            max_latency,
-            responder: None,
-            refresh_on_logon: false,
-            reset_on_logon: false,
-            reset_on_logout: false,
-            outbound: None,
-        }
-    }
-
     pub(crate) fn from_settings(
         app: Box<dyn Application>,
         store_factory: Box<dyn MessageStoreFactory>,
@@ -327,9 +91,9 @@ impl Session {
         settings: SessionSetting,
     ) -> Self {
 
-        let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&settings.session_id().begin_string);
+        let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&settings.session_id().begin_string).clone();
         let application_data_dictionary = if settings.session_id().is_fixt {
-            data_dictionary_provider.get_application_data_dictionary(settings.default_appl_ver_id().unwrap())
+            data_dictionary_provider.get_application_data_dictionary(settings.default_appl_ver_id().unwrap()).clone()
         } else {
             session_data_dictionary.clone()
         };
@@ -368,7 +132,7 @@ impl Session {
         Session {
             application,
             session_id: settings.session_id().clone(),
-            data_dictionary_provider,
+            _data_dictionary_provider: data_dictionary_provider,
             schedule: settings.schedule().clone(),
             msg_factory,
             //TODO app is IApplicationExt
@@ -382,14 +146,14 @@ impl Session {
             persist_messages: !matches!(settings.persistence(), Persistence::None),
             reset_on_disconnect: settings.validation_options().reset_on_disconnect(),
             send_redundant_resend_requests: settings.validation_options().send_redundant_resend_requests(),
-            resend_session_level_rejects: settings.validation_options().resend_session_level_rejects(),
+            _resend_session_level_rejects: settings.validation_options().resend_session_level_rejects(),
             validate_length_and_checksum: settings.validation_options().validate_length_and_checksum(),
             check_comp_id: true,
             time_stamp_precision: settings.validation_options().time_stamp_precision().clone(),
             enable_last_msg_seq_num_processed: settings.validation_options().enable_last_msg_seq_num_processed(),
             max_messages_in_resend_request: settings.validation_options().max_messages_in_resend_request(),
             send_logout_before_timeout_disconnect: settings.validation_options().send_logout_before_disconnect_from_timeout(),
-            ignore_poss_dup_resend_requests: settings.validation_options().ignore_poss_dup_resend_requests(),
+            _ignore_poss_dup_resend_requests: settings.validation_options().ignore_poss_dup_resend_requests(),
             requires_orig_sending_time: settings.validation_options().requires_orig_sending_time(),
             check_latency: settings.validation_options().check_latency(),
             max_latency: settings.validation_options().max_latency(),
@@ -711,7 +475,7 @@ impl Session {
         if self.state.received_logon() || self.state.sent_logon() {
             self.state.set_received_logon(false);
             self.state.set_sent_logon(false);
-            self.application.on_logout(&self.session_id);
+            self.application.on_logout(&self.session_id).unwrap();
         }
 
         self.state.set_sent_logout(false);
@@ -904,13 +668,14 @@ impl Session {
 
         if let Err(e) = result {
             match e {
-                HandleError::UnsupportedVersion { expected, actual } => todo!(),
+                HandleError::UnsupportedVersion { expected, actual } => todo!("handle err: Unsupported version {expected} {actual}"),
                 HandleError::MessageFactoryError(_) => todo!(),
-                HandleError::MessageParseError(_) => todo!(),
+                HandleError::MessageParseError(e) => todo!("{e:?}"),
                 HandleError::MessageValidationError(v) => todo!("{:?}", v),
                 HandleError::String(s) => todo!("{}", s),
                 HandleError::ApplicationError(_) => todo!(),
                 HandleError::FieldMapError(_) => todo!(),
+                HandleError::ConversionError(_) => todo!(),
             }
         }
         // }
@@ -990,7 +755,7 @@ impl Session {
             Some(&self.application_data_dictionary),
             Some(&*self.msg_factory),
             false,
-        );
+        )?;
 
         if self.app_does_early_intercept {
             // if let Some(func) = self.application.get_early_intercept() {
@@ -999,7 +764,7 @@ impl Session {
             todo!("Do early intercept")
         }
 
-        let header = message.header();
+        let _header = message.header();
 
         if begin_string != self.session_id.begin_string {
             return Err(HandleError::UnsupportedVersion {
@@ -1114,7 +879,7 @@ impl Session {
 
         let msg_seq_num = logon.header().get_int(tags::MsgSeqNum)?;
         if self.is_target_too_high(msg_seq_num) && !received_reset {
-            self.do_target_too_high(logon, msg_seq_num);
+            self.do_target_too_high(logon, msg_seq_num)?;
         } else {
             self.state.incr_next_target_msg_seq_num()
         }
@@ -1299,7 +1064,7 @@ impl Session {
         // {
         //     this.Log.OnEvent("ERROR during resend request " + e.Message);
         // }
-        todo!("session::next_resend_request")
+        todo!("session::next_resend_request {resend_request}")
     }
 
     /// This will pass the message into the from_admin / from_app methods from the Application
@@ -1336,11 +1101,11 @@ impl Session {
         }
 
         if check_too_high && self.is_target_too_high(msg_seq_num) {
-            self.do_target_too_high(message, msg_seq_num);
+            self.do_target_too_high(message, msg_seq_num)?;
             return Ok(None);
         }
         if check_too_low && self.is_target_too_low(msg_seq_num) {
-            self.do_target_too_low(message, msg_seq_num);
+            self.do_target_too_low(message, msg_seq_num)?;
             return Ok(None);
         }
 
@@ -1366,7 +1131,7 @@ impl Session {
                             message.header().get_string(tags::BeginString)?,
                             chunk + 1,
                             new_chunk_end_seq_no,
-                        );
+                        )?;
                         self.state
                             .resend_range_mut()
                             .as_mut()
@@ -1420,9 +1185,9 @@ impl Session {
         msg_seq_num < self.state.next_target_msg_seq_num()
     }
 
-    fn do_target_too_high(&mut self, msg: Message, msg_seq_num: u32) -> () {
+    fn do_target_too_high(&mut self, msg: Message, msg_seq_num: u32) -> Result<(), HandleError> {
         // string beginString = msg.Header.GetString(Fields.Tags.BeginString);
-        let begin_string = msg.header().get_string(tags::BeginString).unwrap();
+        let begin_string = msg.header().get_string(tags::BeginString)?;
 
         // this.Log.OnEvent("MsgSeqNum too high, expecting " + state_.GetNextTargetMsgSeqNum() + " but received " + msgSeqNum);
         self.log.on_event(
@@ -1446,11 +1211,12 @@ impl Session {
                         )
                         .as_str(),
                     );
-                    return;
+                    return Ok(());
                 }
             }
         }
-        self.generate_resend_request(begin_string, msg_seq_num);
+        self.generate_resend_request(begin_string, msg_seq_num)?;
+        Ok(())
     }
 
     fn do_target_too_low(&mut self, message: Message, msg_seq_num: u32) -> Result<(), HandleError> {
@@ -1477,7 +1243,7 @@ impl Session {
             return true;
         }
 
-        let sending_time = message.header().get_datetime(tags::SendingTime);
+        let sending_time = message.header().get_datetime(tags::SendingTime).unwrap();
         let timespan = Utc::now() - sending_time;
 
         timespan.num_seconds().abs() <= self.max_latency as i64
@@ -1485,13 +1251,13 @@ impl Session {
 
     fn generate_resend_request_range(
         &mut self,
-        beginstring: String,
+        begin_string: String,
         start_seq_num: u32,
         end_seq_num: u32,
     ) -> Result<bool, HandleError> {
         let mut resend_request = self
             .msg_factory
-            .create(&self.session_id.begin_string, MsgType::RESEND_REQUEST)?;
+            .create(&begin_string, MsgType::RESEND_REQUEST)?;
 
         resend_request.set_field(tags::BeginSeqNo, format!("{}", start_seq_num).as_str());
         resend_request.set_field(tags::BeginSeqNo, format!("{}", end_seq_num).as_str());
@@ -1665,13 +1431,13 @@ impl Session {
                 message,
                 SessionRejectReason::REQUIRED_TAG_MISSING,
                 Some(tags::OrigSendingTime),
-            );
+            )?;
             return Ok(());
         }
 
         // Ensure sendingTime is later than OrigSendingTime, else reject and logout
-        let orig_send_time = message.header().get_datetime(tags::OrigSendingTime);
-        let sending_time = message.header().get_datetime(tags::SendingTime);
+        let orig_send_time = message.header().get_datetime(tags::OrigSendingTime)?;
+        let sending_time = message.header().get_datetime(tags::SendingTime)?;
         let timespan = orig_send_time - sending_time;
 
         if timespan.num_seconds() > 0 {
@@ -1679,7 +1445,7 @@ impl Session {
                 message,
                 SessionRejectReason::SENDING_TIME_ACCURACY_PROBLEM,
                 Some(tags::OrigSendingTime),
-            );
+            )?;
             self.generate_logout(None, None);
         }
 
@@ -1725,12 +1491,13 @@ pub enum SessionError {
 
 #[derive(Debug, Clone)]
 pub(crate) enum InternalSessionError {
-    NotConnected(SessionId),
-    NotLoggedOn(SessionId),
-    SessionNotFound,
+    // NotConnected(SessionId),
+    // NotLoggedOn(SessionId),
+    // SessionNotFound,
     AlreadyConnected,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) enum HandleError {
     UnsupportedVersion { expected: String, actual: String },
     MessageFactoryError(MessageFactoryError),
@@ -1739,6 +1506,7 @@ pub(crate) enum HandleError {
     String(String),
     ApplicationError(ApplicationError),
     FieldMapError(FieldMapError),
+    ConversionError(ConversionError),
 }
 
 impl From<MessageFactoryError> for HandleError {
@@ -1769,5 +1537,10 @@ impl From<ApplicationError> for HandleError {
 impl From<FieldMapError> for HandleError {
     fn from(e: FieldMapError) -> Self {
         HandleError::FieldMapError(e)
+    }
+}
+impl From<ConversionError> for HandleError {
+    fn from(e: ConversionError) -> Self {
+        HandleError::ConversionError(e)
     }
 }

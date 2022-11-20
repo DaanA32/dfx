@@ -8,7 +8,6 @@ use crate::tags;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
-use std::time::Instant;
 
 #[derive(Default, Clone, Debug)]
 pub struct FieldMap {
@@ -30,6 +29,13 @@ pub type FieldValue = Vec<u8>;
 #[derive(Clone, Debug)]
 pub enum FieldMapError {
     FieldNotFound(Tag),
+    ConversionError(ConversionError),
+}
+
+impl From<ConversionError> for FieldMapError {
+    fn from(err: ConversionError) -> Self {
+        FieldMapError::ConversionError(err)
+    }
 }
 
 #[derive(Default, Clone, Debug)]
@@ -81,11 +87,11 @@ impl Field {
     pub fn value(&self) -> &Vec<u8> {
         &self.1
     }
-    pub fn string_value(&self) -> String {
-        self.as_value().unwrap()
+    pub(crate) fn string_value(&self) -> Result<String, ConversionError> {
+        self.as_value()
     }
-    pub fn to_string_field(&self) -> String {
-        format!("{}={}", self.tag(), self.string_value())
+    pub(crate) fn to_string_field(&self) -> String {
+        format!("{}={}", self.tag(), self.as_value::<&str>().ok().unwrap_or(""))
     }
     pub fn as_value<'a, T>(&'a self) -> Result<T, ConversionError>
     where
@@ -107,10 +113,10 @@ impl Field {
     }
 
     pub(crate) fn to_usize(&self) -> Option<usize> {
-        match self.string_value().parse::<usize>() {
+        self.string_value().ok().map(|v| match v.parse::<usize>() {
             Ok(value) => Some(value),
             Err(_) => None,
-        }
+        }).flatten()
     }
 }
 
@@ -167,28 +173,28 @@ impl FieldMap {
     pub fn get_int(&self, tag: Tag) -> Result<u32, FieldMapError> {
         match self.fields.get(&tag) {
             None => Err(FieldMapError::FieldNotFound(tag)),
-            Some(value) => Ok(value.string_value().parse::<u32>().unwrap()),
+            Some(value) => Ok(value.as_value()?),
         }
     }
     pub fn get_string(&self, tag: Tag) -> Result<String, FieldMapError> {
         match self.fields.get(&tag) {
             None => Err(FieldMapError::FieldNotFound(tag)),
-            Some(value) => Ok(value.string_value()),
+            Some(value) => Ok(value.string_value()?),
         }
     }
     pub fn get_string_unchecked(&self, tag: Tag) -> String {
-        self.fields[&tag].string_value().into()
+        self.fields[&tag].string_value().unwrap().into() // explicit_unchecked
     }
     pub fn get_bool(&self, tag: Tag) -> bool {
-        self.fields[&tag].string_value() == "Y"
+        self.fields[&tag].string_value().ok() == Some("Y".into())
     }
-    pub fn get_datetime(&self, tag: Tag) -> DateTime<Utc> {
-        self.fields[&tag].as_value().unwrap()
+    pub fn get_datetime(&self, tag: Tag) -> Result<DateTime<Utc>, ConversionError> {
+        self.fields[&tag].as_value()
     }
     // VALUES
 
-    pub fn get_field_mut(&mut self, tag: Tag) -> &mut Field {
-        self.fields.get_mut(&tag).unwrap()
+    pub fn get_field_mut(&mut self, tag: Tag) -> Option<&mut Field> {
+        self.fields.get_mut(&tag)
     }
     pub fn is_field_set(&self, tag: Tag) -> bool {
         self.fields.contains_key(&tag)
@@ -205,11 +211,11 @@ impl FieldMap {
         self.groups.entry(group.field()).or_insert_with(Vec::new);
         self.groups
             .get_mut(&group.field())
-            .unwrap()
+            .unwrap() //checked
             .push(group.clone());
 
         // if (autoIncCounter)
-        if set_count.is_none() || set_count.unwrap() {
+        if set_count.unwrap_or(true) {
             // increment group size
 
             // int groupsize = _groups[group.Field].Count;
@@ -265,8 +271,8 @@ impl FieldMap {
             return Err(FieldMapError::FieldNotFound(field));
         }
 
-        // return _groups[field][num - 1];
-        Ok(&mut self.groups.get_mut(&field).unwrap()[index as usize])
+        //TODO (index - 1) try into usize => field not found
+        Ok(&mut self.groups.get_mut(&field).ok_or_else(|| FieldMapError::FieldNotFound(field))?[(index as usize - 1)])
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
@@ -296,7 +302,8 @@ impl FieldMap {
             //     _groups[field].RemoveAt(num - 1);
             self.groups
                 .get_mut(&field)
-                .unwrap()
+                .ok_or_else(|| FieldMapError::FieldNotFound(field))?
+                //TODO (index - 1) try into usize => field not found
                 .remove((index as usize) - 1);
         }
         Ok(())
@@ -327,9 +334,10 @@ impl FieldMap {
         let group_ref = self
             .groups
             .get_mut(&field)
-            .unwrap()
+            .ok_or_else(|| FieldMapError::FieldNotFound(field))?
+            //TODO (index - 1) try into usize => field not found
             .get_mut(index as usize - 1)
-            .unwrap();
+            .ok_or_else(|| FieldMapError::FieldNotFound(field))?;
         let group = std::mem::replace(group_ref, group);
 
         Ok(group)
@@ -493,7 +501,7 @@ impl FieldMap {
             //     sb.Append(field.Tag.ToString() + "=" + field.ToString());
             //     sb.Append(Message.SOH);
             sb.push_str(
-                format!("{}={}{}", field.tag(), field.string_value(), Message::SOH).as_str(),
+                format!("{}={}{}", field.tag(), field.string_value().unwrap(), Message::SOH).as_str(),
             );
         }
 

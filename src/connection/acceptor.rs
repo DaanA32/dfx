@@ -7,16 +7,21 @@ use std::{
 };
 
 use crate::{
-    connection::SocketSettings,
-    session::{self, Application, Session, SessionBuilder, SessionSetting, SessionSettings}, message_store::MessageStoreFactory, data_dictionary_provider::DataDictionaryProvider, logging::LogFactory, message_factory::MessageFactory,
+    session::{Application, SessionSetting, SessionSettings},
+    message_store::MessageStoreFactory,
+    data_dictionary_provider::DataDictionaryProvider,
+    logging::LogFactory,
+    message_factory::MessageFactory,
 };
 
 use super::{ConnectionError, SocketReactor, StreamFactory};
 
-type Builder = fn() -> Session;
-
-pub(crate) struct SocketAcceptorThread<App> {
+pub(crate) struct SocketAcceptorThread<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
     app: App,
+    store_factory: StoreFactory,
+    data_dictionary_provider: DataDictionaryProvider,
+    log_factory: LogFactory,
+    message_factory: MessageFactory,
     addr: SocketAddr,
     session_settings: Vec<SessionSetting>,
 }
@@ -82,7 +87,15 @@ where App: Application + Sync + Clone + 'static,
 
         //TODO group by port => Vec<SessionSetting>
         for (addr, session_settings) in self.session_settings.sessions_by_address() {
-            let ac = SocketAcceptorThread::new(self.app.clone(), addr, session_settings);
+            let ac = SocketAcceptorThread::new(
+                self.app.clone(),
+                self.store_factory.clone(),
+                self.data_dictionary_provider.clone(),
+                self.log_factory.clone(),
+                self.message_factory.clone(),
+                addr,
+                session_settings,
+            );
             let thread = ac.start(&self.running);
             self.thread.push(thread);
         }
@@ -101,10 +114,20 @@ where App: Application + Sync + Clone + 'static,
     }
 }
 
-impl<App: Application + Clone + Sync + 'static> SocketAcceptorThread<App> {
-    pub(crate) fn new(app: App, addr: SocketAddr, session_settings: Vec<SessionSetting>) -> Self {
+impl<App, SF, DDP, LF, MF> SocketAcceptorThread<App, SF, DDP, LF, MF>
+where App: Application + Sync + Clone + 'static,
+      SF: MessageStoreFactory + Send + Clone + 'static,
+      DDP: DataDictionaryProvider + Send + Clone + 'static,
+      LF: LogFactory + Send + Clone + 'static,
+      MF: MessageFactory + Send + Clone + 'static,
+{
+    pub(crate) fn new(app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF, addr: SocketAddr, session_settings: Vec<SessionSetting>) -> Self {
         SocketAcceptorThread {
             app,
+            store_factory,
+            data_dictionary_provider,
+            log_factory,
+            message_factory,
             addr,
             session_settings,
         }
@@ -137,10 +160,15 @@ impl<App: Application + Clone + Sync + 'static> SocketAcceptorThread<App> {
                     )?;
                     let session_settings = self.session_settings.clone();
                     let app = self.app.clone();
+                    let store_factory = self.store_factory.clone();
+                    let data_dictionary_provider = self.data_dictionary_provider.clone();
+                    let log_factory = self.log_factory.clone();
+                    let message_factory = self.message_factory.clone();
+
                     let t = thread::Builder::new()
                         .name(format!("socket-acceptor-connection-{n}"))
                         .spawn(move || {
-                            let reactor = SocketReactor::new(stream, None, session_settings, app);
+                            let reactor = SocketReactor::new(stream, session_settings, app, store_factory, data_dictionary_provider, log_factory, message_factory);
                             reactor.start()
                         })
                         .unwrap();

@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 
-use crate::message::Message;
 use crate::session::SessionId;
 
 pub trait MessageStore: Send {
@@ -86,7 +85,7 @@ impl MessageStore for MemoryMessageStore {
         assert!(begin_seq_num < end_seq_num);
         self.messages
             .range(begin_seq_num..=end_seq_num)
-            .map(|(k, v)| v)
+            .map(|(_, v)| v)
             .collect()
     }
 }
@@ -108,7 +107,7 @@ impl DefaultStoreFactory {
 }
 
 impl MessageStoreFactory for DefaultStoreFactory {
-    fn create(&self, session_id: &SessionId) -> Box<dyn MessageStore> {
+    fn create(&self, _session_id: &SessionId) -> Box<dyn MessageStore> {
         Box::new(MemoryMessageStore::new())
     }
 }

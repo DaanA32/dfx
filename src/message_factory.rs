@@ -41,7 +41,7 @@ impl MessageFactory for DefaultMessageFactory {
     }
 
     fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Group {
-        todo!()
+        todo!("{begin_string} {msg_type} {group_counter_tag}")
     }
 }
 //     factories: Hash

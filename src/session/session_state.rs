@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused)]
 use chrono::{DateTime, Utc};
 
 use crate::logging::Logger;
@@ -499,8 +501,8 @@ impl SessionState {
         self.msg_store.set(msg_seq_num, message_string)
     }
 
-    pub(crate) fn queue(&self, msg_seq_num: u32, msg: Message) {
-        todo!()
+    pub(crate) fn queue(&mut self, msg_seq_num: u32, msg: Message) {
+        self.message_queue.insert(msg_seq_num, msg);
     }
 }
 

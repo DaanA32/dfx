@@ -137,10 +137,13 @@ fn perform_steps(steps: Vec<TestStep>, port: u32) {
                 }
             }
             TestStep::ExpectConnect => {
+                println!("Existing: {stream:?}");
                 if stream.is_none() {
                     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
+                    println!("Waiting for connection.");
                     // println!("Runner: Awaiting connection");
-                    let (s, _) = listener.accept().expect("Connected Expected");
+                    let (s, addr) = listener.accept().expect("Connected Expected");
+                    println!("Accepted connection : {addr}.");
                     // println!("Runner: Connected");
                     s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
                     stream = Some(s);

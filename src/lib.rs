@@ -1,7 +1,7 @@
-#![allow(dead_code)]
-#![allow(unused)]
+// #![allow(dead_code)]
+// #![allow(unused)]
 #![allow(clippy::module_inception)]
-#![allow(clippy::too_many_arguments)]
+// #![allow(clippy::too_many_arguments)]
 // TODO remove above once closer to completed
 
 pub mod connection;
@@ -12,7 +12,6 @@ pub mod fields;
 mod fix_values;
 pub mod logging;
 pub mod message;
-mod message_builder;
 mod message_factory;
 pub mod message_store;
 pub mod parser;

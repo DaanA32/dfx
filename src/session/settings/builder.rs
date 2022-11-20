@@ -1,4 +1,4 @@
-use chrono::{NaiveTime, FixedOffset, Weekday};
+use chrono::NaiveTime;
 
 use crate::{session::{SessionId, SessionSchedule}, fields::converters::datetime::DateTimeFormat};
 
@@ -406,7 +406,7 @@ impl DynamicSessionSettingBuilder {
         let conn_type: Option<Result<ConnectionType, _>> =
             self.connection_type.as_ref().map(|v| v.as_str().try_into());
         match conn_type {
-            Some(Ok(conn)) => (),
+            Some(Ok(_)) => (),
             _ => errors
                 .push("ConnectionType must be set to either 'acceptor' or 'initiator'.".into()),
         }

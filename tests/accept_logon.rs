@@ -15,7 +15,6 @@ use common::runner;
 use common::TestApplication;
 
 #[test]
-#[ignore]
 pub fn test_accept() {
     let app = TestApplication;
     let session_settings = SessionSettings::from_file("tests/acceptor.cfg").unwrap();
