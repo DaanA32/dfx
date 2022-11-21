@@ -10,7 +10,7 @@ use serde::Deserializer;
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fs::File;
 use std::ops::Deref;
@@ -67,9 +67,9 @@ pub struct DataDictionary {
     check_user_defined_fields: bool,
     allow_unknown_message_fields: bool,
     version: Option<String>,
-    fields_by_tag: HashMap<Tag, DDField>,
-    fields_by_name: HashMap<String, DDField>,
-    messages: HashMap<String, DDMap>,
+    fields_by_tag: BTreeMap<Tag, DDField>,
+    fields_by_name: BTreeMap<String, DDField>,
+    messages: BTreeMap<String, DDMap>,
     // spec: FixSpec,
     header: DDMap,
     trailer: DDMap,
@@ -577,15 +577,15 @@ impl DataDictionary {
         }
     }
 
-    pub fn fields_by_name(&self) -> &HashMap<String, DDField> {
+    pub fn fields_by_name(&self) -> &BTreeMap<String, DDField> {
         &self.fields_by_name
     }
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct DDMap {
-    fields: HashMap<Tag, DDField>,
-    groups: HashMap<Tag, DDGroup>,
+    fields: BTreeMap<Tag, DDField>,
+    groups: BTreeMap<Tag, DDGroup>,
     required_fields: HashSet<Tag>,
 }
 impl DDMap {
@@ -640,9 +640,9 @@ impl<D: DerefMut<Target = DDMap>> AsDDMap for D {
 
 fn parse_msg_el<D: AsDDMap + 'static>(
     ddmap: D,
-    parts: &HashMap<String, MessagePart>,
-    fields_by_name: &HashMap<String, DDField>,
-    components_by_name: &HashMap<String, HashMap<String, MessagePart>>,
+    parts: &BTreeMap<String, MessagePart>,
+    fields_by_name: &BTreeMap<String, DDField>,
+    components_by_name: &BTreeMap<String, BTreeMap<String, MessagePart>>,
     component_required: Option<bool>,
 ) -> Result<D, MessageValidationError> {
     let mut org = ddmap;
@@ -745,7 +745,7 @@ pub struct DDField {
     // public String Name;
     name: String,
     // public Dictionary<String, String> EnumDict;
-    enum_dictionary: HashMap<String, String>,
+    enum_dictionary: BTreeMap<String, String>,
     // public String FixFldType;
     field_type: String,
     // TODO type?
@@ -764,7 +764,7 @@ impl DDField {
         // public String Name;
         name: String,
         // public Dictionary<String, String> EnumDict;
-        enum_dictionary: HashMap<String, String>,
+        enum_dictionary: BTreeMap<String, String>,
         // public String FixFldType;
         field_type: String,
         // TODO type?
@@ -795,7 +795,7 @@ impl DDField {
     pub fn has_enums(&self) -> bool {
         !self.enum_dictionary.is_empty()
     }
-    pub fn enums(&self) -> &HashMap<String, String> {
+    pub fn enums(&self) -> &BTreeMap<String, String> {
         &self.enum_dictionary
     }
     pub fn field_type(&self) -> &String {
@@ -893,10 +893,10 @@ pub struct Header {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    values: HashMap<String, MessagePart>,
+    values: BTreeMap<String, MessagePart>,
 }
 impl Deref for Header {
-    type Target = HashMap<String, MessagePart>;
+    type Target = BTreeMap<String, MessagePart>;
     fn deref(&self) -> &Self::Target {
         &self.values
     }
@@ -917,7 +917,7 @@ pub struct Messages {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    values: HashMap<String, MessageDefinition>,
+    values: BTreeMap<String, MessageDefinition>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -928,7 +928,7 @@ pub struct Fields {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    values: HashMap<String, FieldDefinition>,
+    values: BTreeMap<String, FieldDefinition>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -941,7 +941,7 @@ pub struct Components {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    values: HashMap<String, ComponentDefinition>,
+    values: BTreeMap<String, ComponentDefinition>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -954,7 +954,7 @@ pub struct Trailer {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    values: HashMap<String, MessagePart>,
+    values: BTreeMap<String, MessagePart>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -984,7 +984,7 @@ pub struct ComponentDefinition {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    values: HashMap<String, MessagePart>,
+    values: BTreeMap<String, MessagePart>,
 }
 
 impl Named for ComponentDefinition {
@@ -998,7 +998,7 @@ pub(crate) trait Named {
 }
 
 fn ser_peer_public<S, V: Named + Serialize>(
-    peer_public: &HashMap<String, V>,
+    peer_public: &BTreeMap<String, V>,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
@@ -1010,7 +1010,7 @@ where
 
 fn de_peer_public<'de, D, V: Named + Deserialize<'de>>(
     deserializer: D,
-) -> Result<HashMap<String, V>, D::Error>
+) -> Result<BTreeMap<String, V>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -1049,7 +1049,7 @@ pub struct MessageDefinition {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    fields: HashMap<String, MessagePart>,
+    fields: BTreeMap<String, MessagePart>,
 }
 
 impl Named for MessageDefinition {
@@ -1070,7 +1070,7 @@ pub struct GroupDefinition {
         serialize_with = "ser_peer_public",
         deserialize_with = "de_peer_public"
     )]
-    fields: HashMap<String, MessagePart>,
+    fields: BTreeMap<String, MessagePart>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1082,7 +1082,7 @@ pub struct FieldDefinition {
     #[serde(default, rename = "$value")]
     values: Vec<FieldValue>,
     // #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
-    // values: HashMap<String, FieldValue>,
+    // values: BTreeMap<String, FieldValue>,
 }
 
 impl Named for FieldDefinition {
@@ -1401,7 +1401,7 @@ mod tests {
         assert_eq!(bytes.iter().map(|b| *b as char).collect::<String>().trim(), inner_str.iter().map(|b| *b as char).collect::<String>().trim());
     }
 
-    fn messages(bytes: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
+    fn messages(bytes: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
         let mut reader = Reader::from_reader(bytes);
         reader.trim_text(true);
         let mut map = Vec::new();
@@ -1443,7 +1443,7 @@ mod tests {
         Ok(map)
     }
 
-    fn message(bytes: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<DDMap, XmlError> {
+    fn message(bytes: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<DDMap, XmlError> {
         todo!()
     }
 
@@ -1529,11 +1529,11 @@ mod tests {
         }
     }
 
-    fn components(components_span: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
+    fn components(components_span: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
         todo!()
     }
 
-    fn component(component_span: &[u8], fields_by_name: &HashMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
+    fn component(component_span: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
         todo!()
     }
 
@@ -1564,7 +1564,7 @@ mod tests {
                             let number = e.try_get_attribute("number")?.ok_or(XmlError::NoValue { name: "number" })?.unescape_value()?;
                             let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?;
                             let field_type = e.try_get_attribute("type")?.ok_or(XmlError::NoValue { name: "type" })?.unescape_value()?;
-                            let enum_values = HashMap::new();
+                            let enum_values = BTreeMap::new();
                             let field = DDField::new(number.parse()?, name.to_string(), enum_values, field_type.to_string());
                             map.push(field);
                         },
@@ -1578,8 +1578,8 @@ mod tests {
         Ok(map)
     }
 
-    fn enum_values(bytes: &[u8]) -> Result<HashMap<String, String>, XmlError> {
-        let mut values = HashMap::new();
+    fn enum_values(bytes: &[u8]) -> Result<BTreeMap<String, String>, XmlError> {
+        let mut values = BTreeMap::new();
         let mut reader = Reader::from_reader(bytes);
         reader.trim_text(true);
 
