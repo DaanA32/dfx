@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use dfx_core::field_map::Tag;
 use dfx_core::field_map::Field;
 use dfx_core::fields::ConversionError;
+#[allow(unused)]
 use dfx_core::fields::converters::*;
 
 /// LiquidityPctHigh
@@ -27,7 +28,7 @@ impl<'a> LiquidityPctHigh<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Field> for LiquidityPctHigh<'a> {
+impl<'a> std::convert::TryFrom<&'a Field> for LiquidityPctHigh<'a> {
     type Error = ConversionError;
     fn try_from(field: &'a Field) -> Result<Self, ConversionError> {
         if field.tag() != Self::tag() {
@@ -37,7 +38,7 @@ impl<'a> TryFrom<&'a Field> for LiquidityPctHigh<'a> {
         Ok(Self { inner: Cow::Borrowed(field) })
     }
 }
-impl<'a> TryFrom<Field> for LiquidityPctHigh<'a> {
+impl<'a> std::convert::TryFrom<Field> for LiquidityPctHigh<'a> {
     type Error = ConversionError;
     fn try_from(field: Field) -> Result<Self, ConversionError> {
         if field.tag() != Self::tag() {

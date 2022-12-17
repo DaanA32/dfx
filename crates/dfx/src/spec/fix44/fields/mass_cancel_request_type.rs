@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use dfx_core::field_map::Tag;
 use dfx_core::field_map::Field;
 use dfx_core::fields::ConversionError;
+#[allow(unused)]
 use dfx_core::fields::converters::*;
 
 /// MassCancelRequestType
@@ -27,7 +28,7 @@ impl<'a> MassCancelRequestType<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Field> for MassCancelRequestType<'a> {
+impl<'a> std::convert::TryFrom<&'a Field> for MassCancelRequestType<'a> {
     type Error = ConversionError;
     fn try_from(field: &'a Field) -> Result<Self, ConversionError> {
         if field.tag() != Self::tag() {
@@ -37,7 +38,7 @@ impl<'a> TryFrom<&'a Field> for MassCancelRequestType<'a> {
         Ok(Self { inner: Cow::Borrowed(field) })
     }
 }
-impl<'a> TryFrom<Field> for MassCancelRequestType<'a> {
+impl<'a> std::convert::TryFrom<Field> for MassCancelRequestType<'a> {
     type Error = ConversionError;
     fn try_from(field: Field) -> Result<Self, ConversionError> {
         if field.tag() != Self::tag() {
