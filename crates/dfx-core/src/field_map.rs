@@ -170,8 +170,8 @@ impl FieldMap {
         self.set_field_base(field.into(), None);
     }
 
-    pub fn get_field(&self, tag: Tag) -> &Field {
-        &self.fields[&tag]
+    pub fn get_field(&self, tag: Tag) -> Option<&Field> {
+        self.fields.get(&tag)
     }
 
     // VALUES

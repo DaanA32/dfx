@@ -504,6 +504,10 @@ impl SessionState {
     pub(crate) fn queue(&mut self, msg_seq_num: u32, msg: Message) {
         self.message_queue.insert(msg_seq_num, msg);
     }
+
+    pub(crate) fn get_messages(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
+        self.msg_store.get(begin_seq_num, end_seq_num).iter().map(|v| v.to_owned().to_owned()).collect()
+    }
 }
 
 /// All time args are in milliseconds

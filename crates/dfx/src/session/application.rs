@@ -32,9 +32,9 @@ pub trait Application: Send {
     ) -> Result<(), ApplicationError>;
     fn to_app(
         &mut self,
-        message: Message,
+        message: &mut Message,
         session_id: &SessionId,
-    ) -> Result<Message, ApplicationError>;
+    ) -> Result<(), ApplicationError>;
     fn from_app(
         &mut self,
         message: &Message,
@@ -56,6 +56,7 @@ pub mod tests {
 
     use super::{Application, ApplicationExt};
     use dfx_core::message::Message;
+    use crate::session;
 
     pub struct TestApplication;
 
@@ -99,10 +100,10 @@ pub mod tests {
 
         fn to_app(
             &mut self,
-            _message: Message,
+            _message: &mut Message,
             _session_id: &SessionId,
-        ) -> Result<Message, super::ApplicationError> {
-            Ok(_message)
+        ) -> Result<(), super::ApplicationError> {
+            Ok(())
         }
 
         fn from_app(

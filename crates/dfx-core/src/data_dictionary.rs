@@ -120,8 +120,9 @@ impl DataDictionary {
             .values()
             .map(|m| {
                 let key = m.msgtype.clone();
+                let name = m.name.clone();
                 let ddmap = parse_msg_el(
-                    DDMap::default(),
+                    DDMap::new(name),
                     &m.fields,
                     &fields_by_name,
                     &components_by_name,
@@ -132,7 +133,7 @@ impl DataDictionary {
             })
             .collect();
         let header = parse_msg_el(
-            DDMap::default(),
+            DDMap::new("header".into()),
             &spec.header.values,
             &fields_by_name,
             &components_by_name,
@@ -140,7 +141,7 @@ impl DataDictionary {
         )
         .unwrap();
         let trailer = parse_msg_el(
-            DDMap::default(),
+            DDMap::new("trailer".into()),
             &spec.trailer.values,
             &fields_by_name,
             &components_by_name,
@@ -580,6 +581,10 @@ impl DataDictionary {
     pub fn fields_by_name(&self) -> &BTreeMap<String, DDField> {
         &self.fields_by_name
     }
+
+    pub fn messages(&self) -> &BTreeMap<String, DDMap> {
+        &self.messages
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -587,8 +592,17 @@ pub struct DDMap {
     fields: BTreeMap<Tag, DDField>,
     groups: BTreeMap<Tag, DDGroup>,
     required_fields: HashSet<Tag>,
+    name: String,
 }
 impl DDMap {
+    pub fn new(name: String) -> Self {
+        DDMap {
+            fields: BTreeMap::default(),
+            groups: BTreeMap::default(),
+            required_fields: HashSet::<Tag>::default(),
+            name
+        }
+    }
     pub fn add_field(&mut self, field: DDField) {
         self.fields.insert(field.tag(), field);
     }
@@ -615,6 +629,15 @@ impl DDMap {
     }
     pub fn add_required_field(&mut self, tag: Tag) {
         self.required_fields.insert(tag);
+    }
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+    pub fn fields(&self) -> &BTreeMap<Tag, DDField> {
+        &self.fields
+    }
+    pub fn groups(&self) -> &BTreeMap<Tag, DDGroup> {
+        &self.groups
     }
 }
 trait AsDDMap {
@@ -708,6 +731,7 @@ fn parse_msg_el<D: AsDDMap + 'static>(
                 // ddgrp grp = new ddgrp();
                 let mut grp = DDGroup {
                     num_fld: dd_field.tag(),
+                    name: format!("{}Group", dd_field.name()),
                     ..Default::default()
                 };
                 // if (required)
@@ -811,9 +835,13 @@ pub struct DDGroup {
     num_fld: u32,
     delim: u32,
     required: bool,
+    name: String,
     map: DDMap,
 }
 impl DDGroup {
+    pub fn name(&self) -> &String {
+        &self.name
+    }
     pub fn num_fld(&self) -> u32 {
         self.num_fld
     }

@@ -7,6 +7,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use chashmap::CHashMap;
+use chrono::NaiveDateTime;
 use chrono::Utc;
 use lazy_static::lazy_static;
 
@@ -379,10 +380,10 @@ impl Session {
         if self.session_id.is_fixt() {
             logon.set_tag_value(tags::DefaultApplVerID, &self.sender_default_appl_ver_id.as_ref().unwrap());
         }
-        logon.set_field_base(other.get_field(tags::HeartBtInt).clone(), None);
+        logon.set_field_base(other.get_field(tags::HeartBtInt).unwrap().clone(), None);
 
         if self.enable_last_msg_seq_num_processed {
-            logon.set_field_base(other.header().get_field(tags::MsgSeqNum).clone(), None);
+            logon.set_field_base(other.header().get_field(tags::MsgSeqNum).unwrap().clone(), None);
         }
 
         self.initialize_header(&mut logon, None);
@@ -409,7 +410,7 @@ impl Session {
                 let field = other
                     .as_ref()
                     .unwrap()
-                    .get_field(tags::LastMsgSeqNumProcessed);
+                    .get_field(tags::LastMsgSeqNumProcessed).unwrap();
                 logout
                     .header_mut()
                     .set_field_base(field.clone(), Some(true));
@@ -438,11 +439,11 @@ impl Session {
             .create(&self.session_id.begin_string(), MsgType::TEST_REQUEST)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
-        heartbeat.set_field_base(message.get_field(tags::TestReqID).clone(), None);
+        heartbeat.set_field_base(message.get_field(tags::TestReqID).unwrap().clone(), None);
         if self.enable_last_msg_seq_num_processed {
             heartbeat
                 .header_mut()
-                .set_field_base(message.get_field(tags::MsgSeqNum).clone(), None);
+                .set_field_base(message.get_field(tags::MsgSeqNum).unwrap().clone(), None);
         }
         self.send_raw(heartbeat, 0).unwrap()
     }
@@ -519,7 +520,8 @@ impl Session {
             }
             Ok(message)
         } else {
-            self.application.to_app(message, &self.session_id)
+            self.application.to_app(&mut message, &self.session_id)?;
+            Ok(message)
         };
 
         if matches!(message, Err(ApplicationError::DoNotSend(_))) {
@@ -618,6 +620,10 @@ impl Session {
         }
 
         self.insert_sending_time(message)
+    }
+
+    fn insert_orig_sending_time(&self, message: &mut Message, sending_time: NaiveDateTime) {
+        todo!()
     }
 
     fn insert_sending_time(&self, message: &mut Message) {
@@ -965,107 +971,95 @@ impl Session {
         Ok(())
     }
 
-    fn next_resend_request(&self, resend_request: Message) -> Result<(), HandleError> {
-        // if (!Verify(resendReq, false, false))
-        //     return;
-        // try
-        // {
-        //     int msgSeqNum = 0;
-        //     if (!(this.IgnorePossDupResendRequests && resendReq.Header.IsSetField(Tags.PossDupFlag)))
-        //     {
-        //         int begSeqNo = resendReq.GetInt(Fields.Tags.BeginSeqNo);
-        //         int endSeqNo = resendReq.GetInt(Fields.Tags.EndSeqNo);
-        //         this.Log.OnEvent("Got resend request from " + begSeqNo + " to " + endSeqNo);
+    fn next_resend_request(&mut self, resend_request: Message) -> Result<(), HandleError> {
+        let resend_request = self.verify_opt(resend_request, false, false)?;
+        if let Some(resend_request) = resend_request {
+            let mut msg_seq_num = 0;
+            if !(self._ignore_poss_dup_resend_requests && resend_request.header().is_field_set(tags::PossDupFlag)) {
+                let beg_seq_no = resend_request.get_int(tags::BeginSeqNo)?;
+                let mut end_seq_no = resend_request.get_int(tags::EndSeqNo)?;
+                self.log.on_event(format!("Got resend request from {beg_seq_no} to {end_seq_no}").as_str());
 
-        //         if ((endSeqNo == 999999) || (endSeqNo == 0))
-        //         {
-        //             endSeqNo = state_.GetNextSenderMsgSeqNum() - 1;
-        //         }
+                if end_seq_no == 999999 || end_seq_no == 0 {
+                    end_seq_no = self.state.next_sender_msg_seq_num() - 1;
+                }
 
-        //         if (!PersistMessages)
-        //         {
-        //             endSeqNo++;
-        //             int next = state_.GetNextSenderMsgSeqNum();
-        //             if (endSeqNo > next)
-        //                 endSeqNo = next;
-        //             GenerateSequenceReset(resendReq, begSeqNo, endSeqNo);
-        //             msgSeqNum = resendReq.Header.GetInt(Tags.MsgSeqNum);
-        //             if (!IsTargetTooHigh(msgSeqNum) && !IsTargetTooLow(msgSeqNum))
-        //             {
-        //                 state_.IncrNextTargetMsgSeqNum();
-        //             }
-        //             return;
-        //         }
+                if !self.persist_messages {
+                    end_seq_no += 1;
+                    let next = self.state.next_sender_msg_seq_num();
+                    if end_seq_no > next {
+                        end_seq_no = next;
+                    }
+                    self.generate_sequence_reset(&resend_request, beg_seq_no, end_seq_no)?;
+                    msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
+                    if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num) {
+                        self.state.incr_next_target_msg_seq_num();
+                    }
+                    return Ok(());
+                }
 
-        //         List<string> messages = new List<string>();
-        //         state_.Get(begSeqNo, endSeqNo, messages);
-        //         int current = begSeqNo;
-        //         int begin = 0;
-        //         foreach (string msgStr in messages)
-        //         {
-        //             Message msg = new Message();
-        //             msg.FromString(msgStr, true, this.SessionDataDictionary, this.ApplicationDataDictionary, msgFactory_);
-        //             msgSeqNum = msg.Header.GetInt(Tags.MsgSeqNum);
+                let mut current = beg_seq_no;
+                let mut begin = 0;
+                for msg_str in self.state.get_messages(beg_seq_no, end_seq_no) {
 
-        //             if ((current != msgSeqNum) && begin == 0)
-        //             {
-        //                 begin = current;
-        //             }
+                    let mut msg = Message::default();
+                    msg.from_string(
+                        msg_str.as_bytes(),
+                        true,
+                        Some(&self.session_data_dictionary),
+                        Some(&self.application_data_dictionary),
+                        Some(self.msg_factory.as_ref()),
+                        false
+                    );
+                    msg_seq_num = msg.header().get_int(tags::MsgSeqNum)?;
 
-        //             if (IsAdminMessage(msg) && !(this.ResendSessionLevelRejects && msg.Header.GetString(Tags.MsgType) == MsgType.REJECT))
-        //             {
-        //                 if (begin == 0)
-        //                 {
-        //                     begin = msgSeqNum;
-        //                 }
-        //             }
-        //             else
-        //             {
+                    if current != msg_seq_num && begin == 0 {
+                        begin = current;
+                    }
 
-        //                 initializeResendFields(msg);
-        //                 if(!ResendApproved(msg, SessionID))
-        //                 {
-        //                     continue;
-        //                 }
+                    if msg.is_admin() && !(self._resend_session_level_rejects && msg.header().get_string(tags::MsgType)? == MsgType::REJECT) {
+                        if begin == 0 {
+                            begin = msg_seq_num;
+                        }
+                    } else {
+                        self.initialize_resend_fields(&mut msg);
+                        let approved = self.resend_approved(msg);
+                        if let Some(mut msg) = approved {
+                            if begin != 0 {
+                                self.generate_sequence_reset(&resend_request, beg_seq_no, end_seq_no)?;
+                            }
 
-        //                 if (begin != 0)
-        //                 {
-        //                     GenerateSequenceReset(resendReq, begin, msgSeqNum);
-        //                 }
-        //                 Send(msg.ToString());
-        //                 begin = 0;
-        //             }
-        //             current = msgSeqNum + 1;
-        //         }
+                            self.send(msg.to_string_mut());
+                            begin = 0;
+                        }else{
+                            continue;
+                        }
 
-        //         int nextSeqNum = state_.GetNextSenderMsgSeqNum();
-        //         if (++endSeqNo > nextSeqNum)
-        //         {
-        //             endSeqNo = nextSeqNum;
-        //         }
+                    }
+                    current = msg_seq_num + 1;
+                }
 
-        //         if (begin == 0)
-        //         {
-        //             begin = current;
-        //         }
+                let next_seq_num = self.state.next_sender_msg_seq_num();
+                end_seq_no += 1;
+                if end_seq_no > next_seq_num {
+                    end_seq_no = next_seq_num;
+                }
+                if begin == 0 {
+                    begin = current;
+                }
 
-        //         if (endSeqNo > begin)
-        //         {
-        //             GenerateSequenceReset(resendReq, begin, endSeqNo);
-        //         }
-        //     }
-        //     msgSeqNum = resendReq.Header.GetInt(Tags.MsgSeqNum);
-        //     if (!IsTargetTooHigh(msgSeqNum) && !IsTargetTooLow(msgSeqNum))
-        //     {
-        //         state_.IncrNextTargetMsgSeqNum();
-        //     }
-
-        // }
-        // catch (System.Exception e)
-        // {
-        //     this.Log.OnEvent("ERROR during resend request " + e.Message);
-        // }
-        todo!("session::next_resend_request {resend_request}")
+                if end_seq_no > begin {
+                    self.generate_sequence_reset(&resend_request, beg_seq_no, end_seq_no)?;
+                }
+            }
+            msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
+            if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num) {
+                self.state.incr_next_target_msg_seq_num();
+            }
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 
     /// This will pass the message into the from_admin / from_app methods from the Application
@@ -1476,6 +1470,53 @@ impl Session {
 
     pub(crate) fn set_session_id(&mut self, clone: SessionId) {
         self.session_id = clone;
+    }
+
+    fn generate_sequence_reset(
+        &self,
+        resend_request: &Message,
+        start_seq_num: u32,
+        end_seq_num: u32,
+    ) -> Result<(), HandleError> {
+        // string beginString = this.SessionID.BeginString;
+        // Message sequenceReset = msgFactory_.Create(beginString, Fields.MsgType.SEQUENCE_RESET);
+        // InitializeHeader(sequenceReset);
+        // int newSeqNo = endSeqNo;
+        // sequenceReset.Header.SetField(new PossDupFlag(true));
+        // InsertOrigSendingTime(sequenceReset.Header, sequenceReset.Header.GetDateTime(Tags.SendingTime));
+
+        // sequenceReset.Header.SetField(new MsgSeqNum(beginSeqNo));
+        // sequenceReset.SetField(new NewSeqNo(newSeqNo));
+        // sequenceReset.SetField(new GapFillFlag(true));
+        // if (receivedMessage != null && this.EnableLastMsgSeqNumProcessed)
+        // {
+        //     try
+        //     {
+        //         sequenceReset.Header.SetField(new Fields.LastMsgSeqNumProcessed(receivedMessage.Header.GetInt(Tags.MsgSeqNum)));
+        //     }
+        //     catch (FieldNotFoundException)
+        //     {
+        //         this.Log.OnEvent("Error: Received message without MsgSeqNum: " + receivedMessage);
+        //     }
+        // }
+        // SendRaw(sequenceReset, beginSeqNo);
+        // this.Log.OnEvent("Sent SequenceReset TO: " + newSeqNo);
+        todo!("{resend_request:?} {start_seq_num} {end_seq_num}")
+    }
+
+    fn initialize_resend_fields(&self, msg: &mut Message) {
+        let sending_time = msg.header().get_datetime(tags::SendingTime).unwrap();
+        self.insert_orig_sending_time(msg, sending_time.naive_utc());
+        msg.header_mut().set_tag_value(tags::PossDupFlag, true);
+        self.insert_sending_time(msg);
+    }
+
+    fn resend_approved(&mut self, mut msg: Message) -> Option<Message> {
+        match self.application.to_app(&mut msg, &self.session_id) {
+            Err(ApplicationError::DoNotSend(_)) => None,
+            Ok(()) => Some(msg),
+            _ => Some(msg)
+        }
     }
 }
 
