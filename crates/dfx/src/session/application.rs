@@ -135,10 +135,10 @@ pub mod tests {
     impl ApplicationExt for TestApplication {
         fn early_intercept(
             &mut self,
-            _message: Message,
+            message: Message,
             _session_id: &SessionId,
         ) -> Result<Message, super::ApplicationError> {
-            todo!()
+            Ok(message)
         }
     }
     #[test]

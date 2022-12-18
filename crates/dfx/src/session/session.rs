@@ -9,6 +9,7 @@ use std::time::Instant;
 use chashmap::CHashMap;
 use chrono::NaiveDateTime;
 use chrono::Utc;
+use dfx_core::fix_values;
 use lazy_static::lazy_static;
 
 use dfx_core::data_dictionary::DataDictionary;
@@ -623,7 +624,23 @@ impl Session {
     }
 
     fn insert_orig_sending_time(&self, message: &mut Message, sending_time: NaiveDateTime) {
-        todo!()
+        // bool fix42OrAbove = false;
+        // if (this.SessionID.BeginString == FixValues.BeginString.FIXT11)
+        //     fix42OrAbove = true;
+        // else
+        //     fix42OrAbove = this.SessionID.BeginString.CompareTo(FixValues.BeginString.FIX42) >= 0;
+
+        // header.SetField(new OrigSendingTime(sendingTime, fix42OrAbove ? TimeStampPrecision : TimeStampPrecision.Second ) );
+        let fix42_or_above = self.session_id.begin_string() == BeginString::FIXT11 || self.session_id.begin_string() >= BeginString::FIX42;
+        let precision = if fix42_or_above {
+            self.time_stamp_precision.as_datetime_format()
+        } else {
+            DateTimeFormat::Seconds.as_datetime_format()
+        };
+        let send_time = format!("{}", sending_time.format(precision));
+        message
+            .header_mut()
+            .set_tag_value(tags::OrigSendingTime, &send_time);
     }
 
     fn insert_sending_time(&self, message: &mut Message) {

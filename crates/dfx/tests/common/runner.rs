@@ -211,7 +211,7 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) {
                     break;
                 }
             }
-            Err(_) => todo!(),
+            Err(_) => panic!("Test failed reading fix message."),
         };
     }
     let other = other.expect("Read a message");

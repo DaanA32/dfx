@@ -497,7 +497,6 @@ impl SessionSetting {
     // pub(crate) fn create(&self,
     //     app: Box<dyn Application>,
     // ) -> Session {
-    //     todo!()
     // }
     // pub(crate) fn create(&self,
     //     app: Box<dyn Application>,
