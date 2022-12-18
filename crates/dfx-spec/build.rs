@@ -189,7 +189,7 @@ fn generate_message(message: &DDMap) -> String {
 //TODO move to codegen crate?
 fn codegen(filename: &str) {
     // let out_dir = std::env::var_os("out_dir").unwrap();
-    let out_dir = "src/spec";
+    let out_dir = "src/";
     let data_dictionary = DataDictionary::from_file(filename).expect("Unable to read filename {filename}");
 
     let version = data_dictionary.version().unwrap();

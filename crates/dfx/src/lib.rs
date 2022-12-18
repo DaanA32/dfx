@@ -12,4 +12,3 @@ pub mod parser;
 pub mod session;
 
 pub use dfx_core::*;
-pub mod spec;
