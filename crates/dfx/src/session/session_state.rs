@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use crate::session::ResetRange;
 
+#[derive(Debug)]
 pub(crate) struct SessionState {
     is_enabled: bool,
     is_initiator: bool,

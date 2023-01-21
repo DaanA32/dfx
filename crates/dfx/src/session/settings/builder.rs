@@ -455,7 +455,7 @@ impl DynamicSessionSettingBuilder {
                 session_qualifier: self.session_qualifier,
                 accept_addr: format!(
                     "{}:{}",
-                    self.socket_accept_host.unwrap(),
+                    self.socket_accept_host.unwrap_or_else(|| "127.0.0.1".to_string()),
                     self.socket_accept_port.unwrap()
                 )
                 .parse()

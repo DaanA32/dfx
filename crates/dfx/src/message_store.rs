@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use dfx_core::session_id::SessionId;
 
-pub trait MessageStore: Send {
+pub trait MessageStore: Send + std::fmt::Debug {
     fn reset(&mut self);
     fn creation_time(&self) -> Option<DateTime<Utc>>;
     fn refresh(&mut self);
@@ -21,6 +21,7 @@ pub trait MessageStore: Send {
     fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<&String>;
 }
 
+#[derive(Debug)]
 pub(crate) struct MemoryMessageStore {
     messages: BTreeMap<u32, String>,
     next_sender_msg_seq_num: u32,

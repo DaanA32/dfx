@@ -15,7 +15,7 @@ use dfx_core::session_id::SessionId;
 //     ($target:expr, $($arg:tt)+) => ($target.on_incoming($($arg)+))
 // }
 
-pub trait Logger: Send {
+pub trait Logger: Send + std::fmt::Debug {
     fn on_incoming(&self, incoming: &str);
     fn on_outgoing(&self, outgoing: &str);
     fn on_event(&self, event: &str);

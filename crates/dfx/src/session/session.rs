@@ -18,6 +18,7 @@ use dfx_core::data_dictionary_provider::DataDictionaryProvider;
 use dfx_core::field_map::Field;
 use dfx_core::field_map::FieldMapError;
 use dfx_core::field_map::Tag;
+use crate::connection::ConnectionError;
 use crate::fields::*;
 use dfx_core::fields::ConversionError;
 use dfx_core::fields::converters::datetime::DateTimeFormat;
@@ -389,7 +390,9 @@ impl Session {
 
         self.initialize_header(&mut logon, None);
         let sent_logon = self.send_raw(logon, 0).unwrap();
+        let sent_logon = true; //FIXME check if logon works?
         self.state.set_sent_logon(sent_logon);
+        // println!("{sent_logon} -> {:?}", self.state);
         self.state.sent_logon()
     }
 
@@ -437,7 +440,7 @@ impl Session {
     fn generate_heartbeat_other(&mut self, message: &Message) -> bool {
         let mut heartbeat = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::TEST_REQUEST)
+            .create(&self.session_id.begin_string(), MsgType::HEARTBEAT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         heartbeat.set_field_base(message.get_field(tags::TestReqID).unwrap().clone(), None);
@@ -549,7 +552,6 @@ impl Session {
     fn initialize_header(&mut self, message: &mut Message, seq_num: Option<u32>) {
         let seq_num = seq_num.unwrap_or(0);
         // state_.LastSentTimeDT = DateTime.UtcNow;
-        //self.state.set_last_received_time_dt(Utc::now()); // TODO?
         self.state.set_last_received_time_dt(Instant::now());
 
         // m.Header.SetField(new Fields.BeginString>(this.SessionID.BeginString));
@@ -673,6 +675,11 @@ impl Session {
         &mut self.log
     }
 
+    // TODO!!! change to fn(&mut self, msg: Vec<u8>) -> Result<(), dfx::Error> IMPORTANT
+    // enum dfx::Error {
+    //     ...
+    //     SessionDisconnect { context, reason }
+    // }
     pub(crate) fn next_msg(&mut self, msg: Vec<u8>) {
         self.log.on_incoming(&String::from_utf8_lossy(&msg));
 
@@ -1272,7 +1279,7 @@ impl Session {
             .create(&begin_string, MsgType::RESEND_REQUEST)?;
 
         resend_request.set_tag_value(tags::BeginSeqNo, format!("{}", start_seq_num).as_str());
-        resend_request.set_tag_value(tags::BeginSeqNo, format!("{}", end_seq_num).as_str());
+        resend_request.set_tag_value(tags::EndSeqNo, format!("{}", end_seq_num).as_str());
 
         self.initialize_header(&mut resend_request, None);
         if self.send_raw(resend_request, 0)? {
@@ -1413,7 +1420,7 @@ impl Session {
         } else if begin_string.as_str() >= BeginString::FIX42 {
             0
         } else {
-            99999
+            999999
         };
 
         if !self.generate_resend_request_range(begin_string, begin_seq_num, end_chunk_seq_num)? {
@@ -1490,23 +1497,33 @@ impl Session {
     }
 
     fn generate_sequence_reset(
-        &self,
-        resend_request: &Message,
-        start_seq_num: u32,
-        end_seq_num: u32,
+        &mut self,
+        received_message: &Message,
+        begin_seq_no: u32,
+        end_seq_no: u32,
     ) -> Result<(), HandleError> {
         // string beginString = this.SessionID.BeginString;
+        let begin_string = self.session_id.begin_string();
         // Message sequenceReset = msgFactory_.Create(beginString, Fields.MsgType.SEQUENCE_RESET);
+        let mut sequence_reset = self.msg_factory.create(begin_string, MsgType::SEQUENCE_RESET)?;
         // InitializeHeader(sequenceReset);
+        self.initialize_header(&mut sequence_reset, None);
         // int newSeqNo = endSeqNo;
+        let new_seq_no = end_seq_no;
         // sequenceReset.Header.SetField(new PossDupFlag(true));
+        sequence_reset.header_mut().set_tag_value(tags::PossDupFlag, true);
         // InsertOrigSendingTime(sequenceReset.Header, sequenceReset.Header.GetDateTime(Tags.SendingTime));
+        let sending_time = sequence_reset.header().get_datetime(tags::SendingTime)?;
+        self.insert_orig_sending_time(&mut sequence_reset, sending_time.naive_local());
 
         // sequenceReset.Header.SetField(new MsgSeqNum(beginSeqNo));
+        sequence_reset.header_mut().set_tag_value(tags::MsgSeqNum, begin_seq_no as i64);
         // sequenceReset.SetField(new NewSeqNo(newSeqNo));
+        sequence_reset.set_tag_value(tags::NewSeqNo, new_seq_no as i64);
         // sequenceReset.SetField(new GapFillFlag(true));
+        sequence_reset.set_tag_value(tags::GapFillFlag, true);
         // if (receivedMessage != null && this.EnableLastMsgSeqNumProcessed)
-        // {
+        if /* resend_request.is_some() && */ self.enable_last_msg_seq_num_processed {
         //     try
         //     {
         //         sequenceReset.Header.SetField(new Fields.LastMsgSeqNumProcessed(receivedMessage.Header.GetInt(Tags.MsgSeqNum)));
@@ -1515,10 +1532,19 @@ impl Session {
         //     {
         //         this.Log.OnEvent("Error: Received message without MsgSeqNum: " + receivedMessage);
         //     }
-        // }
+            let seq_num: Option<Result<i64, _>> = received_message.get_field(tags::MsgSeqNum).map(|v| v.as_value());
+            if let Some(result) = seq_num {
+                sequence_reset.header_mut().set_tag_value(tags::LastMsgSeqNumProcessed, result?);
+            } else {
+                self.log().on_event(format!("Error: Received message without MsgSeqNum: {}", received_message).as_str());
+            }
+        }
+
+        self.send_raw(sequence_reset, begin_seq_no)?;
         // SendRaw(sequenceReset, beginSeqNo);
+        self.log().on_event(format!("Sent SequenceReset TO: {}", begin_seq_no).as_str());
         // this.Log.OnEvent("Sent SequenceReset TO: " + newSeqNo);
-        todo!("{resend_request:?} {start_seq_num} {end_seq_num}")
+        Ok(())
     }
 
     fn initialize_resend_fields(&self, msg: &mut Message) {

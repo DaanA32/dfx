@@ -18,6 +18,9 @@ chashmap = "2.2.2"
 derive_builder = "0.11.2"
 openssl = "0.10.42"
 
+[dev-dependencies]
+walkdir = "2.3.2"
+
 [build-dependencies]
 indoc = "1"
 heck = "0.4.0"

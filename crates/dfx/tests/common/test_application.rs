@@ -43,11 +43,11 @@ impl Application for TestApplication {
 
     fn to_app(
         &mut self,
-        _message: Message,
+        _message: &mut Message,
         _session_id: &dfx::session_id::SessionId,
-    ) -> Result<Message, ApplicationError> {
+    ) -> Result<(), ApplicationError> {
         println!("TestApplication To App: {}", _session_id);
-        Ok(_message)
+        Ok(())
     }
 
     fn from_app(
@@ -113,11 +113,11 @@ impl Application for SendTestApplication {
 
     fn to_app(
         &mut self,
-        _message: Message,
+        _message: &mut Message,
         _session_id: &dfx::session_id::SessionId,
-    ) -> Result<Message, ApplicationError> {
+    ) -> Result<(), ApplicationError> {
         println!("TestApplication To App: {}", _session_id);
-        Ok(_message)
+        Ok(())
     }
 
     fn from_app(

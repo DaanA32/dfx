@@ -7,7 +7,7 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{Shutdown, TcpListener, TcpStream},
     thread::{self, JoinHandle},
-    time::Duration,
+    time::Duration, path::Path,
 };
 
 #[allow(unused)]
@@ -49,10 +49,28 @@ lazy_static! {
     static ref E_MESSAGE: Regex = Regex::new(r"^E(.*)").unwrap();
 
     // matches (FIXT?.X.X\x01)(body)(checksum);
-    static ref MESSAGE: Regex = Regex::new(r"((8=FIXT?\.\d\.\d\x01)(.*?\x01))(10=.*\x01)").unwrap(); // (9=\d+)?
+    static ref MESSAGE_L: Regex = Regex::new(r"((8=FIXT?\.\d\.\d\|)((.*?\|)*))(10=.*\|)?").unwrap(); // (9=\d+)?
+    static ref MESSAGE: Regex = Regex::new(r"((8=FIXT?\.\d\.\d\x01)(9=\d+\x01)((.*?\x01)*))(10=.*\x01)?").unwrap(); // (9=\d+)?
+    static ref VERSION: Regex = Regex::new(r"^.*8=(FIXT?\.\d\.\d).*$").unwrap(); // (9=\d+)?
+    static ref TIME: Regex = Regex::new(r"<TIME(([+-])(\d+))*>").unwrap(); // (9=\d+)?
 }
 
-pub(crate) fn from_filename(filename: &str) -> JoinHandle<()> {
+pub(crate) fn version(path: &Path) -> Result<String, std::io::Error> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    for (index, line) in reader.lines().enumerate() {
+        let line = line?; // Ignore errors.
+        let captures = VERSION.captures(&line);
+        // println!("{line} -> {captures:?}");
+        if let Some(captures) = captures {
+            return Ok(captures.get(1).map_or("".into(), |m| m.as_str().into()));
+        }
+    }
+    Ok("".into())
+}
+
+pub(crate) fn from_filename(filename: &str) -> JoinHandle<Result<(), String>> {
     let steps = steps(filename);
     let runner_thread = create_thread(steps, 40000);
     runner_thread
@@ -110,18 +128,19 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
     steps
 }
 
-pub fn create_thread(steps: Vec<TestStep>, port: u32) -> JoinHandle<()> {
+pub fn create_thread(steps: Vec<TestStep>, port: u32) -> JoinHandle<Result<(), String>> {
     thread::spawn(move || perform_steps(steps, port))
 }
 
-fn perform_steps(steps: Vec<TestStep>, port: u32) {
-    println!("Runner: performing steps: {:?}", steps);
+fn perform_steps(steps: Vec<TestStep>, port: u32) -> Result<(), String> {
+    println!("Runner: performing {} step(s).", steps.len());
     assert!(steps.len() > 0);
     assert!(steps[0] == TestStep::ExpectConnect || steps[0] == TestStep::InitiateConnect);
     let mut stream = None;
     let mut parser = Parser::default();
 
     for step in steps {
+        // println!("{step:?}");
         match step {
             TestStep::InitiateConnect => {
                 if stream.is_none() {
@@ -168,12 +187,14 @@ fn perform_steps(steps: Vec<TestStep>, port: u32) {
             }
             TestStep::ExpectMessage(message) => {
                 if let Some(s) = &mut stream {
-                    do_receive(s, message, &mut parser);
+                    do_receive(s, message, &mut parser)?;
                 }
             }
             TestStep::Comment(message) => println!("Runner: Comment {}", message),
         }
+        println!("end step");
     }
+    Ok(())
 }
 
 fn wait_for_disconnect(s: &mut TcpStream) {
@@ -191,9 +212,10 @@ fn wait_for_disconnect(s: &mut TcpStream) {
     }
 }
 
-fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) {
+fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result<(), String> {
     let mut buffer = [0; 512];
     let other;
+    let start = std::time::Instant::now();
     loop {
         let read = match s.read(&mut buffer) {
             Ok(read) => Ok(read),
@@ -204,6 +226,9 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) {
             0 => {}
             n => parser.add_to_stream(&buffer[0..n]),
         };
+        if (start - std::time::Instant::now()) > Duration::from_secs(30) {
+            panic!("Test failed reading fix message: Timeout");
+        }
         match parser.read_fix_message() {
             Ok(message) => {
                 if let Some(value) = message {
@@ -220,32 +245,75 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) {
     let message = message.replace("|", "\x01");
     let read_fields = to_fields(other, '\x01', true);
     let expected_fields = to_fields(message, '\x01', true);
-    assert_eq!(read_fields, expected_fields);
+    if read_fields != expected_fields {
+        Err(format!("Expected: {expected_fields:?}\nRead: {read_fields:?}"))
+    } else {
+        Ok(())
+    }
 }
 
 fn do_send(message: String, s: &mut TcpStream) {
+    let now = Utc::now();
+    let mut message = message;
+    while let Some(captures) = TIME.captures(&message) {
+        // println!("{captures:?}");
+        let num = captures.get(3).map(|g| g.as_str().parse().unwrap_or_default()).unwrap_or_default();
+        let offset = if match captures.get(2) {
+            Some(s) if s.as_str() == "-" => false,
+            _ => true,
+        } {
+            num
+        } else {
+            0 - num
+        };
+
+        // println!("{offset}");
+        message = TIME.replacen(message.as_str(), 1, now
+                .checked_add_signed(chrono::Duration::seconds(offset)).unwrap()
+                .format(DATE_TIME_FORMAT_WITHOUT_MILLISECONDS)
+                .to_string()
+                .as_str()
+        ).to_string();
+        // println!("{message}");
+    }
+
+    let len = do_length(&message);
+    let message = if message.contains("|9=") {
+        message.replace(r"9=[0-9]+", format!("9={:03}", len).as_str())
+    }else{
+        message.replacen(r"|", format!("|9={}|", len).as_str(), 1)
+    };
     let message = message.replace("|", "\x01");
-    let message = message.replace(
-        r"<TIME>",
-        Utc::now()
-            .format(DATE_TIME_FORMAT_WITHOUT_MILLISECONDS)
-            .to_string()
-            .as_str(),
-    );
+    // println!("Runner: {}", message.replace("\x01", "|"));
     let checksum = do_checksum(&message);
-    let message = message.replace(r"10=0", format!("10={:03}", checksum).as_str());
+    let message = if message.contains("\x0110=") {
+        message.replace(r"10=0", format!("10={:03}", checksum).as_str())
+    } else {
+        format!("{message}10={checksum:03}\x01")
+    };
     // println!("Runner: {}", message.replace("\x01", "|"));
     s.write_all(message.as_bytes()).expect("Sent message");
     s.flush().unwrap();
 }
 
 fn do_checksum(message: &str) -> u32 {
+    // println!("{:?}", &message);
     // println!("{:?}", MESSAGE.captures(&message));
     MESSAGE
         .captures(&message)
         .map(|cap| {
             // println!("{:?}", cap.get(3));
             cap.get(1).map(|mg| checksum(mg.as_str())).unwrap_or(0)
+        })
+        .unwrap_or(0)
+}
+fn do_length(message: &str) -> u32 {
+    // println!("{:?}", MESSAGE_L.captures(&message));
+    MESSAGE_L
+        .captures(&message)
+        .map(|cap| {
+            // println!("{:?}", cap.get(3));
+            cap.get(3).map(|mg| mg.as_str().bytes().len()).unwrap_or(0) as u32
         })
         .unwrap_or(0)
 }
@@ -279,5 +347,6 @@ fn to_fields(message: String, delim: char, skip_time: bool) -> Vec<(String, Stri
         .filter(|value| value.0 != "")
         .filter(|value| skip_time && value.0 != "52")
         .filter(|value| value.0 != "10")
+        .filter(|value| value.0 != "9")
         .collect()
 }
