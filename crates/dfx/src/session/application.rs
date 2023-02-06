@@ -4,11 +4,18 @@ use dfx_core::session_id::SessionId;
 
 #[derive(Debug, Clone)]
 pub enum ApplicationError {
-    DoNotAccept,
-    LogonReject,
-    DoNotSend(Box<Message>),
+    // DoNotAccept,
+    // LogonReject,
+    DoNotSend,
     FieldMapError(FieldMapError),
 }
+
+#[derive(Debug, Clone)]
+pub struct LogonReject {
+    pub reason: Option<String>
+}
+#[derive(Debug, Clone)]
+pub struct DoNotAccept;
 
 impl From<FieldMapError> for ApplicationError {
     fn from(e: FieldMapError) -> Self {
@@ -17,19 +24,19 @@ impl From<FieldMapError> for ApplicationError {
 }
 
 pub trait Application: Send {
-    fn on_create(&mut self, session_id: &SessionId) -> Result<(), ApplicationError>;
-    fn on_logon(&mut self, session_id: &SessionId) -> Result<(), ApplicationError>;
+    fn on_create(&mut self, session_id: &SessionId) -> Result<(), DoNotAccept>;
+    fn on_logon(&mut self, session_id: &SessionId) -> Result<(), LogonReject>;
     fn on_logout(&mut self, session_id: &SessionId) -> Result<(), ApplicationError>;
     fn to_admin(
         &mut self,
         message: Message,
         session_id: &SessionId,
-    ) -> Result<Message, ApplicationError>;
+    ) -> Result<Message, FieldMapError>;
     fn from_admin(
         &mut self,
         message: &Message,
         session_id: &SessionId,
-    ) -> Result<(), ApplicationError>;
+    ) -> Result<(), FieldMapError>;
     fn to_app(
         &mut self,
         message: &mut Message,
@@ -39,7 +46,7 @@ pub trait Application: Send {
         &mut self,
         message: &Message,
         session_id: &SessionId,
-    ) -> Result<(), ApplicationError>;
+    ) -> Result<(), FieldMapError>;
 }
 
 pub trait ApplicationExt: Application {
@@ -54,7 +61,7 @@ pub trait ApplicationExt: Application {
 pub mod tests {
     use dfx_core::session_id::SessionId;
 
-    use super::{Application, ApplicationExt};
+    use super::{Application, ApplicationExt, DoNotAccept, LogonReject};
     use dfx_core::message::Message;
     use crate::session;
 
@@ -64,14 +71,14 @@ pub mod tests {
         fn on_create(
             &mut self,
             _session_id: &SessionId,
-        ) -> Result<(), super::ApplicationError> {
+        ) -> Result<(), DoNotAccept> {
             Ok(())
         }
 
         fn on_logon(
             &mut self,
             _session_id: &SessionId,
-        ) -> Result<(), super::ApplicationError> {
+        ) -> Result<(), LogonReject> {
             Ok(())
         }
 
@@ -86,7 +93,7 @@ pub mod tests {
             &mut self,
             message: Message,
             _session_id: &SessionId,
-        ) -> Result<Message, super::ApplicationError> {
+        ) -> Result<Message, dfx_core::field_map::FieldMapError> {
             Ok(message)
         }
 
@@ -94,7 +101,7 @@ pub mod tests {
             &mut self,
             _message: &Message,
             _session_id: &SessionId,
-        ) -> Result<(), super::ApplicationError> {
+        ) -> Result<(), dfx_core::field_map::FieldMapError> {
             Ok(())
         }
 
@@ -110,7 +117,7 @@ pub mod tests {
             &mut self,
             _message: &Message,
             _session_id: &SessionId,
-        ) -> Result<(), super::ApplicationError> {
+        ) -> Result<(), dfx_core::field_map::FieldMapError> {
             Ok(())
         }
     }

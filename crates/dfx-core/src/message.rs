@@ -5,6 +5,7 @@ use crate::data_dictionary::DDGroup;
 use crate::data_dictionary::DDMap;
 use crate::data_dictionary::DataDictionary;
 use crate::data_dictionary::MessageValidationError;
+use crate::data_dictionary::TagException;
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMap;
 use crate::field_map::FieldMapError;
@@ -76,7 +77,7 @@ pub struct Message {
     body: FieldMap,
     trailer: Trailer,
     application_data_dictionary: Option<DataDictionary>,
-    field_: u32,
+    field_: Tag,
     valid_structure_: bool,
 }
 
@@ -131,7 +132,8 @@ impl Message {
         if self.valid_structure_ {
             Ok(())
         } else {
-            Err(MessageValidationError::InvalidStructure(self.field_))
+            Err(MessageValidationError::TagException(TagException::tag_out_of_order(self.field_)))
+            // Err(MessageValidationError::InvalidStructure(self.field_))
         }
     }
 
@@ -248,9 +250,9 @@ impl Message {
             println!("{:?}", &msgstr[*pos..tagend]);
             panic!("{}", e);
         }
-        let tag: Result<u32, _> = result.unwrap().parse();
+        let tag: Result<Tag, _> = result.unwrap().parse();
         if tag.is_err() {
-            return Err(MessageParseError::FailedToConvertTagToInt(
+            return Err(MessageParseError::InvalidTagNumber(
                 std::str::from_utf8(&msgstr[*pos..tagend]).unwrap().into(),
             ));
         }
@@ -939,7 +941,7 @@ impl Display for Message {
 #[derive(Debug, Clone)]
 pub enum MessageParseError {
     InvalidMessage(String),
-    FailedToConvertTagToInt(String),
+    InvalidTagNumber(String),
     FailedToFindEqualsAt(usize),
     FailedToFindSohAt(usize),
     PosGreaterThanLen(usize, usize),
@@ -947,7 +949,7 @@ pub enum MessageParseError {
     GroupDelimiterTagException(Tag, Tag),
     FieldMapError(FieldMapError),
     Malformed(String),
-    ConversionError(ConversionError)
+    ConversionError(ConversionError),
 }
 
 impl From<FieldMapError> for MessageParseError {

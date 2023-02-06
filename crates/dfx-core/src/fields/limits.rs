@@ -1,1 +1,3 @@
-pub const USER_MIN: u32 = 5000;
+use crate::field_map::Tag;
+
+pub const USER_MIN: Tag = 5000;

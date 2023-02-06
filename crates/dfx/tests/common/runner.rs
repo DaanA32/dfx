@@ -77,6 +77,7 @@ pub(crate) fn from_filename(filename: &str) -> JoinHandle<Result<(), String>> {
 }
 
 pub fn steps(filename: &str) -> Vec<TestStep> {
+    println!("Reading steps from {filename}");
     let mut steps = vec![];
 
     let file = File::open(filename).expect(format!("Unable to open file: {}", filename).as_str());
@@ -192,7 +193,7 @@ fn perform_steps(steps: Vec<TestStep>, port: u32) -> Result<(), String> {
             }
             TestStep::Comment(message) => println!("Runner: Comment {}", message),
         }
-        println!("end step");
+        //println!("end step");
     }
     Ok(())
 }
@@ -297,8 +298,6 @@ fn do_send(message: String, s: &mut TcpStream) {
 }
 
 fn do_checksum(message: &str) -> u32 {
-    // println!("{:?}", &message);
-    // println!("{:?}", MESSAGE.captures(&message));
     MESSAGE
         .captures(&message)
         .map(|cap| {
@@ -309,10 +308,14 @@ fn do_checksum(message: &str) -> u32 {
 }
 fn do_length(message: &str) -> u32 {
     // println!("{:?}", MESSAGE_L.captures(&message));
+    let message = if message.contains("|10=") {
+        format!("{}|", message[..message.find("|10=").unwrap()].to_string())
+    } else {
+        message.to_string()
+    };
     MESSAGE_L
         .captures(&message)
         .map(|cap| {
-            // println!("{:?}", cap.get(3));
             cap.get(3).map(|mg| mg.as_str().bytes().len()).unwrap_or(0) as u32
         })
         .unwrap_or(0)
@@ -348,5 +351,6 @@ fn to_fields(message: String, delim: char, skip_time: bool) -> Vec<(String, Stri
         .filter(|value| skip_time && value.0 != "52")
         .filter(|value| value.0 != "10")
         .filter(|value| value.0 != "9")
+        .filter(|value| value.0 != "122")
         .collect()
 }

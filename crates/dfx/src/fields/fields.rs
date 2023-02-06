@@ -126,12 +126,12 @@ impl Deref for ResetSeqNumFlag {
 //     pub const FIX50SP2: u32 = 9;
 // }
 
-pub struct SessionRejectReason;
-impl SessionRejectReason {
-    pub const VALUE_IS_INCORRECT: &str = "Value incorrect";
-    pub const SENDING_TIME_ACCURACY_PROBLEM: &str = "Sending time";
-    pub const COMPID_PROBLEM: &str = "Comp ID";
-    pub const INVALID_MSGTYPE: &str = "Invalid MSG Type";
-    pub const INVALID_TAG_NUMBER: &str = "Invalid Tag";
-    pub const REQUIRED_TAG_MISSING: &str = "Required Tag";
-}
+// pub struct SessionRejectReason;
+// impl SessionRejectReason {
+//     pub const VALUE_IS_INCORRECT: &str = "Value incorrect";
+//     pub const SENDING_TIME_ACCURACY_PROBLEM: &str = "Sending time";
+//     pub const COMPID_PROBLEM: &str = "Comp ID";
+//     pub const INVALID_MSGTYPE: &str = "Invalid MSG Type";
+//     pub const INVALID_TAG_NUMBER: &str = "Invalid Tag";
+//     pub const REQUIRED_TAG_MISSING: &str = "Required Tag";
+// }

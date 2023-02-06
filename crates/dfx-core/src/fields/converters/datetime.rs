@@ -6,9 +6,13 @@ pub const TICKS_PER_MICROSECOND: u32 = 10;
 pub const NANOSECONDS_PER_TICK: u32 = 100;
 
 // https://docs.rs/chrono/latest/chrono/format/strftime/index.html
+pub const DATE_TIME_FORMAT_WITH_NANOSECONDS_LEN: usize = 8 + 1 + 6 + 2 + 1 + 9;
 pub const DATE_TIME_FORMAT_WITH_NANOSECONDS: &str = "%Y%m%d-%H:%M:%S.%f";
+pub const DATE_TIME_FORMAT_WITH_MICROSECONDS_LEN: usize = 8 + 1 + 6 + 2 + 1 + 6;
 pub const DATE_TIME_FORMAT_WITH_MICROSECONDS: &str = "%Y%m%d-%H:%M:%S.%6f";
+pub const DATE_TIME_FORMAT_WITH_MILLISECONDS_LEN: usize = 8 + 1 + 6 + 2 + 1 + 3;
 pub const DATE_TIME_FORMAT_WITH_MILLISECONDS: &str = "%Y%m%d-%H:%M:%S.%3f";
+pub const DATE_TIME_FORMAT_WITHOUT_MILLISECONDS_LEN: usize = 8 + 1 + 6 + 2;
 pub const DATE_TIME_FORMAT_WITHOUT_MILLISECONDS: &str = "%Y%m%d-%H:%M:%S";
 pub const DATE_ONLY_FORMAT: &str = "%Y%m%d";
 pub const TIME_ONLY_FORMAT_WITH_NANOSECONDS: &str = "%H:%M:%S.%f";
@@ -30,7 +34,7 @@ impl DateTimeFormat {
             DateTimeFormat::Nanoseconds => DATE_TIME_FORMAT_WITH_NANOSECONDS,
             DateTimeFormat::Microseconds => DATE_TIME_FORMAT_WITH_MICROSECONDS,
             DateTimeFormat::Milliseconds => DATE_TIME_FORMAT_WITH_MILLISECONDS,
-            DateTimeFormat::Seconds => DATE_TIME_FORMAT_WITH_MILLISECONDS,
+            DateTimeFormat::Seconds => DATE_TIME_FORMAT_WITHOUT_MILLISECONDS,
         }
     }
     pub fn as_time_format(&self) -> &str {
@@ -38,7 +42,7 @@ impl DateTimeFormat {
             DateTimeFormat::Nanoseconds => TIME_ONLY_FORMAT_WITH_NANOSECONDS,
             DateTimeFormat::Microseconds => TIME_ONLY_FORMAT_WITH_MICROSECONDS,
             DateTimeFormat::Milliseconds => TIME_ONLY_FORMAT_WITH_MILLISECONDS,
-            DateTimeFormat::Seconds => TIME_ONLY_FORMAT_WITH_MILLISECONDS,
+            DateTimeFormat::Seconds => TIME_ONLY_FORMAT_WITHOUT_MILLISECONDS,
         }
     }
 }
@@ -57,7 +61,7 @@ impl std::convert::TryFrom<String> for DateTimeFormat {
     }
 }
 
-use chrono::{DateTime as ChronoDateTime, TimeZone, Utc, NaiveDateTime, NaiveDate, NaiveTime};
+use chrono::{DateTime as ChronoDateTime, TimeZone, Utc, NaiveDateTime, NaiveDate, NaiveTime, Local};
 
 use crate::field_map::FieldValue;
 use crate::fields::converters::TryFrom;
@@ -70,9 +74,13 @@ impl<'a> TryFrom<&'a FieldValue> for ChronoDateTime<Utc> {
 
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let time: &str = TryFrom::try_from(value)?;
-
-        Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS)
-            .map_err(|_e| todo!())
+        match Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS) {
+            Ok(t) => Ok(t),
+            Err(e) => match Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITH_MILLISECONDS) {
+                Ok(t) => Ok(t),
+                Err(_) => todo!(),
+            },
+        }
     }
 }
 
@@ -84,7 +92,18 @@ impl<'a> TryFrom<&'a FieldValue> for DateTime {
     type Error = ConversionError;
 
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
-        todo!()
+        let time: &str = TryFrom::try_from(value)?;
+        let format = match time.len() {
+            DATE_TIME_FORMAT_WITH_NANOSECONDS_LEN => DATE_TIME_FORMAT_WITH_NANOSECONDS,
+            DATE_TIME_FORMAT_WITH_MICROSECONDS_LEN => DATE_TIME_FORMAT_WITH_MICROSECONDS,
+            DATE_TIME_FORMAT_WITH_MILLISECONDS_LEN => DATE_TIME_FORMAT_WITH_MILLISECONDS,
+            DATE_TIME_FORMAT_WITHOUT_MILLISECONDS_LEN => DATE_TIME_FORMAT_WITHOUT_MILLISECONDS,
+            len => panic!("Invalid len {len}"),
+        };
+        match NaiveDateTime::parse_from_str(time, format) {
+            Ok(v) => Ok(v),
+            Err(e) => todo!("{e}"),
+        }
     }
 }
 

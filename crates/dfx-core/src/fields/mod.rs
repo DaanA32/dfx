@@ -1,5 +1,6 @@
 mod fields;
 pub(crate) mod limits;
+pub mod types;
 
 pub use fields::*;
 

@@ -20,7 +20,7 @@ pub struct FieldMap {
     _field_order: FieldOrder,
 }
 
-pub type Tag = u32;
+pub type Tag = i32;
 pub type Total = u32;
 pub type Length = u32;
 pub type FieldOrder = Vec<Tag>;

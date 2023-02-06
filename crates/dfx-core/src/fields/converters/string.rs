@@ -60,7 +60,7 @@ impl<'a> TryFrom<&'a FieldValue> for char {
 
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         if value.len() != 1 {
-            todo!()
+            Err(ConversionError::EncodingError)
         } else {
             Ok(value[0] as char)
         }

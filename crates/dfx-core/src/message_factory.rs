@@ -12,8 +12,17 @@ pub trait MessageFactory: Debug + Send {
 
 #[derive(Clone, Debug)]
 pub enum MessageFactoryError {
-    UnsupportedBeginString(String),
-    UnsupportedMsgType(String),
+    UnsupportedBeginString { begin_string: String, message: String },
+    UnsupportedMsgType { msg_type: String, message: String },
+}
+
+impl MessageFactoryError {
+    pub fn message(&self) -> String {
+        match self {
+            MessageFactoryError::UnsupportedBeginString { begin_string, message } => format!("{message}: {begin_string}"),
+            MessageFactoryError::UnsupportedMsgType { msg_type, message } => format!("{message}: {msg_type}"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

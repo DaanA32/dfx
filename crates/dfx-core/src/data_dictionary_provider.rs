@@ -47,7 +47,7 @@ impl DataDictionaryProvider for DefaultDataDictionaryProvider {
         self.transport.insert(begin_string.into(), dictionary);
     }
 
-    fn add_application_data_dictionary(&mut self, begin_string: &str, dictionary: DataDictionary) {
-        self.app.insert(begin_string.into(), dictionary);
+    fn add_application_data_dictionary(&mut self, appl_ver_id: &str, dictionary: DataDictionary) {
+        self.app.insert(appl_ver_id.into(), dictionary);
     }
 }
