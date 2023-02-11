@@ -11,6 +11,7 @@ use chrono::NaiveDateTime;
 use chrono::Utc;
 use dfx_core::data_dictionary::TagException;
 use dfx_core::fix_values;
+use dfx_core::fix_values::BusinessRejectReason;
 use dfx_core::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
 
@@ -41,6 +42,7 @@ use crate::session::SessionSchedule;
 use crate::session::SessionState;
 use dfx_core::tags;
 
+use super::FromAppError;
 use super::LogonReject;
 use super::Persistence;
 use super::SessionSetting;
@@ -311,11 +313,13 @@ impl Session {
             }
             self.disconnect("Timed out waiting for heartbeat")
         } else if self.state.need_test_request() {
+            println!("Need test request: {}", Utc::now());
             self.generate_test_request("TEST");
             self.state
                 .set_test_request_counter(self.state.test_request_counter() + 1);
             self.log.on_event("Sent test request TEST")
         } else if self.state.need_heartbeat() {
+            println!("Need heartbeat: {}", Utc::now());
             self.generate_heartbeat();
         }
     }
@@ -577,7 +581,7 @@ impl Session {
     fn initialize_header(&mut self, message: &mut Message, seq_num: Option<u32>) {
         let seq_num = seq_num.unwrap_or(0);
         // state_.LastSentTimeDT = DateTime.UtcNow;
-        self.state.set_last_received_time_dt(Instant::now());
+        self.state.set_last_sent_time_dt(Instant::now());
 
         // m.Header.SetField(new Fields.BeginString>(this.SessionID.BeginString));
         // m.Header.SetField(new Fields.SenderCompID(this.SessionID.SenderCompID));
@@ -700,12 +704,17 @@ impl Session {
         &mut self.log
     }
 
+    pub(crate) fn next_msg(&mut self, msg: Vec<u8>) {
+        self.internal_next_msg(msg);
+        self.next_queued();
+    }
+
     // TODO!!! change to fn(&mut self, msg: Vec<u8>) -> Result<(), dfx::Error> IMPORTANT
     // enum dfx::Error {
     //     ...
     //     SessionDisconnect { context, reason }
     // }
-    pub(crate) fn next_msg(&mut self, msg: Vec<u8>) {
+    fn internal_next_msg(&mut self, msg: Vec<u8>) {
         self.log.on_incoming(&String::from_utf8_lossy(&msg));
 
         if !self.is_session_time() {
@@ -735,8 +744,8 @@ impl Session {
                     //     { }
                     // return e;
                 },
-                SessionHandleMessageError::MessageParseError(e) => {
-                    self.log.on_event(format!("MessageParse Error: {e:?}").as_str());
+                SessionHandleMessageError::MessageParseError { message: _, parse_error } => {
+                    self.log.on_event(format!("MessageParse Error: {parse_error:?}").as_str());
                 },
                 //Tag Exception
                 SessionHandleMessageError::TagException(msg, e) => {
@@ -769,6 +778,10 @@ impl Session {
                     self.generate_logout(reason, None);
                     self.disconnect(&disconnect_msg);
                 },
+                SessionHandleMessageError::UnknownMessageType { message, msg_type } => {
+                    self.log.on_event(format!("Unsupported message type: {}", msg_type).as_str());
+                    self.generate_business_message_reject(message, BusinessRejectReason::UNKNOWN_MESSAGE_TYPE()).unwrap();
+                }
             }
         }
         // catch (UnsupportedVersion uvx)
@@ -812,8 +825,10 @@ impl Session {
     }
 
     fn next_msg_handler(&mut self, msg: Vec<u8>) -> Result<(), SessionHandleMessageError> {
-        let msg_type = Message::identify_type(&msg)?;
-        let begin_string = Message::extract_begin_string(&msg)?;
+        let msg_type = Message::identify_type(&msg)
+            .map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
+        let begin_string = Message::extract_begin_string(&msg)
+            .map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
         let mut message = self.msg_factory.create(begin_string.as_str(), msg_type)?;
         message.from_string(
             &msg,
@@ -822,8 +837,11 @@ impl Session {
             Some(&self.application_data_dictionary),
             Some(&*self.msg_factory),
             false,
-        )?;
+        ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
+        self.handle_msg(message, &begin_string, msg_type)
+    }
 
+    fn handle_msg(&mut self, message: Message, begin_string: &str, msg_type: &str) -> Result<(), SessionHandleMessageError> {
         if self.app_does_early_intercept {
             // if let Some(func) = self.application.get_early_intercept() {
             //     message = func(self.application.as_mut(), message, &self.session_id)?;
@@ -898,6 +916,33 @@ impl Session {
         } else {
             self.state.incr_next_target_msg_seq_num();
             Ok(())
+        }
+    }
+
+    fn next_queued(&mut self) {
+        while let Some(msg) = self.state.dequeue(self.state.msg_store().next_target_msg_seq_num()) {
+            // Log.OnEvent("Processing queued message: " + num);
+            self.log.on_event(format!("Processing queued message: {}", self.state.msg_store().next_target_msg_seq_num()).as_str());
+
+            // string msgType = msg.Header.GetString(Tags.MsgType);
+            match (msg.header().get_string(tags::MsgType), msg.header().get_string(tags::BeginString)) {
+                (Ok(msg_type), Ok(begin_string)) => {
+                    if msg_type == MsgType::LOGON || msg_type == MsgType::RESEND_REQUEST {
+                        self.state.incr_next_target_msg_seq_num();
+                    } else {
+                        self.handle_msg(msg, &begin_string, &msg_type);
+                    }
+                },
+                e => todo!("session::next_queued {e:?}")
+            }
+            // if (msgType.Equals(MsgType.LOGON) || msgType.Equals(MsgType.RESEND_REQUEST))
+            // {
+            //     state_.IncrNextTargetMsgSeqNum();
+            // }
+            // else
+            // {
+            //     NextMessage(msg.ToString());
+            // }
         }
     }
 
@@ -1044,8 +1089,8 @@ impl Session {
     fn next_resend_request(&mut self, resend_request: Message) -> Result<(), SessionHandleMessageError> {
         let resend_request = self.verify_opt(resend_request, false, false)?;
         if let Some(resend_request) = resend_request {
-            let mut msg_seq_num = 0;
             if !(self._ignore_poss_dup_resend_requests && resend_request.header().is_field_set(tags::PossDupFlag)) {
+                let mut msg_seq_num;
                 let beg_seq_no = resend_request.get_int(tags::BeginSeqNo)?;
                 let mut end_seq_no = resend_request.get_int(tags::EndSeqNo)?;
                 self.log.on_event(format!("Got resend request from {beg_seq_no} to {end_seq_no}").as_str());
@@ -1071,7 +1116,6 @@ impl Session {
                 let mut current = beg_seq_no;
                 let mut begin = 0;
                 for msg_str in self.state.get_messages(beg_seq_no, end_seq_no) {
-
                     let mut msg = Message::default();
                     msg.from_string(
                         msg_str.as_bytes(),
@@ -1080,7 +1124,7 @@ impl Session {
                         Some(&self.application_data_dictionary),
                         Some(self.msg_factory.as_ref()),
                         false
-                    );
+                    ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg_str.into_bytes(), parse_error: mp })?;
                     msg_seq_num = msg.header().get_int(tags::MsgSeqNum)?;
 
                     if current != msg_seq_num && begin == 0 {
@@ -1096,7 +1140,7 @@ impl Session {
                         let approved = self.resend_approved(msg);
                         if let Some(mut msg) = approved {
                             if begin != 0 {
-                                self.generate_sequence_reset(&resend_request, beg_seq_no, end_seq_no)?;
+                                self.generate_sequence_reset(&resend_request, begin, msg_seq_num)?;
                             }
 
                             self.send(msg.to_string_mut());
@@ -1119,11 +1163,13 @@ impl Session {
                 }
 
                 if end_seq_no > begin {
-                    self.generate_sequence_reset(&resend_request, beg_seq_no, end_seq_no)?;
+                    self.generate_sequence_reset(&resend_request, begin, end_seq_no)?;
                 }
             }
-            msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
+            let msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
+            println!("4.");
             if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num) {
+                println!("4.1");
                 self.state.incr_next_target_msg_seq_num();
             }
             Ok(())
@@ -1311,7 +1357,9 @@ impl Session {
         let sending_time = message.header().get_datetime(tags::SendingTime).unwrap();
         let timespan = Utc::now() - sending_time;
 
-        timespan.num_seconds().abs() <= self.max_latency as i64
+        // TODO change to <=
+        //println!("{} < {}", timespan.num_seconds().abs(), self.max_latency);
+        timespan.num_seconds().abs() < self.max_latency as i64
     }
 
     fn generate_resend_request_range(
@@ -1608,6 +1656,48 @@ impl Session {
             _ => Some(msg)
         }
     }
+
+    fn generate_business_message_reject(&mut self, message: Message, business_reject_reason: BusinessRejectReason) -> Result<(), SessionHandleMessageError> {
+        // string msgType = message.Header.GetString(Tags.MsgType);
+        let msg_type = message.header().get_string(tags::MsgType)?;
+        // int msgSeqNum = message.Header.GetInt(Tags.MsgSeqNum);
+        let msg_seq_num = message.header().get_int(tags::MsgSeqNum)?;
+        // string reason = FixValues.BusinessRejectReason.RejText[err];
+        let reason = business_reject_reason.reason();
+        // Message reject;
+        let mut reject = if self.session_id.begin_string() >= BeginString::FIX42 {
+        //     reject = msgFactory_.Create(this.SessionID.BeginString, MsgType.BUSINESS_MESSAGE_REJECT);
+        //     reject.SetField(new RefMsgType(msgType));
+        //     reject.SetField(new BusinessRejectReason(err));
+            let mut reject = self.msg_factory.create(self.session_id.begin_string(), MsgType::BUSINESS_MESSAGE_REJECT)?;
+            reject.set_tag_value(tags::RefMsgType, msg_type);
+            reject.set_tag_value(tags::BusinessRejectReason, format!("{}", business_reject_reason.index()));
+            reject
+        } else {
+            let reject = self.msg_factory.create(self.session_id.begin_string(), MsgType::REJECT)?;
+            // TODO magic?
+        //     reject = msgFactory_.Create(this.SessionID.BeginString, MsgType.REJECT);
+        //     char[] reasonArray = reason.ToLower().ToCharArray();
+        //     reasonArray[0] = char.ToUpper(reasonArray[0]);
+        //     reason = new string(reasonArray);
+            reject
+        };
+
+        // InitializeHeader(reject);
+        self.initialize_header(&mut reject, None);
+        // reject.SetField(new RefSeqNum(msgSeqNum));
+        reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num));
+        // state_.IncrNextTargetMsgSeqNum();
+        self.state.incr_next_target_msg_seq_num();
+
+        // reject.SetField(new Text(reason));
+        reject.set_tag_value(tags::Text, reason);
+        // Log.OnEvent("Reject sent for Message: " + msgSeqNum + " Reason:" + reason);
+        self.log.on_event("Reject sent for Message: {msg_seq_num} Reason:{reason}");
+        // SendRaw(reject, 0);
+        self.send_raw(reject, 0)?;
+        Ok(())
+    }
 }
 
 fn is_session_time(session_schedule: &SessionSchedule) -> bool {
@@ -1632,10 +1722,11 @@ pub(crate) enum InternalSessionError {
 #[derive(Debug, Clone)]
 pub(crate) enum SessionHandleMessageError {
     UnsupportedVersion { message: Message, expected: String, actual: String },
+    UnknownMessageType { message: Message, msg_type: String },
     // MessageFactory::create
     InvalidMessageError(MessageFactoryError),
     // Message::from_string
-    MessageParseError(MessageParseError),
+    MessageParseError { message: Vec<u8>, parse_error: MessageParseError },
     // DataDictionaryError
     TagException(Message, TagException),
     //TODO?
@@ -1651,11 +1742,11 @@ impl From<MessageFactoryError> for SessionHandleMessageError {
         SessionHandleMessageError::InvalidMessageError(e)
     }
 }
-impl From<MessageParseError> for SessionHandleMessageError {
-    fn from(e: MessageParseError) -> Self {
-        SessionHandleMessageError::MessageParseError(e)
-    }
-}
+// impl From<MessageParseError> for SessionHandleMessageError {
+//     fn from(e: MessageParseError) -> Self {
+//         SessionHandleMessageError::MessageParseError(e)
+//     }
+// }
 // impl From<MessageValidationError> for SessionHandleMessageError {
 //     fn from(e: MessageValidationError) -> Self {
 //         SessionHandleMessageError::MessageValidationError(e)
@@ -1679,5 +1770,13 @@ impl From<FieldMapError> for SessionHandleMessageError {
 impl From<dfx_core::fields::ConversionError> for SessionHandleMessageError {
     fn from(e: dfx_core::fields::ConversionError) -> Self {
         SessionHandleMessageError::ConversionError(e)
+    }
+}
+impl From<FromAppError> for SessionHandleMessageError {
+    fn from(from_app_error: FromAppError) -> Self {
+        match from_app_error {
+            FromAppError::UnknownMessageType { message, msg_type } => SessionHandleMessageError::UnknownMessageType { message, msg_type },
+            FromAppError::FieldMapError(fm) => SessionHandleMessageError::FieldMapError(fm),
+        }
     }
 }

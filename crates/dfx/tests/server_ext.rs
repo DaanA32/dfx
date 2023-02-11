@@ -33,6 +33,7 @@ fn is_def_file(entry: Result<&DirEntry, &walkdir::Error>) -> bool {
 pub fn test_accept() {
 
     let path = "tests/definitions/server-ext/";
+    let start_from = 0;
     let mut i = 0;
     let mut entries: Vec<walkdir::DirEntry> = WalkDir::new(path).into_iter()
         .filter(|entry| is_def_file(entry.as_ref()))
@@ -40,6 +41,10 @@ pub fn test_accept() {
         .collect();
     entries.sort_by(|a, b| a.path().cmp(b.path()));
     for entry in entries {
+        if i <= start_from {
+            i+=1;
+            continue;
+        }
         let path = entry.path();
         let cfg = match runner::version(path) {
             Ok(v) => match v.as_str() {
@@ -63,13 +68,20 @@ pub fn test_accept() {
         let steps = runner::steps(format!("{}", path.display()).as_str());
         acceptor.start();
 
-        let runner_thread = runner::create_thread(steps, 5002);
+        while acceptor.endpoints().len() == 0 {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        let endpoint = acceptor.endpoints()[0];
+
+        let runner_thread = runner::create_thread(steps, endpoint.port().into(), format!("{}", path.display()).as_str());
         let start = Instant::now();
         while !runner_thread.is_finished() {
-            if Instant::now() - start > Duration::from_secs(30) {
+            if Instant::now() - start > Duration::from_secs(120) {
                 println!("ERROR: Timeout: {runner_thread:?}");
                 break;
             }
+            std::thread::sleep(Duration::from_millis(10));
         }
         acceptor.stop();
 

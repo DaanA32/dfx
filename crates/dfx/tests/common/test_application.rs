@@ -2,8 +2,8 @@ use std::{collections::HashSet, sync::{Mutex, Arc}};
 
 use dfx::{
     message::Message,
-    session::{Application, ApplicationError, ApplicationExt, Session, DoNotAccept, LogonReject},
-    tags, fields::MsgType,
+    session::{Application, ApplicationError, ApplicationExt, Session, DoNotAccept, LogonReject, FromAppError},
+    tags, fields::MsgType, session_id,
 };
 use lazy_static::lazy_static;
 
@@ -14,17 +14,24 @@ lazy_static! {
 #[derive(Clone)]
 pub struct TestApplication;
 impl TestApplication {
-    fn seen(&self, cl_ord_id: String) -> bool {
+    fn seen(&self, cl_ord_id: &String) -> bool {
         match SEEN.lock() {
-            Ok(mut seen) => {
-                if seen.contains(&cl_ord_id) {
+            Ok(seen) => {
+                if seen.contains(cl_ord_id) {
                     println!("Contained {}", cl_ord_id);
                     true
                 } else {
                     println!("Did not contain {}", cl_ord_id);
-                    seen.insert(cl_ord_id);
                     false
                 }
+            },
+            Err(e) => panic!("Poisened {e:?}"),
+        }
+    }
+    fn insert(&self, cl_ord_id: String) {
+        match SEEN.lock() {
+            Ok(mut seen) => {
+                seen.insert(cl_ord_id);
             },
             Err(e) => panic!("Poisened {e:?}"),
         }
@@ -36,6 +43,20 @@ impl TestApplication {
             },
             Err(e) => panic!("Poisened {e:?}"),
         }
+    }
+    fn echo(&self, message: &Message, session_id: &dfx::session_id::SessionId) {
+        Session::send_to_session(session_id, message.clone()).unwrap();
+    }
+    fn handle_nos(&self, message: &Message, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::field_map::FieldMapError> {
+        let poss_resend = message.header().get_field(tags::PossResend).is_some() && message.header().get_bool(tags::PossResend);
+
+        let cl_ord_id = message.get_string(tags::ClOrdID)?;
+        if poss_resend && self.seen(&cl_ord_id) {
+        } else {
+            self.insert(cl_ord_id);
+            Session::send_to_session(session_id, message.clone()).unwrap();
+        }
+        Ok(())
     }
 }
 impl Application for TestApplication {
@@ -83,32 +104,18 @@ impl Application for TestApplication {
 
     fn from_app(
         &mut self,
-        _message: &Message,
-        _session_id: &dfx::session_id::SessionId,
-    ) -> Result<(), dfx::field_map::FieldMapError> {
-        println!("TestApplication From App: {}", _session_id);
-        if _message.header().get_field(tags::PossResend).is_none()
-        || !_message.header().get_bool(tags::PossResend) {
-            let msg_type = _message.header().get_string(tags::MsgType);
-            if matches!(&msg_type, Ok(d) if d == "D") && _message.get_field(tags::ClOrdID).is_some() {
-                println!("Adding to SEEN");
-                self.seen(_message.get_string(tags::ClOrdID)?);
-            }
-            Session::send_to_session(_session_id, _message.clone()).unwrap();
+        message: &Message,
+        session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), FromAppError> {
+        println!("TestApplication From App: {}", session_id);
 
-        } else if _message.header().get_bool(tags::PossResend) {
-            //TODO skip if NewOrderSingle and ID has been seen
-            println!("PossDup!");
-            let msg_type = _message.header().get_string(tags::MsgType);
-            if matches!(&msg_type, Ok(d) if d == "D")
-                && !self.seen(_message.get_string(tags::ClOrdID)?)
-            {
-                println!("Was not SEEN");
-                Session::send_to_session(_session_id, _message.clone()).unwrap();
-            } else {
-                println!("Was     SEEN");
-                println!("{msg_type:?}");
-            }
+        let msg_type = message.header().get_string(tags::MsgType)?;
+        match msg_type.as_str() {
+            "D" => self.handle_nos(message, session_id)?,
+            "d" => self.echo(message, session_id),
+            "B" => todo!("Handle news"),
+            "AE" => {},
+            _ => return Err(FromAppError::UnknownMessageType { message: message.clone(), msg_type }),
         }
         Ok(())
     }
@@ -178,7 +185,7 @@ impl Application for SendTestApplication {
         &mut self,
         _message: &Message,
         _session_id: &dfx::session_id::SessionId,
-    ) -> Result<(), dfx::field_map::FieldMapError> {
+    ) -> Result<(), FromAppError> {
         println!("TestApplication From App: {}", _session_id);
         Ok(())
     }

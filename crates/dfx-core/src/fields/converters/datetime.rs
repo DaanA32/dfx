@@ -94,12 +94,12 @@ impl<'a> TryFrom<&'a FieldValue> for DateTime {
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let time: &str = TryFrom::try_from(value)?;
         let format = match time.len() {
-            DATE_TIME_FORMAT_WITH_NANOSECONDS_LEN => DATE_TIME_FORMAT_WITH_NANOSECONDS,
-            DATE_TIME_FORMAT_WITH_MICROSECONDS_LEN => DATE_TIME_FORMAT_WITH_MICROSECONDS,
-            DATE_TIME_FORMAT_WITH_MILLISECONDS_LEN => DATE_TIME_FORMAT_WITH_MILLISECONDS,
-            DATE_TIME_FORMAT_WITHOUT_MILLISECONDS_LEN => DATE_TIME_FORMAT_WITHOUT_MILLISECONDS,
-            len => panic!("Invalid len {len}"),
-        };
+            DATE_TIME_FORMAT_WITH_NANOSECONDS_LEN => Ok(DATE_TIME_FORMAT_WITH_NANOSECONDS),
+            DATE_TIME_FORMAT_WITH_MICROSECONDS_LEN => Ok(DATE_TIME_FORMAT_WITH_MICROSECONDS),
+            DATE_TIME_FORMAT_WITH_MILLISECONDS_LEN => Ok(DATE_TIME_FORMAT_WITH_MILLISECONDS),
+            DATE_TIME_FORMAT_WITHOUT_MILLISECONDS_LEN => Ok(DATE_TIME_FORMAT_WITHOUT_MILLISECONDS),
+            len => Err(ConversionError::EncodingError),
+        }?;
         match NaiveDateTime::parse_from_str(time, format) {
             Ok(v) => Ok(v),
             Err(e) => todo!("{e}"),

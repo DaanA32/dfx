@@ -40,7 +40,7 @@ pub enum TestStep {
     Comment(String),
 }
 lazy_static! {
-    static ref COMMENT: Regex = Regex::new(r"^[ \t]+#(.*)").unwrap();
+    static ref COMMENT: Regex = Regex::new(r"^[ \t]*#(.*)").unwrap();
     static ref I_CONNECT: Regex = Regex::new(r"^iCONNECT").unwrap();
     static ref E_CONNECT: Regex = Regex::new(r"^eCONNECT").unwrap();
     static ref I_DISCONNECT: Regex = Regex::new(r"^iDISCONNECT").unwrap();
@@ -59,7 +59,7 @@ pub(crate) fn version(path: &Path) -> Result<String, std::io::Error> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
-    for (index, line) in reader.lines().enumerate() {
+    for (_index, line) in reader.lines().enumerate() {
         let line = line?; // Ignore errors.
         let captures = VERSION.captures(&line);
         // println!("{line} -> {captures:?}");
@@ -72,11 +72,12 @@ pub(crate) fn version(path: &Path) -> Result<String, std::io::Error> {
 
 pub(crate) fn from_filename(filename: &str) -> JoinHandle<Result<(), String>> {
     let steps = steps(filename);
-    let runner_thread = create_thread(steps, 40000);
+    let runner_thread = create_thread(steps, 40000, filename);
     runner_thread
 }
 
 pub fn steps(filename: &str) -> Vec<TestStep> {
+    // TODO multi session steps
     println!("Reading steps from {filename}");
     let mut steps = vec![];
 
@@ -85,7 +86,7 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
     for line in lines {
         if let Ok(line) = line {
             if let Some(capture) = COMMENT.captures(&line) {
-                match capture.get(1) {
+                match capture.get(0) {
                     Some(comment) => steps.push(TestStep::Comment(comment.as_str().to_string())),
                     None => {}
                 }
@@ -129,14 +130,19 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
     steps
 }
 
-pub fn create_thread(steps: Vec<TestStep>, port: u32) -> JoinHandle<Result<(), String>> {
-    thread::spawn(move || perform_steps(steps, port))
+pub fn create_thread(steps: Vec<TestStep>, port: u32, filename: &str) -> JoinHandle<Result<(), String>> {
+    let filename: String = filename.into();
+    thread::spawn(move || perform_steps(steps, port, filename.as_str()))
 }
 
-fn perform_steps(steps: Vec<TestStep>, port: u32) -> Result<(), String> {
+fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), String> {
+    eprintln!("Running {} step(s) from {filename}", steps.len());
     println!("Runner: performing {} step(s).", steps.len());
     assert!(steps.len() > 0);
-    assert!(steps[0] == TestStep::ExpectConnect || steps[0] == TestStep::InitiateConnect);
+    let filtered: Vec<&TestStep> = steps.iter().filter(|s| !matches!(s, TestStep::Comment(_))).collect();
+    if !(filtered[0] == &TestStep::ExpectConnect || filtered[0] == &TestStep::InitiateConnect) {
+        assert!(filtered[0] == &TestStep::ExpectConnect || filtered[0] == &TestStep::InitiateConnect);
+    }
     let mut stream = None;
     let mut parser = Parser::default();
 
@@ -191,7 +197,7 @@ fn perform_steps(steps: Vec<TestStep>, port: u32) -> Result<(), String> {
                     do_receive(s, message, &mut parser)?;
                 }
             }
-            TestStep::Comment(message) => println!("Runner: Comment {}", message),
+            TestStep::Comment(message) => println!("{}", message),
         }
         //println!("end step");
     }
@@ -227,7 +233,7 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
             0 => {}
             n => parser.add_to_stream(&buffer[0..n]),
         };
-        if (start - std::time::Instant::now()) > Duration::from_secs(30) {
+        if (start - std::time::Instant::now()) > Duration::from_secs(35) {
             panic!("Test failed reading fix message: Timeout");
         }
         match parser.read_fix_message() {

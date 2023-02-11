@@ -122,7 +122,7 @@ impl SessionState {
         need_test_request(
             Instant::now(),
             self.heartbeat_int_ms.into(),
-            self.last_sent_time_dt,
+            self.last_received_time_dt,
             self.test_request_counter,
         )
     }
@@ -509,6 +509,10 @@ impl SessionState {
     pub(crate) fn get_messages(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
         self.msg_store.get(begin_seq_num, end_seq_num).iter().map(|v| v.to_owned().to_owned()).collect()
     }
+
+    pub(crate) fn dequeue(&mut self, next_target_msg_seq_num: u32) -> Option<Message> {
+        self.message_queue.remove(&next_target_msg_seq_num)
+    }
 }
 
 /// All time args are in milliseconds
@@ -551,8 +555,10 @@ pub(crate) fn within_heartbeat(
     last_sent_time: Instant,
     last_received_time: Instant,
 ) -> bool {
-    (now - last_sent_time).as_millis() < heartbeat_int_ms
-        && (now - last_received_time).as_millis() < heartbeat_int_ms
+    //println!("ds {:?} dr {:?} {heartbeat_int_ms}", (now - last_sent_time).as_millis(), (now - last_received_time).as_millis());
+    ((now - last_sent_time).as_millis() < heartbeat_int_ms)
+    &&
+    ((now - last_received_time).as_millis() < heartbeat_int_ms)
 }
 
 // public static bool NeedHeartbeat(DateTime now, int heartBtIntMillis, DateTime lastSentTime, int testRequestCounter)
@@ -580,6 +586,7 @@ pub(crate) fn need_test_request(
     last_received_time: Instant,
     test_request_counter: u32,
 ) -> bool {
-    (now - last_received_time).as_millis() as f64
-        >= (1.2 * ((test_request_counter as u128 + 1) * heartbeat_int_ms) as f64)
+    // println!("{now:?} - {last_received_time:?} = {:?} >= {} (1.2* ({test_request_counter} +1) * heartbeat_int_ms )", (now - last_received_time).as_millis(), ((1.2 * ((test_request_counter as u128 + 1) * heartbeat_int_ms) as f64) as u128));
+    (now - last_received_time).as_millis()
+        >= (1.2 * ((test_request_counter as u128 + 1) * heartbeat_int_ms) as f64) as u128
 }

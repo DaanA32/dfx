@@ -11,6 +11,12 @@ pub enum ApplicationError {
 }
 
 #[derive(Debug, Clone)]
+pub enum FromAppError {
+    UnknownMessageType { message: Message, msg_type: String },
+    FieldMapError(FieldMapError),
+}
+
+#[derive(Debug, Clone)]
 pub struct LogonReject {
     pub reason: Option<String>
 }
@@ -20,6 +26,12 @@ pub struct DoNotAccept;
 impl From<FieldMapError> for ApplicationError {
     fn from(e: FieldMapError) -> Self {
         ApplicationError::FieldMapError(e)
+    }
+}
+
+impl From<FieldMapError> for FromAppError {
+    fn from(e: FieldMapError) -> Self {
+        FromAppError::FieldMapError(e)
     }
 }
 
@@ -46,7 +58,7 @@ pub trait Application: Send {
         &mut self,
         message: &Message,
         session_id: &SessionId,
-    ) -> Result<(), FieldMapError>;
+    ) -> Result<(), FromAppError>;
 }
 
 pub trait ApplicationExt: Application {
@@ -117,7 +129,7 @@ pub mod tests {
             &mut self,
             _message: &Message,
             _session_id: &SessionId,
-        ) -> Result<(), dfx_core::field_map::FieldMapError> {
+        ) -> Result<(), super::FromAppError> {
             Ok(())
         }
     }

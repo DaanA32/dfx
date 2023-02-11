@@ -54,3 +54,25 @@ impl SessionRejectReason {
         format!("{}", self.reason)
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BusinessRejectReason {
+    index: usize,
+    reason: String,
+}
+
+impl BusinessRejectReason {
+    pub fn UNKNOWN_MESSAGE_TYPE() -> BusinessRejectReason { BusinessRejectReason { index: 4, reason: "Unsupported message type".to_string() } }
+
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    pub fn reason(&self) -> &str {
+        self.reason.as_ref()
+    }
+
+    pub fn description(&self) -> String {
+        format!("{}", self.reason)
+    }
+}

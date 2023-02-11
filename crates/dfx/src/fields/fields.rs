@@ -15,6 +15,7 @@ impl MsgType {
     pub const SEQUENCE_RESET: &'static str = "4"; //TODO
     pub const LOGOUT: &'static str = "5"; //TODO
     pub const LOGON: &'static str = "A";
+    pub const BUSINESS_MESSAGE_REJECT: &'static str = "j";
 
     pub fn new(msg_type: &str) -> Self {
         Self(Field::new(

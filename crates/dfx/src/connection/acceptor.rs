@@ -1,7 +1,7 @@
 use std::{
     fmt::Display,
     net::{SocketAddr, TcpListener},
-    sync::{atomic::AtomicBool, Arc},
+    sync::{atomic::AtomicBool, Arc, Mutex},
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -56,7 +56,7 @@ pub struct SocketAcceptor<App, StoreFactory, DataDictionaryProvider, LogFactory,
     log_factory: LogFactory,
     message_factory: MessageFactory,
     session_settings: SessionSettings,
-    thread: Vec<JoinHandle<()>>,
+    thread: Vec<ThreadState>,
     running: Arc<AtomicBool>,
 }
 
@@ -103,13 +103,39 @@ where App: Application + Sync + Clone + 'static,
     }
 
     pub fn join(&mut self) {
-        while self.thread.iter().any(|t| !t.is_finished()) {}
+        while self.thread.iter().any(|t| !t.thread().is_finished()) {}
+    }
+
+    pub fn endpoints(&self) -> Vec<SocketAddr>{
+        self.thread
+            .iter()
+            .filter_map(|t| t.endpoint())
+            .collect()
     }
 
     pub fn stop(&mut self) {
         self.running
             .store(false, std::sync::atomic::Ordering::Relaxed);
         self.join()
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ThreadState {
+    endpoint: Arc<Mutex<Option<SocketAddr>>>,
+    thread: JoinHandle<()>
+}
+
+impl ThreadState {
+    fn thread(&self) -> &JoinHandle<()> {
+        &self.thread
+    }
+
+    fn endpoint(&self) -> Option<SocketAddr> {
+        match self.endpoint.lock() {
+            Ok(guard) => *guard,
+            Err(_) => todo!(),
+        }
     }
 }
 
@@ -132,19 +158,30 @@ where App: Application + Sync + Clone + 'static,
         }
     }
 
-    pub(crate) fn start(self, running: &Arc<AtomicBool>) -> JoinHandle<()> {
+    pub(crate) fn start(self, running: &Arc<AtomicBool>) -> ThreadState {
         let rt = running.clone();
-        thread::Builder::new()
+        let endpoint = Arc::new(Mutex::new(None));
+        let ref_endpoint = endpoint.clone();
+        let thread = thread::Builder::new()
             .name("socket-acceptor-thread".into())
-            .spawn(move || match self.event_loop(rt) {
+            .spawn(move || match self.event_loop(rt, ref_endpoint) {
                 Ok(()) => {}
                 Err(e) => println!("{e}"),
             })
-            .expect("socket-acceptor-thread started")
+            .expect("socket-acceptor-thread started");
+        ThreadState {
+            endpoint,
+            thread,
+        }
     }
 
-    fn event_loop(&self, running: Arc<AtomicBool>) -> Result<(), AcceptorError> {
+    fn event_loop(&self, running: Arc<AtomicBool>, endpoint: Arc<Mutex<Option<SocketAddr>>>) -> Result<(), AcceptorError> {
         let listener = self.bind()?;
+        let addr = listener.local_addr().unwrap();
+        match endpoint.lock() {
+            Ok(mut guard) => { guard.replace(addr); },
+            Err(_) => todo!(),
+        }
         let mut threads = Vec::new();
         let mut n = 0;
         //TODO static listener based on sessions/ports

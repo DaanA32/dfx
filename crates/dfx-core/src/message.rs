@@ -727,7 +727,7 @@ impl Message {
         Message::get_msg_type(msg_str)
     }
 
-    pub fn get_appl_ver_id(begin_string: &String) -> Result<u32, String> {
+    pub fn get_appl_ver_id(begin_string: &str) -> Result<u32, String> {
         // switch (beginString)
         // {
         //     case FixValues.BeginString.FIX40:
@@ -750,7 +750,7 @@ impl Message {
         //         throw new System.ArgumentException(String.Format());
         // }
 
-        match begin_string.as_str() {
+        match begin_string {
             fix_values::BeginString::FIX40 => Ok(ApplVerID::FIX40),
             fix_values::BeginString::FIX41 => Ok(ApplVerID::FIX41),
             fix_values::BeginString::FIX42 => Ok(ApplVerID::FIX42),
@@ -803,21 +803,21 @@ impl Message {
             }
         }
 
-        if self.header.is_field_set(tags::SenderCompID) {
+        if header.is_field_set(tags::SenderCompID) {
             let sender_comp_id = header.get_string(tags::SenderCompID).unwrap();
             if sender_comp_id.len() > 0 {
                 self.header.set_tag_value(tags::TargetCompID, &sender_comp_id);
             }
         }
 
-        if self.header.is_field_set(tags::SenderSubID) {
+        if header.is_field_set(tags::SenderSubID) {
             let sender_sub_id = header.get_string(tags::SenderSubID).unwrap();
             if sender_sub_id.len() > 0 {
                 self.header.set_tag_value(tags::TargetSubID, &sender_sub_id);
             }
         }
 
-        if self.header.is_field_set(tags::SenderLocationID) {
+        if header.is_field_set(tags::SenderLocationID) {
             let sender_location_id = header.get_string(tags::SenderLocationID).unwrap();
             if sender_location_id.len() > 0 {
                 self.header
@@ -825,21 +825,21 @@ impl Message {
             }
         }
 
-        if self.header.is_field_set(tags::TargetCompID) {
+        if header.is_field_set(tags::TargetCompID) {
             let target_comp_id = header.get_string(tags::TargetCompID).unwrap();
             if target_comp_id.len() > 0 {
                 self.header.set_tag_value(tags::SenderCompID, &target_comp_id);
             }
         }
 
-        if self.header.is_field_set(tags::TargetSubID) {
+        if header.is_field_set(tags::TargetSubID) {
             let target_sub_id = header.get_string(tags::TargetSubID).unwrap();
             if target_sub_id.len() > 0 {
                 self.header.set_tag_value(tags::SenderSubID, &target_sub_id);
             }
         }
 
-        if self.header.is_field_set(tags::TargetLocationID) {
+        if header.is_field_set(tags::TargetLocationID) {
             let target_location_id = header.get_string(tags::TargetLocationID).unwrap();
             if target_location_id.len() > 0 {
                 self.header
@@ -853,7 +853,7 @@ impl Message {
         self.header.remove_field(tags::DeliverToCompID);
         self.header.remove_field(tags::DeliverToSubID);
 
-        if self.header.is_field_set(tags::OnBehalfOfCompID) {
+        if header.is_field_set(tags::OnBehalfOfCompID) {
             let on_behalf_of_comp_id = header.get_string(tags::OnBehalfOfCompID).unwrap();
             if on_behalf_of_comp_id.len() > 0 {
                 self.header
@@ -861,7 +861,7 @@ impl Message {
             }
         }
 
-        if self.header.is_field_set(tags::OnBehalfOfSubID) {
+        if header.is_field_set(tags::OnBehalfOfSubID) {
             let on_behalf_of_sub_id = header.get_string(tags::OnBehalfOfSubID).unwrap();
             if on_behalf_of_sub_id.len() > 0 {
                 self.header
@@ -869,7 +869,7 @@ impl Message {
             }
         }
 
-        if self.header.is_field_set(tags::DeliverToCompID) {
+        if header.is_field_set(tags::DeliverToCompID) {
             let deliver_to_comp_id = header.get_string(tags::DeliverToCompID).unwrap();
             if deliver_to_comp_id.len() > 0 {
                 self.header
@@ -877,7 +877,7 @@ impl Message {
             }
         }
 
-        if self.header.is_field_set(tags::DeliverToSubID) {
+        if header.is_field_set(tags::DeliverToSubID) {
             let deliver_to_sub_id = header.get_string(tags::DeliverToSubID).unwrap();
             if deliver_to_sub_id.len() > 0 {
                 self.header
