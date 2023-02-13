@@ -31,22 +31,22 @@ const TIME_ONLY_FORMAT_WITHOUT_MILLISECONDS: &str = "%H:%M:%S";
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum TestStep {
-    InitiateConnect,
-    ExpectConnect,
-    InitiateDisconnect,
-    ExpectDisconnect,
-    InitiateMessage(String),
-    ExpectMessage(String),
+    InitiateConnect(usize),
+    ExpectConnect(usize),
+    InitiateDisconnect(usize),
+    ExpectDisconnect(usize),
+    InitiateMessage(usize, String),
+    ExpectMessage(usize, String),
     Comment(String),
 }
 lazy_static! {
     static ref COMMENT: Regex = Regex::new(r"^[ \t]*#(.*)").unwrap();
-    static ref I_CONNECT: Regex = Regex::new(r"^iCONNECT").unwrap();
-    static ref E_CONNECT: Regex = Regex::new(r"^eCONNECT").unwrap();
-    static ref I_DISCONNECT: Regex = Regex::new(r"^iDISCONNECT").unwrap();
-    static ref E_DISCONNECT: Regex = Regex::new(r"^eDISCONNECT").unwrap();
-    static ref I_MESSAGE: Regex = Regex::new(r"^I(.*)").unwrap();
-    static ref E_MESSAGE: Regex = Regex::new(r"^E(.*)").unwrap();
+    static ref I_CONNECT: Regex = Regex::new(r"^i(\d,)?CONNECT").unwrap();
+    static ref E_CONNECT: Regex = Regex::new(r"^e(\d,)?CONNECT").unwrap();
+    static ref I_DISCONNECT: Regex = Regex::new(r"^i(\d,)?DISCONNECT").unwrap();
+    static ref E_DISCONNECT: Regex = Regex::new(r"^e(\d,)?DISCONNECT").unwrap();
+    static ref I_MESSAGE: Regex = Regex::new(r"^I(\d,)?(.*)").unwrap();
+    static ref E_MESSAGE: Regex = Regex::new(r"^E(\d,)?(.*)").unwrap();
 
     // matches (FIXT?.X.X\x01)(body)(checksum);
     static ref MESSAGE_L: Regex = Regex::new(r"((8=FIXT?\.\d\.\d\|)((.*?\|)*))(10=.*\|)?").unwrap(); // (9=\d+)?
@@ -91,36 +91,54 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     None => {}
                 }
             } else if let Some(capture) = I_CONNECT.captures(&line) {
+                let n = capture.get(1)
+                    .map(|c| c.as_str().replace(",", "").parse().unwrap())
+                    .unwrap_or(0);
                 match capture.get(0) {
-                    Some(_) => steps.push(TestStep::InitiateConnect),
+                    Some(_) => steps.push(TestStep::InitiateConnect(n)),
                     None => {}
                 }
             } else if let Some(capture) = E_CONNECT.captures(&line) {
+                let n = capture.get(1)
+                    .map(|c| c.as_str().replace(",", "").parse().unwrap())
+                    .unwrap_or(0);
                 match capture.get(0) {
-                    Some(_) => steps.push(TestStep::ExpectConnect),
+                    Some(_) => steps.push(TestStep::ExpectConnect(n)),
                     None => {}
                 }
             } else if let Some(capture) = I_DISCONNECT.captures(&line) {
+                let n = capture.get(1)
+                    .map(|c| c.as_str().replace(",", "").parse().unwrap())
+                    .unwrap_or(0);
                 match capture.get(0) {
-                    Some(_) => steps.push(TestStep::InitiateDisconnect),
+                    Some(_) => steps.push(TestStep::InitiateDisconnect(n)),
                     None => {}
                 }
             } else if let Some(capture) = E_DISCONNECT.captures(&line) {
+                let n = capture.get(1)
+                    .map(|c| c.as_str().replace(",", "").parse().unwrap())
+                    .unwrap_or(0);
                 match capture.get(0) {
-                    Some(_) => steps.push(TestStep::ExpectDisconnect),
+                    Some(_) => steps.push(TestStep::ExpectDisconnect(n)),
                     None => {}
                 }
             } else if let Some(capture) = I_MESSAGE.captures(&line) {
-                match capture.get(1) {
+                let n = capture.get(1)
+                    .map(|c| c.as_str().replace(",", "").parse().unwrap())
+                    .unwrap_or(0);
+                match capture.get(2) {
                     Some(message) => {
-                        steps.push(TestStep::InitiateMessage(message.as_str().to_string()))
+                        steps.push(TestStep::InitiateMessage(0, message.as_str().to_string()))
                     }
                     None => {}
                 }
             } else if let Some(capture) = E_MESSAGE.captures(&line) {
-                match capture.get(1) {
+                let n = capture.get(1)
+                    .map(|c| c.as_str().replace(",", "").parse().unwrap())
+                    .unwrap_or(0);
+                match capture.get(2) {
                     Some(message) => {
-                        steps.push(TestStep::ExpectMessage(message.as_str().to_string()))
+                        steps.push(TestStep::ExpectMessage(0, message.as_str().to_string()))
                     }
                     None => {}
                 }
@@ -140,8 +158,8 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
     println!("Runner: performing {} step(s).", steps.len());
     assert!(steps.len() > 0);
     let filtered: Vec<&TestStep> = steps.iter().filter(|s| !matches!(s, TestStep::Comment(_))).collect();
-    if !(filtered[0] == &TestStep::ExpectConnect || filtered[0] == &TestStep::InitiateConnect) {
-        assert!(filtered[0] == &TestStep::ExpectConnect || filtered[0] == &TestStep::InitiateConnect);
+    if !(matches!(filtered[0], &TestStep::ExpectConnect(n)) || matches!(filtered[0], &TestStep::InitiateConnect(n))) {
+        assert!(matches!(filtered[0], &TestStep::ExpectConnect(n)) || matches!(filtered[0], &TestStep::InitiateConnect(n)));
     }
     let mut stream = None;
     let mut parser = Parser::default();
@@ -149,7 +167,7 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
     for step in steps {
         // println!("{step:?}");
         match step {
-            TestStep::InitiateConnect => {
+            TestStep::InitiateConnect(n) => {
                 if stream.is_none() {
                     stream = Some(
                         TcpStream::connect(format!("127.0.0.1:{}", port))
@@ -162,7 +180,7 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
                         .unwrap();
                 }
             }
-            TestStep::ExpectConnect => {
+            TestStep::ExpectConnect(n) => {
                 println!("Existing: {stream:?}");
                 if stream.is_none() {
                     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
@@ -175,24 +193,24 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
                     stream = Some(s);
                 }
             }
-            TestStep::InitiateDisconnect => {
+            TestStep::InitiateDisconnect(n) => {
                 if let Some(s) = &mut stream {
                     s.shutdown(Shutdown::Both).expect("Closed stream");
                     stream = None;
                 }
             }
-            TestStep::ExpectDisconnect => {
+            TestStep::ExpectDisconnect(n) => {
                 if let Some(s) = &mut stream {
                     wait_for_disconnect(s);
                     stream = None;
                 }
             }
-            TestStep::InitiateMessage(message) => {
+            TestStep::InitiateMessage(n, message) => {
                 if let Some(s) = &mut stream {
                     do_send(message, s);
                 }
             }
-            TestStep::ExpectMessage(message) => {
+            TestStep::ExpectMessage(n, message) => {
                 if let Some(s) = &mut stream {
                     do_receive(s, message, &mut parser)?;
                 }

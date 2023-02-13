@@ -169,12 +169,12 @@ where App: Application + Clone + 'static,
     }
 
     // TODO move this to a concurrent map > SessionState > Sender<Message>
-    fn set_connected(&mut self, session_id: SessionId) {
+    fn set_connected(&mut self, session_id: SessionId) -> Result<(), ReactorError> {
         self.session
             .as_mut()
             .unwrap()
-            .set_connected(&session_id)
-            .unwrap();
+            .set_connected(&session_id).map_err(|_e| ReactorError::Disconnect)?;
+        Ok(())
     }
 
     // TODO move this to a concurrent map > SessionState > Sender<Message>
@@ -220,7 +220,7 @@ where App: Application + Clone + 'static,
             if let Some(session) = self.session.as_mut() {
                 session.next_msg(msg);
             } else {
-                let message = Message::new(&msg[..])?;
+                let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
                 let session_id = message.extract_contra_session_id();
                 let session_settings = self.for_session_id(&session_id);
                 match session_settings {
