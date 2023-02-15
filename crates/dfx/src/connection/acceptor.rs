@@ -188,7 +188,7 @@ where App: Application + Sync + Clone + 'static,
         while running.load(std::sync::atomic::Ordering::Relaxed) {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    println!("Connected");
+                    println!("Connected: {_addr}");
                     let session_setting = &self.session_settings[0];
                     let stream = StreamFactory::configure_stream(
                         stream,

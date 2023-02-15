@@ -7,15 +7,18 @@ use dfx::{
 };
 use lazy_static::lazy_static;
 
-lazy_static! {
-    static ref SEEN: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-}
-
 #[derive(Clone)]
-pub struct TestApplication;
+pub struct TestApplication {
+    ids_seen: Arc<Mutex<HashSet<String>>>,
+}
 impl TestApplication {
+    pub fn new() -> Self {
+        TestApplication {
+            ids_seen: Arc::new(Mutex::new(HashSet::new()))
+        }
+    }
     fn seen(&self, cl_ord_id: &String) -> bool {
-        match SEEN.lock() {
+        match self.ids_seen.lock() {
             Ok(seen) => {
                 if seen.contains(cl_ord_id) {
                     println!("Contained {}", cl_ord_id);
@@ -29,15 +32,15 @@ impl TestApplication {
         }
     }
     fn insert(&self, cl_ord_id: String) {
-        match SEEN.lock() {
+        match self.ids_seen.lock() {
             Ok(mut seen) => {
                 seen.insert(cl_ord_id);
             },
             Err(e) => panic!("Poisened {e:?}"),
         }
     }
-    pub fn clear() {
-        match SEEN.lock() {
+    pub fn clear(&self) {
+        match self.ids_seen.lock() {
             Ok(mut seen) => {
                 seen.clear()
             },
@@ -123,6 +126,11 @@ impl Application for TestApplication {
 
 #[derive(Clone)]
 pub struct SendTestApplication;
+impl SendTestApplication {
+    pub fn new() -> Self {
+        SendTestApplication
+    }
+}
 impl ApplicationExt for SendTestApplication {
     fn early_intercept(
         &mut self,

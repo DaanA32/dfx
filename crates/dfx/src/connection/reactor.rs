@@ -160,11 +160,13 @@ where App: Application + Clone + 'static,
             .session_id()
             .clone();
         self.set_disconnected(session_id);
+        let remote = self.stream.as_ref().unwrap().peer_addr().unwrap();
         self.stream
             .as_mut()
             .unwrap()
             .shutdown(std::net::Shutdown::Both)
             .unwrap();
+        println!("Disconnected: {remote}");
         Ok(())
     }
 
@@ -230,6 +232,7 @@ where App: Application + Clone + 'static,
                             session.set_session_id(session_id.clone());
                             self.session = Some(session);
                             self.create_responder();
+                            // queue instead?
                             self.session.as_mut().unwrap().next_msg(msg);
                         } else {
                             return Err(ReactorError::Disconnect);

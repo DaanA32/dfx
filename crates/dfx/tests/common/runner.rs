@@ -128,7 +128,7 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     .unwrap_or(0);
                 match capture.get(2) {
                     Some(message) => {
-                        steps.push(TestStep::InitiateMessage(0, message.as_str().to_string()))
+                        steps.push(TestStep::InitiateMessage(n, message.as_str().to_string()))
                     }
                     None => {}
                 }
@@ -138,7 +138,7 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     .unwrap_or(0);
                 match capture.get(2) {
                     Some(message) => {
-                        steps.push(TestStep::ExpectMessage(0, message.as_str().to_string()))
+                        steps.push(TestStep::ExpectMessage(n, message.as_str().to_string()))
                     }
                     None => {}
                 }
@@ -161,28 +161,27 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
     if !(matches!(filtered[0], &TestStep::ExpectConnect(n)) || matches!(filtered[0], &TestStep::InitiateConnect(n))) {
         assert!(matches!(filtered[0], &TestStep::ExpectConnect(n)) || matches!(filtered[0], &TestStep::InitiateConnect(n)));
     }
-    let mut stream = None;
+    // let mut stream = None;
     let mut parser = Parser::default();
+
+    let mut stream_map = std::collections::HashMap::new();
 
     for step in steps {
         // println!("{step:?}");
         match step {
             TestStep::InitiateConnect(n) => {
-                if stream.is_none() {
-                    stream = Some(
-                        TcpStream::connect(format!("127.0.0.1:{}", port))
-                            .expect("Connection initiated."),
-                    );
-                    stream
-                        .as_mut()
-                        .unwrap()
-                        .set_read_timeout(Some(Duration::from_secs(10)))
-                        .unwrap();
+                if stream_map.get(&n).is_none() {
+                    let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port))
+                            .expect("Connection initiated.");
+                    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+                    stream_map.insert(n, stream);
+                } else {
+                    return Err(format!("Initiate connect[{n}] on existing stream"));
                 }
             }
             TestStep::ExpectConnect(n) => {
-                println!("Existing: {stream:?}");
-                if stream.is_none() {
+                println!("Existing: {stream_map:?}");
+                if stream_map.get(&n).is_none() {
                     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
                     println!("Waiting for connection.");
                     // println!("Runner: Awaiting connection");
@@ -190,29 +189,39 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
                     println!("Accepted connection : {addr}.");
                     // println!("Runner: Connected");
                     s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
-                    stream = Some(s);
+                    stream_map.insert(n, s);
+                } else {
+                    return Err(format!("Expect connect[{n}] on existing stream"));
                 }
             }
             TestStep::InitiateDisconnect(n) => {
-                if let Some(s) = &mut stream {
+                if let Some(s) = stream_map.get_mut(&n) {
                     s.shutdown(Shutdown::Both).expect("Closed stream");
-                    stream = None;
+                    stream_map.remove(&n);
+                } else {
+                    return Err(format!("Stream[{n}] was none during initiate disconnect"))
                 }
             }
             TestStep::ExpectDisconnect(n) => {
-                if let Some(s) = &mut stream {
+                if let Some(s) = stream_map.get_mut(&n) {
                     wait_for_disconnect(s);
-                    stream = None;
+                    stream_map.remove(&n);
+                } else {
+                    return Err(format!("Stream[{n}] was none during expect disconnect"))
                 }
             }
             TestStep::InitiateMessage(n, message) => {
-                if let Some(s) = &mut stream {
+                if let Some(s) = stream_map.get_mut(&n) {
                     do_send(message, s);
+                } else {
+                    return Err(format!("Stream[{n}] was none during initiate message: {}", message))
                 }
             }
             TestStep::ExpectMessage(n, message) => {
-                if let Some(s) = &mut stream {
+                if let Some(s) = stream_map.get_mut(&n) {
                     do_receive(s, message, &mut parser)?;
+                } else {
+                    return Err(format!("Stream[{n}] was none during expect message: {}", message))
                 }
             }
             TestStep::Comment(message) => println!("{}", message),

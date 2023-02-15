@@ -43,6 +43,8 @@ pub(crate) enum SettingsConnection {
         is_dynamic: bool,
         session_qualifier: Option<String>,
         accept_addr: SocketAddr,
+        logon_timeout: u32,
+        logout_timeout: u32,
     },
     Initiator {
         connect_addr: SocketAddr,
@@ -83,6 +85,20 @@ impl SettingsConnection {
         match self {
             SettingsConnection::Acceptor { .. } => None,
             SettingsConnection::Initiator { heart_bt_int, .. } => Some(*heart_bt_int),
+        }
+    }
+
+    pub(crate) fn logon_timeout(&self) -> u32 {
+        match self {
+            SettingsConnection::Acceptor { logon_timeout, .. } => *logon_timeout,
+            SettingsConnection::Initiator { logon_timeout, .. } => *logon_timeout,
+        }
+    }
+
+    pub(crate) fn logout_timeout(&self) -> u32 {
+        match self {
+            SettingsConnection::Acceptor { logout_timeout, .. } => *logout_timeout,
+            SettingsConnection::Initiator { logout_timeout, .. } => *logout_timeout,
         }
     }
 }

@@ -54,7 +54,7 @@ pub fn test_accept() {
             s => todo!("Handle {s:?}"),
         };
 
-        let app = TestApplication;
+        let app = TestApplication::new();
         let session_settings = SessionSettings::from_file(cfg).unwrap();
         let mut acceptor = SocketAcceptor::new(
             session_settings,
@@ -95,7 +95,7 @@ pub fn test_accept() {
         println!("Finished {i}");
         println!("---------------------------------------");
         i += 1;
-        TestApplication::clear();
+        // TestApplication::clear();
     }
 
     // let session_settings = SessionSettings::from_file("tests/cfg/at_40.cfg").unwrap();

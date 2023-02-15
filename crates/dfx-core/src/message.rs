@@ -783,7 +783,7 @@ impl Message {
             self.header.remove_field(tags::DeliverToLocationID);
 
             if begin_string.as_str() >= "FIX.4.1" {
-                if self.header.is_field_set(tags::OnBehalfOfLocationID) {
+                if header.is_field_set(tags::OnBehalfOfLocationID) {
                     let on_behalf_of_location_id =
                         header.get_string(tags::OnBehalfOfLocationID).unwrap();
                     if on_behalf_of_location_id.len() > 0 {
@@ -792,7 +792,7 @@ impl Message {
                     }
                 }
 
-                if self.header.is_field_set(tags::DeliverToLocationID) {
+                if header.is_field_set(tags::DeliverToLocationID) {
                     let deliver_to_location_id =
                         header.get_string(tags::DeliverToLocationID).unwrap();
                     if deliver_to_location_id.len() > 0 {

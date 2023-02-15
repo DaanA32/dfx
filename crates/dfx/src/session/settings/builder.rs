@@ -460,6 +460,8 @@ impl DynamicSessionSettingBuilder {
                 )
                 .parse()
                 .unwrap(),
+                logon_timeout: self.logon_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(10),
+                logout_timeout: self.logout_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(2),
             },
             "initiator" => SettingsConnection::Initiator {
                 connect_addr: format!(

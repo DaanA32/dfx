@@ -13,7 +13,7 @@ use common::SendTestApplication;
 pub fn test_send() {
     let runner_thread = runner::from_filename("tests/definitions/client/send.def");
 
-    let app = SendTestApplication;
+    let app = SendTestApplication::new();
     let session_settings = SessionSettings::from_file("tests/initiator.cfg").unwrap();
     let mut initiator = SocketInitiator::new(
         session_settings,

@@ -13,7 +13,7 @@ use common::TestApplication;
 pub fn test_client_heartbeat() {
     let runner_thread = runner::from_filename("tests/definitions/client/heartbeat.def");
 
-    let app = TestApplication;
+    let app = TestApplication::new();
     let session_settings = SessionSettings::from_file("tests/initiator.cfg").unwrap();
     let mut initiator = SocketInitiator::new(
         session_settings,

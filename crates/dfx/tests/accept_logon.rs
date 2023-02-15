@@ -16,7 +16,7 @@ use common::TestApplication;
 
 #[test]
 pub fn test_accept() {
-    let app = TestApplication;
+    let app = TestApplication::new();
     let session_settings = SessionSettings::from_file("tests/acceptor.cfg").unwrap();
     let mut acceptor = SocketAcceptor::new(
         session_settings,

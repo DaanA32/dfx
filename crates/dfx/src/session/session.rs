@@ -134,6 +134,8 @@ impl Session {
             .unwrap_or_else(|| Box::new(NoLogger));
         let msg_store = store_factory.create(settings.session_id());
         let mut state = SessionState::new(settings.connection().is_initiator(), log, settings.connection().heart_bt_int().unwrap_or(30), msg_store);
+        state.set_logon_timeout(settings.connection().logon_timeout());
+        state.set_logout_timeout(settings.connection().logout_timeout());
         let log = log_factory
             .map(|l| l.create(settings.session_id()))
             .unwrap_or_else(|| Box::new(NoLogger)); //TODO clone?
@@ -1358,7 +1360,7 @@ impl Session {
         let timespan = Utc::now() - sending_time;
 
         // TODO change to <=
-        //println!("{} < {}", timespan.num_seconds().abs(), self.max_latency);
+        println!("{} < {}", timespan.num_seconds().abs(), self.max_latency);
         timespan.num_seconds().abs() < self.max_latency as i64
     }
 

@@ -20,6 +20,8 @@ openssl = "0.10.42"
 
 [dev-dependencies]
 walkdir = "2.3.2"
+rusty-fork = "0.3.0"
+paste = "1.0"
 
 [build-dependencies]
 indoc = "1"
