@@ -7,3 +7,4 @@ pub mod tags;
 pub mod fields;
 pub mod fix_values;
 pub mod session_id;
+pub mod parser;

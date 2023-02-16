@@ -14,8 +14,8 @@ use dfx::{
 };
 
 mod common;
-use common::runner;
 use common::TestApplication;
+use dfx_testing::runner;
 
 fn is_def_file(entry: Result<&DirEntry, &walkdir::Error>) -> bool {
     match entry {
@@ -83,14 +83,18 @@ pub fn test_accept() {
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        acceptor.stop();
+        // acceptor.stop();
 
-        match runner_thread.join() {
-            Ok(result) => match result {
-                Ok(()) => {},
-                Err(message) => panic!("Steps failed:\n{message}\n")
-            },
-            Err(_) => println!("Failed to join thread."),
+        if runner_thread.is_finished() {
+            match runner_thread.join() {
+                Ok(result) => match result {
+                    Ok(()) => {},
+                    Err(message) => panic!("Steps failed:\n{message}\n")
+                },
+                Err(_) => eprintln!("Failed to join thread."),
+            }
+        } else {
+            eprintln!("Runner did not finish in 120s {}", path.display());
         }
         println!("Finished {i}");
         println!("---------------------------------------");

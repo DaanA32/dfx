@@ -1,4 +1,4 @@
-use std::fmt::Display;
+#![allow(non_snake_case)]
 
 use crate::field_map::Tag;
 

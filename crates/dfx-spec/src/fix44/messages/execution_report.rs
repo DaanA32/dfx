@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 
 use dfx_core::message::Message;
-
-use super::super::fields::*;
+use crate::fix44::fields::*;
 
 /// ExecutionReport
 #[derive(Clone, Debug)]

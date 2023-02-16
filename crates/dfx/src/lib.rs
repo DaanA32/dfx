@@ -8,7 +8,6 @@ pub mod connection;
 pub mod fields;
 pub mod logging;
 pub mod message_store;
-pub mod parser;
 pub mod session;
 
 pub use dfx_core::*;

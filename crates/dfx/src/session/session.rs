@@ -10,7 +10,6 @@ use chashmap::CHashMap;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 use dfx_core::data_dictionary::TagException;
-use dfx_core::fix_values;
 use dfx_core::fix_values::BusinessRejectReason;
 use dfx_core::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
@@ -21,7 +20,6 @@ use dfx_core::data_dictionary_provider::DataDictionaryProvider;
 use dfx_core::field_map::Field;
 use dfx_core::field_map::FieldMapError;
 use dfx_core::field_map::Tag;
-use crate::connection::ConnectionError;
 use crate::fields::*;
 use dfx_core::fields::ConversionError;
 use dfx_core::fields::converters::datetime::DateTimeFormat;
@@ -46,7 +44,6 @@ use super::FromAppError;
 use super::LogonReject;
 use super::Persistence;
 use super::SessionSetting;
-use super::SessionSettings;
 
 const _BUF_SIZE: usize = 4096;
 
@@ -746,8 +743,8 @@ impl Session {
                     //     { }
                     // return e;
                 },
-                SessionHandleMessageError::MessageParseError { message: _, parse_error } => {
-                    self.log.on_event(format!("MessageParse Error: {parse_error:?}").as_str());
+                SessionHandleMessageError::MessageParseError { message, parse_error } => {
+                    self.log.on_event(format!("MessageParse Error: {parse_error:?} {message:?}").as_str());
                 },
                 //Tag Exception
                 SessionHandleMessageError::TagException(msg, e) => {
@@ -932,7 +929,7 @@ impl Session {
                     if msg_type == MsgType::LOGON || msg_type == MsgType::RESEND_REQUEST {
                         self.state.incr_next_target_msg_seq_num();
                     } else {
-                        self.handle_msg(msg, &begin_string, &msg_type);
+                        self.handle_msg(msg, &begin_string, &msg_type).unwrap();
                     }
                 },
                 e => todo!("session::next_queued {e:?}")

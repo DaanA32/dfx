@@ -147,24 +147,32 @@ pub struct {group_name} {{
 
 fn generate_message_fields_groups(message: &DDMap) -> String {
     let mut s = String::new();
-    for (_tag, field) in message.fields() {
-        s.push_str(generate_message_field(field).as_str());
-    }
-    for (_tag, group) in message.groups() {
-        s.push_str(generate_message_group(group).as_str());
+    if message.fields().len() == 0 && message.groups().len() == 0  {
+        s.push_str(format!(r#"
+pub fn value(&self) -> &dfx_core::field_map::FieldMap {{
+    &self.inner
+}}
+"#,
+        ).as_str());
+    } else {
+        for (_tag, field) in message.fields() {
+            s.push_str(generate_message_field(field).as_str());
+        }
+        for (_tag, group) in message.groups() {
+            s.push_str(generate_message_group(group).as_str());
+        }
     }
     s
 }
 
-fn generate_message(message: &DDMap) -> String {
+fn generate_message(message: &DDMap, version: &str) -> String {
     format!(
         indoc!(
             r#"
             use std::borrow::Cow;
 
             use dfx_core::message::Message;
-
-            use super::super::fields::*;
+            {import_fields}
 
             /// {message_name}
             #[derive(Clone, Debug)]
@@ -180,9 +188,10 @@ fn generate_message(message: &DDMap) -> String {
             {groups}
             "#
         ),
+        import_fields = if message.fields().len() == 0 && message.groups().len() == 0  { format!("") } else { format!("use crate::{version}::fields::*;") },
         message_name = message.name().to_pascal_case(),
         functions = generate_message_fields_groups(message),
-        groups = generate_groups(message),
+        groups = generate_groups(message)
     )
 }
 
@@ -193,6 +202,7 @@ fn codegen(filename: &str) {
     let data_dictionary = DataDictionary::from_file(filename).expect("Unable to read filename {filename}");
 
     let version = data_dictionary.version().unwrap();
+    let version_mod_name = version.to_ascii_lowercase().replace(".", "");
 
     let out_dir = Path::new(&out_dir).join(version.to_ascii_lowercase().replace(".", ""));
     if std::fs::read_dir(&out_dir).is_err() {
@@ -230,7 +240,7 @@ fn codegen(filename: &str) {
     let mut module = String::with_capacity(8192);
     for (_, message) in data_dictionary.messages() {
         let dest_path = fields_dir.join(format!("{}.rs", message.name().to_snake_case()));
-        std::fs::write(dest_path, generate_message(message)).unwrap();
+        std::fs::write(dest_path, generate_message(message, &version_mod_name)).unwrap();
         module.push_str(format!("mod r#{name};\npub use r#{name}::*;\n", name = message.name().to_snake_case()).as_str())
     }
     std::fs::write(&module_path, module).unwrap();
@@ -238,9 +248,8 @@ fn codegen(filename: &str) {
 
 
 fn main() {
-    println!("cargo:rerun-if-changed=crate/dfx/build.rs");
+    println!("cargo:rerun-if-changed=crate/dfx-spec/build.rs");
     println!("cargo:rerun-if-changed=spec/");
-    println!("cargo:rerun-if-changed=crate/dfx-core/src/");
 
     codegen("../../spec/FIX44.xml")
 }

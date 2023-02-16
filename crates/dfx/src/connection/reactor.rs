@@ -145,7 +145,7 @@ where App: Application + Clone + 'static,
             .expect("Session not found!")
             .session_id()
             .clone();
-        self.set_connected(session_id.clone());
+        self.set_connected(session_id.clone())?;
 
         let session = self.session.as_mut().expect("Session not found!");
         session
