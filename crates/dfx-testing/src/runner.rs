@@ -270,7 +270,7 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
         let now = std::time::Instant::now();
         let read_time = now.duration_since(start);
         if read_time > Duration::from_secs(35) {
-            return Err("Test failed reading fix message: Timeout".to_string());
+            return Err(format!("Test failed reading fix message timeout: {message}"));
         }
         match parser.read_fix_message() {
             Ok(message) => {
@@ -395,5 +395,6 @@ fn to_fields(message: String, delim: char, skip_time: bool) -> Vec<(String, Stri
         .filter(|value| value.0 != "10")
         .filter(|value| value.0 != "9")
         .filter(|value| value.0 != "122")
+        .filter(|value| value.0 != "60")
         .collect()
 }

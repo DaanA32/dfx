@@ -559,8 +559,11 @@ impl DataDictionary {
         //         throw new RepeatingGroupCountMismatch(field.Tag);
         //     }
         // }
+        // println!("Field {field:?}");
+        // println!("Map {map:?}");
+        // println!("MsgType {msg_type}");
         if self.is_group(msg_type, field.tag())
-            && map.get_int(field.tag())? as usize != map.group_count(field.tag())?
+            && map.get_int(field.tag())? as usize != map.group_count(field.tag()).unwrap_or(0)
         {
             // return Err(MessageValidationError::RepeatingGroupCountMismatch(
             //     field.tag(),
@@ -633,7 +636,9 @@ impl DataDictionary {
                         // CheckIsInMessage(field, msgType);
                         self.check_is_in_message(field, msg_type)?;
                         // CheckGroupDefinitionCount(field, map, msgType);
+                        // println!("check_group_count");
                         self.check_group_count(field, message, msg_type)?;
+                        // println!("check_group_count_end");
                     } else {
                         // println!("header or trailer field");
                     }

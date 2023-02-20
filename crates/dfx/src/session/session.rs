@@ -884,6 +884,7 @@ impl Session {
             )
         };
 
+        println!("Validation.");
         if let Err(e) = validation_result {
             return Err(match e {
                 MessageValidationError::UnsupportedVersion { expected, actual } => SessionHandleMessageError::UnsupportedVersion { message, expected, actual },
@@ -892,6 +893,7 @@ impl Session {
                 MessageValidationError::ConversionError(ce) => SessionHandleMessageError::ConversionError(ce),
             });
         }
+        println!("Finish Validation.");
 
         if MsgType::LOGON == msg_type {
             self.next_logon(message)
@@ -1436,11 +1438,16 @@ impl Session {
                 reject.set_tag_value(tags::RefMsgType, &msg_type);
             }
             //TODO
+            // if ((FixValues.BeginString.FIX42.Equals(beginString) && reason.Value <= FixValues.SessionRejectReason.INVALID_MSGTYPE.Value)
+            //  || (beginString.CompareTo(FixValues.BeginString.FIX42) > 0))
+            //     {
+            //         reject.SetField(new Fields.SessionRejectReason(reason.Value));
+            //     }
             if (&BeginString::FIX42 == begin_string
-                && reason.reason()/*.value*/ <= SessionRejectReason::INVALID_MSGTYPE().reason()/*.value*/)
+                && reason.tag() <= SessionRejectReason::INVALID_MSGTYPE().tag()/*.value*/)
                 || begin_string > &BeginString::FIX42
             {
-                reject.set_tag_value(tags::SessionRejectReason, reason.reason() /*.value*/);
+                reject.set_tag_value(tags::SessionRejectReason, format!("{}", reason.tag()) /*.value*/);
             }
         }
 
