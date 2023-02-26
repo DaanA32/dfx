@@ -119,7 +119,13 @@ impl<'a> TryFrom<&'a FieldValue> for f64 {
 
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let ref_str: &str = TryFrom::try_from(value)?;
-
+        //TODO replace with better function
+        match ref_str.chars().next() {
+            Some('+') => {
+                return Err(ConversionError::IntParseErr);
+            },
+            _ => {}
+        }
         ref_str.parse().map_err(|_e| ConversionError::IntParseErr)
     }
 }
@@ -129,7 +135,13 @@ impl<'a> TryFrom<&'a FieldValue> for f32 {
 
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let ref_str: &str = TryFrom::try_from(value)?;
-
+        //TODO replace with better function
+        match ref_str.chars().next() {
+            Some('+') => {
+                return Err(ConversionError::IntParseErr);
+            },
+            _ => {}
+        }
         ref_str.parse().map_err(|_e| ConversionError::IntParseErr)
     }
 }
