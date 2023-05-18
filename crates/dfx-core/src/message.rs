@@ -11,6 +11,7 @@ use crate::field_map::FieldMap;
 use crate::field_map::FieldMapError;
 use crate::field_map::Group;
 use crate::field_map::Tag;
+use crate::fix_values::SessionRejectReason;
 use crate::fields::ApplVerID;
 use crate::fields::ConversionError;
 use crate::fix_values;
@@ -961,6 +962,37 @@ impl From<FieldMapError> for MessageParseError {
 impl From<ConversionError> for MessageParseError {
     fn from(e: ConversionError) -> MessageParseError {
         MessageParseError::ConversionError(e)
+    }
+}
+
+impl MessageParseError {
+    pub fn as_tag(&self) -> Option<Tag> {
+        match self {
+            Self::InvalidMessage(_) => todo!(),
+            Self::InvalidTagNumber(_) => todo!(),
+            Self::FailedToFindEqualsAt(_) => todo!(),
+            Self::FailedToFindSohAt(_) => todo!(),
+            Self::PosGreaterThanLen(_, _) => todo!(),
+            Self::RepeatedTagWithoutGroupDelimiterTagException(num, delim) => todo!(),
+            Self::GroupDelimiterTagException(num, delim) => Some(*num),
+            Self::FieldMapError(_) => todo!(),
+            Self::Malformed(_) => todo!(),
+            Self::ConversionError(_) => todo!(),
+        }
+    }
+    pub fn as_session_reject(self) -> SessionRejectReason {
+        match self {
+            Self::InvalidMessage(_) => todo!(),
+            Self::InvalidTagNumber(_) => todo!(),
+            Self::FailedToFindEqualsAt(_) => todo!(),
+            Self::FailedToFindSohAt(_) => todo!(),
+            Self::PosGreaterThanLen(_, _) => todo!(),
+            Self::RepeatedTagWithoutGroupDelimiterTagException(num, delim) => todo!(),
+            Self::GroupDelimiterTagException(num, delim) => SessionRejectReason::INCORRECT_NUM_IN_GROUP_COUNT_FOR_REPEATING_GROUP(),
+            Self::FieldMapError(_) => todo!(),
+            Self::Malformed(_) => todo!(),
+            Self::ConversionError(_) => todo!(),
+        }
     }
 }
 

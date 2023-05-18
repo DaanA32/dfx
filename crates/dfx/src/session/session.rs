@@ -102,8 +102,10 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
             dd.set_check_fields_have_values(settings.validation_options().validate_fields_have_values());
             dd.set_check_fields_out_of_order(settings.validation_options().validate_fields_out_of_order());
             dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
+            // println!("validate fields have values: {}", dd.check_fields_have_values());
             provider.add_session_data_dictionary(settings.session_id().begin_string(), dd.clone());
             provider.add_application_data_dictionary("", dd);
+            //provider.add_application_data_dictionary(&settings.session_id().to_string(), dd);
         }
     }
 }
@@ -125,6 +127,8 @@ impl Session {
             session_data_dictionary.clone()
         };
 
+        // println!("Session: validate fields have values: {}", session_data_dictionary.check_fields_have_values());
+        // println!("App: validate fields have values: {}", application_data_dictionary.check_fields_have_values());
         let log = log_factory
             .as_ref()
             .map(|l| l.create(settings.session_id()))
@@ -744,7 +748,11 @@ impl Session {
                     // return e;
                 },
                 SessionHandleMessageError::MessageParseError { message, parse_error } => {
-                    self.log.on_event(format!("MessageParse Error: {parse_error:?} {message:?}").as_str());
+                    self.log.on_event(format!("MessageParse Error: {parse_error:?}").as_str());
+                    let field = parse_error.as_tag();
+                    let reason = parse_error.as_session_reject();
+                    let msg = Message::new(&message).unwrap();
+                    self.generate_reject(msg, reason, field).unwrap();
                 },
                 //Tag Exception
                 SessionHandleMessageError::TagException(msg, e) => {
@@ -1231,7 +1239,7 @@ impl Session {
                         )
                         .as_str(),
                     );
-                    self.state.set_resend_range_begin_end(0, 0, None);
+                    self.state.set_resend_range(None);
                 } else if let Some(chunk) = range.chunk_end_seq_num {
                     if msg_seq_num >= chunk {
                         self.log.on_event(format!("Chunked ResendRequest for messages FROM: {} TO: {} has been satisfied.", range.begin_seq_num, chunk).as_str());
@@ -1511,16 +1519,19 @@ impl Session {
         msg_seq_num: u32,
     ) -> Result<bool, SessionHandleMessageError> {
         let begin_seq_num = self.state.next_target_msg_seq_num();
-        let end_range_seq_num = msg_seq_num - 1;
+        let mut end_range_seq_num = msg_seq_num - 1;
         let end_chunk_seq_num = if self.max_messages_in_resend_request > 0 {
             min(
                 end_range_seq_num,
                 begin_seq_num + self.max_messages_in_resend_request - 1,
             )
-        } else if begin_string.as_str() >= BeginString::FIX42 {
-            0
         } else {
-            999999
+            if begin_string.as_str() >= BeginString::FIX42 {
+                end_range_seq_num = 0;
+            } else {
+                end_range_seq_num = 999999;
+            }
+            end_range_seq_num
         };
 
         if !self.generate_resend_request_range(begin_string, begin_seq_num, end_chunk_seq_num)? {

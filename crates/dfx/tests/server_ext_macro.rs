@@ -48,7 +48,7 @@ macro_rules! imports {
 macro_rules! acceptor {
     ($cfg:ident -> $func:expr) => {
         paste! {
-            rusty_fork_test!{
+            // rusty_fork_test!{
                 #[test]
                 fn [<$cfg:snake _ $func:snake>]() {
                     let app = TestApplication::new();
@@ -96,7 +96,7 @@ macro_rules! acceptor {
                         eprintln!("Runner did not finish in 120s {}::{}", stringify!($cfg), $func);
                     }
                 }
-            }
+            // }
         }
     };
 }
