@@ -751,8 +751,11 @@ impl Session {
                     self.log.on_event(format!("MessageParse Error: {parse_error:?}").as_str());
                     let field = parse_error.as_tag();
                     let reason = parse_error.as_session_reject();
-                    let msg = Message::new(&message).unwrap();
-                    self.generate_reject(msg, reason, field).unwrap();
+                    if let Ok(msg) = Message::new(&message) {
+                        self.generate_reject(msg, reason, field).unwrap();
+                    } else {
+                        self.log.on_event("Skipping message!.");
+                    }
                 },
                 //Tag Exception
                 SessionHandleMessageError::TagException(msg, e) => {

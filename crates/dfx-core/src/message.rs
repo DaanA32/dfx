@@ -968,8 +968,8 @@ impl From<ConversionError> for MessageParseError {
 impl MessageParseError {
     pub fn as_tag(&self) -> Option<Tag> {
         match self {
-            Self::InvalidMessage(_) => todo!(),
-            Self::InvalidTagNumber(_) => todo!(),
+            Self::InvalidMessage(_) => None,
+            Self::InvalidTagNumber(_) => None,
             Self::FailedToFindEqualsAt(_) => todo!(),
             Self::FailedToFindSohAt(_) => todo!(),
             Self::PosGreaterThanLen(_, _) => todo!(),
@@ -982,8 +982,8 @@ impl MessageParseError {
     }
     pub fn as_session_reject(self) -> SessionRejectReason {
         match self {
-            Self::InvalidMessage(_) => todo!(),
-            Self::InvalidTagNumber(_) => todo!(),
+            Self::InvalidMessage(reason) => SessionRejectReason::OTHER(reason),
+            Self::InvalidTagNumber(_) => SessionRejectReason::INVALID_TAG_NUMBER(),
             Self::FailedToFindEqualsAt(_) => todo!(),
             Self::FailedToFindSohAt(_) => todo!(),
             Self::PosGreaterThanLen(_, _) => todo!(),
