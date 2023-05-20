@@ -716,10 +716,10 @@ impl Message {
         RE.captures(msgstr)
             .and_then(|cap| cap.get(1).map(|login| login.as_str()))
             .ok_or_else(|| {
-                MessageParseError::Malformed(format!(
+                MessageParseError::Malformed { tag: 35, message: format!(
                     "missing or malformed tag 35 in msg: {}",
                     msgstr
-                ))
+                )}
             })
     }
 
@@ -949,7 +949,7 @@ pub enum MessageParseError {
     RepeatedTagWithoutGroupDelimiterTagException(Tag, Tag),
     GroupDelimiterTagException(Tag, Tag),
     FieldMapError(FieldMapError),
-    Malformed(String),
+    Malformed { tag: Tag, message: String },
     ConversionError(ConversionError),
 }
 
@@ -976,7 +976,7 @@ impl MessageParseError {
             Self::RepeatedTagWithoutGroupDelimiterTagException(num, delim) => todo!(),
             Self::GroupDelimiterTagException(num, delim) => Some(*num),
             Self::FieldMapError(_) => todo!(),
-            Self::Malformed(_) => todo!(),
+            Self::Malformed { tag, .. } => Some(*tag),
             Self::ConversionError(_) => todo!(),
         }
     }
@@ -990,7 +990,7 @@ impl MessageParseError {
             Self::RepeatedTagWithoutGroupDelimiterTagException(num, delim) => todo!(),
             Self::GroupDelimiterTagException(num, delim) => SessionRejectReason::INCORRECT_NUM_IN_GROUP_COUNT_FOR_REPEATING_GROUP(),
             Self::FieldMapError(_) => todo!(),
-            Self::Malformed(_) => todo!(),
+            Self::Malformed { tag: _, .. } => SessionRejectReason::INVALID_MSGTYPE(),
             Self::ConversionError(_) => todo!(),
         }
     }

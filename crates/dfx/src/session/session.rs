@@ -1476,7 +1476,7 @@ impl Session {
                 } else {
                     self.populate_session_reject_reason(
                         &mut reject,
-                        0,
+                        field,
                         reason.description().as_str(), /*.description*/
                         false,
                     );

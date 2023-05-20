@@ -62,7 +62,7 @@ pub struct BusinessRejectReason {
 }
 
 impl BusinessRejectReason {
-    pub fn UNKNOWN_MESSAGE_TYPE() -> BusinessRejectReason { BusinessRejectReason { index: 4, reason: "Unsupported message type".to_string() } }
+    pub fn UNKNOWN_MESSAGE_TYPE() -> BusinessRejectReason { BusinessRejectReason { index: 3, reason: "Unsupported Message Type".to_string() } }
 
     pub fn index(&self) -> usize {
         self.index

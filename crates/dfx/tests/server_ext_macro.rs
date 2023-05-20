@@ -50,7 +50,7 @@ macro_rules! acceptor {
         paste! {
             rusty_fork_test!{
                 #[test]
-                fn [<$cfg:snake _ $func:snake>]() {
+                fn [<test_ $func:snake>]() {
                     let app = TestApplication::new();
                     let cfg = cfg_from_version(stringify!($cfg));
                     let session_settings = SessionSettings::from_file(cfg).unwrap();
@@ -479,6 +479,10 @@ mod fix50 {
     acceptor!(fix50 -> "ReverseRoute");
     acceptor!(fix50 -> "ReverseRouteWithEmptyRoutingTags");
     acceptor!(fix50 -> "SessionReset");
+}
+
+mod fix50sp1 {
+    imports!();
     acceptor!(fix50sp1 -> "10_MsgSeqNumEqual");
     acceptor!(fix50sp1 -> "10_MsgSeqNumGreater");
     acceptor!(fix50sp1 -> "10_MsgSeqNumLess");
@@ -539,6 +543,9 @@ mod fix50 {
     acceptor!(fix50sp1 -> "ReverseRoute");
     acceptor!(fix50sp1 -> "ReverseRouteWithEmptyRoutingTags");
     acceptor!(fix50sp1 -> "SessionReset");
+}
+mod fix50sp2 {
+    imports!();
     acceptor!(fix50sp2 -> "10_MsgSeqNumEqual");
     acceptor!(fix50sp2 -> "10_MsgSeqNumGreater");
     acceptor!(fix50sp2 -> "10_MsgSeqNumLess");
