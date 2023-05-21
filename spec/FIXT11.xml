@@ -27,13 +27,10 @@
     <field name='XmlData' required='N'/>
     <field name='MessageEncoding' required='N'/>
     <field name='LastMsgSeqNumProcessed' required='N'/>
-    <group name='NoHops' required='N'>
-     <field name='HopCompID' required='N' />
-     <field name='HopSendingTime' required='N' />
-     <field name='HopRefID' required='N' />
-    </group>
+    <component name='HopGrp' required='N'/>
     <field name='ApplVerID' required='N'/>
     <field name='CstmApplVerID' required='N'/>
+    <field name='ApplExtID' required='N' />
   </header>
   <trailer>
     <field name='SignatureLength' required='N'/>
@@ -85,6 +82,13 @@
     </message>
   </messages>
   <components>
+    <component name='HopGrp'>
+      <group name='NoHops' required='N'>
+        <field name='HopCompID' required='N'/>
+        <field name='HopSendingTime' required='N'/>
+        <field name='HopRefID' required='N'/>
+      </group>
+    </component>
     <component name='MsgTypeGrp'>
       <group name='NoMsgTypes' required='N'>
         <field name='RefMsgType' required='N'/>
@@ -306,5 +310,6 @@
     <field name='RefApplVerID' number='1130' type='STRING'/>
     <field name='RefCstmApplVerID' number='1131' type='STRING'/>
     <field name='DefaultApplVerID' number='1137' type='STRING'/>
+    <field name='ApplExtID' number='1156' type='INT'/>
   </fields>
 </fix>
