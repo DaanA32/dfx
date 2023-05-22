@@ -10,11 +10,11 @@ use rusty_fork::rusty_fork_test;
 
 fn cfg_from_version(version: &str) -> &str {
     match version {
-        "fix40" => "tests/cfg/at_40.cfg",
-        "fix41" => "tests/cfg/at_41.cfg",
-        "fix42" => "tests/cfg/at_42.cfg",
-        "fix43" => "tests/cfg/at_43.cfg",
-        "fix44" => "tests/cfg/at_44.cfg",
+        "fix40" => include_str!("./cfg/at_40.cfg"),
+        "fix41" => include_str!("cfg/at_41.cfg"),
+        "fix42" => include_str!("cfg/at_42.cfg"),
+        "fix43" => include_str!("cfg/at_43.cfg"),
+        "fix44" => include_str!("cfg/at_44.cfg"),
         v => panic!("cfg from version {v}"),
     }
 }
@@ -53,7 +53,7 @@ macro_rules! acceptor {
                 fn [<test_ $func:snake>]() {
                     let app = TestApplication::new();
                     let cfg = cfg_from_version(stringify!($cfg));
-                    let session_settings = SessionSettings::from_file(cfg).unwrap();
+                    let session_settings = SessionSettings::from_string(cfg).unwrap();
                     let mut acceptor = SocketAcceptor::new(
                         session_settings,
                         app,
@@ -63,6 +63,7 @@ macro_rules! acceptor {
                         DefaultMessageFactory::new(),
                     );
 
+                    println!("{:?}", std::env::current_dir());
                     let path = path_from_version(stringify!($cfg));
                     let steps = runner::steps(format!("{path}{}.def", $func).as_str());
                     acceptor.start();

@@ -12,11 +12,8 @@ use crate::tags;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
-use serde::Deserializer;
-use serde::Serializer;
-use serde::{Deserialize, Serialize};
-use std::any::TypeId;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::fs::File;
 use std::ops::Deref;
@@ -139,97 +136,20 @@ pub struct DataDictionary {
     trailer: DDMap,
 }
 
+
 impl DataDictionary {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<DataDictionary, DataDictionaryError> {
         //let reader = File::open(path).unwrap();
         let path: &Path = path.as_ref();
-        let reader = match File::open(&path) {
+        let mut reader = match File::open(&path) {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
             Ok(file) => file,
         };
-        let spec = serde_xml_rs::from_reader(reader)?;
 
-        DataDictionary::new(false, false, false, false, spec)
-    }
-
-    // TODO change from FixSpec to str/file and use quick-xml instead
-    pub fn new(
-        check_fields_have_values: bool,
-        check_fields_out_of_order: bool,
-        check_user_defined_fields: bool,
-        allow_unknown_message_fields: bool,
-        spec: FixSpec,
-    ) -> Result<DataDictionary, DataDictionaryError> {
-        let dd_fields = spec.fields.values.values().map(|f| {
-            let tag: Tag = f.number.parse().unwrap();
-            let name = f.name.clone();
-            let field_type = f.type_name.clone();
-            let enum_dictionary = f
-                .values
-                .iter()
-                .map(|v| (v.enum_values.clone(), v.description.clone()))
-                .collect();
-            DDField::new(tag, name, enum_dictionary, field_type)
-        });
-        let fields_by_tag = dd_fields.clone().map(|d| (d.tag, d)).collect();
-        let fields_by_name = dd_fields.clone().map(|d| (d.name.clone(), d)).collect();
-
-        let components_by_name = spec
-            .components.unwrap_or_default()
-            .values
-            .iter()
-            .map(|(k, v)| (k.clone(), v.values.clone()))
-            .collect();
-
-        let version = Some(format!("{}{}.{}", spec.type_name.unwrap_or_default(), spec.major, spec.minor));
-
-        let messages = spec
-            .messages
-            .values
-            .values()
-            .map(|m| {
-                let key = m.msgtype.clone();
-                let name = m.name.clone();
-                let ddmap = parse_msg_el(
-                    DDMap::new(name),
-                    &m.fields,
-                    &fields_by_name,
-                    &components_by_name,
-                    None,
-                )
-                .unwrap();
-                (key, ddmap)
-            })
-            .collect();
-        let header = parse_msg_el(
-            DDMap::new("header".into()),
-            &spec.header.values,
-            &fields_by_name,
-            &components_by_name,
-            None,
-        )
-        .unwrap();
-        let trailer = parse_msg_el(
-            DDMap::new("trailer".into()),
-            &spec.trailer.values,
-            &fields_by_name,
-            &components_by_name,
-            None,
-        )
-        .unwrap();
-
-        Ok(Self {
-            check_fields_have_values,
-            check_fields_out_of_order,
-            check_user_defined_fields,
-            allow_unknown_message_fields,
-            version,
-            fields_by_tag,
-            fields_by_name,
-            messages,
-            header,
-            trailer,
-        })
+        let mut contents = String::new();
+        reader.read_to_string(&mut contents).unwrap();
+        let dd = DataDictionary::load_from_string(&contents).unwrap();
+        Ok(dd)
     }
 
     pub fn version(&self) -> Option<&String> {
@@ -264,13 +184,14 @@ impl DataDictionary {
         //     if (!sessionDataDict.Version.Equals(beginString))
         //         throw new UnsupportedVersion(beginString);
         if let Some(dictionary) = session_data_dictionary {
-            if matches!(dictionary.version(), Some(version) if version == begin_string) {
+            if matches!(dictionary.version(), Some(version) if version != begin_string) {
                 return Err(MessageValidationError::UnsupportedVersion {
                     expected: dictionary.version().unwrap().into(),
                     actual: begin_string.into(),
                 });
             }
         }
+        // println!("Checked version.");
 
         // if (((null != sessionDataDict) && sessionDataDict.CheckFieldsOutOfOrder) || ((null != appDataDict) && appDataDict.CheckFieldsOutOfOrder))
         // {
@@ -286,6 +207,7 @@ impl DataDictionary {
             // println!("valid_structure");
             message.has_valid_structure()?;
         }
+        // println!("Checked structure.");
 
         // if ((null != appDataDict) && (null != appDataDict.Version))
         // {
@@ -296,6 +218,7 @@ impl DataDictionary {
             app_data_dictionary.check_msg_type(msg_type)?;
             app_data_dictionary.check_has_required(message, msg_type)?;
         }
+        // println!("Checked msg_type.");
 
         // if (!bodyOnly)
         // {
@@ -306,9 +229,11 @@ impl DataDictionary {
             dictionary.iterate(message.header(), msg_type)?;
             dictionary.iterate(message.trailer(), msg_type)?;
         }
+        // println!("Checked header & trailer.");
 
         // appDataDict.Iterate(message, msgType);
         app_data_dictionary.iterate(message, msg_type)?;
+        // println!("Checked body.");
         Ok(())
     }
 
@@ -332,6 +257,7 @@ impl DataDictionary {
         // }
         for field in self.header.required_fields() {
             if !message.header().is_field_set(*field) {
+                // println!("missing header_field");
                 return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
             }
         }
@@ -343,6 +269,7 @@ impl DataDictionary {
         // }
         for field in self.trailer.required_fields() {
             if !message.trailer().is_field_set(*field) {
+                // println!("missing trailer_field");
                 return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
             }
         }
@@ -354,6 +281,7 @@ impl DataDictionary {
         // }
         for field in self.messages[msg_type].required_fields() {
             if !message.is_field_set(*field) {
+                // println!("missing body_field {msg_type} {:?}", self.messages[msg_type].required_fields());
                 return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
             }
         }
@@ -380,8 +308,11 @@ impl DataDictionary {
     }
     fn check_valid_format(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
         // TODO check format based on type received.
+        // println!("check_valid_format");
         if let Some(field_definition) = self.fields_by_tag.get(&field.tag()) {
             let field_type = FieldType::get(field_definition.field_type().as_str());
+            // println!("{field_type:?}");
+            // println!("{field:?}");
             if matches!(field_type, Ok(ftype) if ftype == fields::types::FieldType::String) {
                 return Ok(());
             }
@@ -467,6 +398,7 @@ impl DataDictionary {
     fn check_value(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
         match self.fields_by_tag.get(&field.tag()) {
             Some(fld) => {
+                // println!("{:?}", fld);
                 if fld.has_enums() {
                     if fld.is_multiple_value_field_with_enums() {
                         let string_value = field.string_value()?;
@@ -513,7 +445,16 @@ impl DataDictionary {
             return Ok(());
         }
 
-        // println!("in message: {:?}", self.messages.get(msg_type));
+        let fields: Vec<&String> = self.messages.get(msg_type).iter()
+            .map(|f| f.name())
+            .collect();
+        // println!("{} in message: {:?}", msg_type, fields);
+        // println!("{} in message: {:?}", msg_type, self.messages.get(msg_type).map(|f| f.fields.len()));
+        // if let Some(field) = self.messages.get(msg_type) {
+        //     println!("{} in message: {:?}", msg_type, field.fields.iter()
+        //     .map(|f| f.1.name())
+        //     .collect::<Vec<&String>>());
+        // }
         if matches!(self.messages.get(msg_type), Some(dd) if dd.fields.contains_key(&field.tag())) {
             return Ok(());
         }
@@ -559,9 +500,6 @@ impl DataDictionary {
         //         throw new RepeatingGroupCountMismatch(field.Tag);
         //     }
         // }
-        // println!("Field {field:?}");
-        // println!("Map {map:?}");
-        // println!("MsgType {msg_type}");
         if self.is_group(msg_type, field.tag())
             && map.get_int(field.tag())? as usize != map.group_count(field.tag()).unwrap_or(0)
         {
@@ -596,6 +534,7 @@ impl DataDictionary {
     fn iterate(&self, message: &FieldMap, msg_type: &str) -> Result<(), MessageValidationError> {
         // DataDictionary.CheckHasNoRepeatedTags(map);
         DataDictionary::check_has_no_repeated_tags(message)?;
+        // println!("Checked no repeated tags");
 
         // check non-group fields
         // int lastField = 0;
@@ -615,7 +554,7 @@ impl DataDictionary {
             self.check_has_value(field)?;
 
             // if (!string.IsNullOrEmpty(this.Version))
-            if matches!(&self.version, Some(version) if !version.is_empty()) {
+            if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
                 // CheckValidFormat(field);
                 self.check_valid_format(field)?;
 
@@ -648,21 +587,28 @@ impl DataDictionary {
             // lastField = field.Tag;
             last_field = field.tag();
         }
+        // println!("Checked fields.");
 
         // check contents of each group
         // foreach (int groupTag in map.GetGroupDefinitionTags())
         for tag in message.group_tags() {
             // for (int i = 1; i <= map.GroupDefinitionCount(groupTag); i++)
+            // println!("Checking group: {tag}");
             for i in 1..=message.group_count(*tag)? {
                 // GroupDefinition g = map.GetGroupDefinition(i, groupTag);
                 // DDGrp ddg = this.Messages[msgType].GetGroupDefinition(groupTag);
                 // IterateGroupDefinition(g, ddg, msgType);
-
+                // println!("start group {tag}:{i}");
                 let g = message.get_group(i as u32, *tag)?;
+                // println!("get group {tag}:{i}");
                 let ddg = self.messages[msg_type].get_group(*tag);
+                // println!("end group {tag}:{i}");
                 self.iterate_group(g, ddg, msg_type)?;
+                // println!("end group {tag}:{i}");
             }
+            // println!("Checked group: {tag}");
         }
+        // println!("Checked groups.");
 
         Ok(())
     }
@@ -673,6 +619,8 @@ impl DataDictionary {
         group_definition: Option<&DDGroup>,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
+        // println!("-----------------------");
+        // println!("{group:?}");
         if group_definition.is_none() {
             //return Err(MessageValidationError::MissingGroupDefinition());
             return Ok(());
@@ -680,11 +628,13 @@ impl DataDictionary {
         let group_definition = group_definition.unwrap();
         // DataDictionary.CheckHasNoRepeatedTags(group);
         DataDictionary::check_has_no_repeated_tags(group)?;
+        // println!("Checked has no repeated tags group");
 
         // int lastField = 0;
         let mut last_field = 0;
         // foreach (KeyValuePair<int, Fields.IField> kvp in group)
         for (_, v) in group.entries() {
+            // println!("{v:?}");
             let field = v;
 
             // if (lastField != 0 && field.Tag == lastField)
@@ -692,13 +642,17 @@ impl DataDictionary {
             if last_field != 0 && field.tag() == last_field {
                 return Err(MessageValidationError::TagException(TagException::repeated_tag(last_field)));
             }
+            // println!("repeated tag");
             // CheckHasValue(field);
             self.check_has_value(field)?;
+            // println!("check_has_value");
 
             // if (!string.IsNullOrEmpty(this.Version))
-            if matches!(&self.version, Some(version) if version.is_empty()) {
+            if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
+                // println!("version match");
                 // CheckValidFormat(field);
                 self.check_valid_format(field)?;
+                // println!("check_valid_format");
 
                 // if (ShouldCheckTag(field))
                 if self.should_check_tag(field) {
@@ -715,21 +669,29 @@ impl DataDictionary {
             }
             last_field = field.tag();
         }
+        // println!("Checked fields group");
 
         // check contents of each nested group
         // foreach (int groupTag in map.GetGroupTags())
         for tag in group.group_tags() {
+            // println!("Checking group nested: {tag}");
             // for (int i = 1; i <= map.GroupCount(groupTag); i++)
             for i in 1..=group.group_count(*tag)? {
                 // Group g = group.GetGroup(i, groupTag);
                 // DDGrp ddg = ddgroup.GetGroup(groupTag);
                 // IterateGroup(g, ddg, msgType);
 
+                // println!("start group {tag}:{i}");
                 let g = group.get_group(i as u32, *tag)?;
+                // println!("get group {tag}:{i}");
                 let ddg = group_definition.get_group(*tag);
+                // println!("end group {tag}:{i}");
                 self.iterate_group(g, ddg, msg_type)?;
+                // println!("end group {tag}:{i}");
             }
+            // println!("Checked group nested: {tag}");
         }
+        // println!("Checked groups in group");
 
         Ok(())
     }
@@ -807,16 +769,30 @@ impl DataDictionary {
 pub struct DDMap {
     fields: BTreeMap<Tag, DDField>,
     groups: BTreeMap<Tag, DDGroup>,
-    required_fields: HashSet<Tag>,
+    required_fields: BTreeSet<Tag>,
     name: String,
+    msg_type: String,
+    admin: bool,
 }
 impl DDMap {
     pub fn new(name: String) -> Self {
         DDMap {
             fields: BTreeMap::default(),
             groups: BTreeMap::default(),
-            required_fields: HashSet::<Tag>::default(),
-            name
+            required_fields: BTreeSet::default(),
+            name,
+            msg_type: "".into(),
+            admin: false,
+        }
+    }
+    pub fn new_with_values(name: String, msg_type: String, admin: bool) -> Self {
+        DDMap {
+            fields: BTreeMap::default(),
+            groups: BTreeMap::default(),
+            required_fields: BTreeSet::default(),
+            name,
+            msg_type,
+            admin,
         }
     }
     pub fn add_field(&mut self, field: DDField) {
@@ -837,10 +813,10 @@ impl DDMap {
     pub fn get_group(&self, tag: Tag) -> Option<&DDGroup> {
         self.groups.get(&tag)
     }
-    pub fn required_fields(&self) -> &HashSet<Tag> {
+    pub fn required_fields(&self) -> &BTreeSet<Tag> {
         &self.required_fields
     }
-    pub fn required_fields_mut(&mut self) -> &mut HashSet<Tag> {
+    pub fn required_fields_mut(&mut self) -> &mut BTreeSet<Tag> {
         &mut self.required_fields
     }
     pub fn add_required_field(&mut self, tag: Tag) {
@@ -854,6 +830,14 @@ impl DDMap {
     }
     pub fn groups(&self) -> &BTreeMap<Tag, DDGroup> {
         &self.groups
+    }
+
+    pub fn admin(&self) -> bool {
+        self.admin
+    }
+
+    pub fn msg_type(&self) -> &str {
+        self.msg_type.as_ref()
     }
 }
 trait AsDDMap {
@@ -880,107 +864,6 @@ impl<D: DerefMut<Target = DDMap>> AsDDMap for D {
 #[derive(Clone, Debug)]
 pub enum DictionaryError {
     ParseError(String),
-}
-
-fn parse_msg_el<D: AsDDMap + 'static>(
-    ddmap: D,
-    parts: &BTreeMap<String, MessagePart>,
-    fields_by_name: &BTreeMap<String, DDField>,
-    components_by_name: &BTreeMap<String, BTreeMap<String, MessagePart>>,
-    component_required: Option<bool>,
-) -> Result<D, DictionaryError> {
-    let mut org = ddmap;
-    let ddmap = &mut org.as_map_mut();
-    for v in parts.values() {
-        match v {
-            MessagePart::Field(field) => {
-                if !fields_by_name.contains_key(&field.name) {
-                    return Err(DictionaryError::ParseError(format!(
-                        "Field '{}' is not defined in <fields> section.",
-                        field.name
-                    )));
-                }
-                let dd_field = &fields_by_name[&field.name];
-                let required = field.required == "Y" && component_required.unwrap_or(true);
-                if required {
-                    ddmap.add_required_field(dd_field.tag());
-                }
-
-                if !ddmap.is_field(dd_field.tag()) {
-                    ddmap.add_field(dd_field.clone());
-                }
-
-                // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
-                // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
-                if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
-                    unsafe {
-                        let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
-                        if casted.delim() == 0 {
-                            casted.delim = dd_field.tag();
-                            //     ddGroup.Delim = fld.Tag;
-                        }
-                    }
-                }
-            }
-            MessagePart::GroupDefinition(group) => {
-                if !fields_by_name.contains_key(&group.name) {
-                    return Err(DictionaryError::ParseError(format!(
-                        "Field '{}' is not defined in <fields> section.",
-                        group.name
-                    )));
-                }
-                let dd_field = &fields_by_name[&group.name];
-                let required = group.required == "Y" && component_required.unwrap_or(true);
-                if required {
-                    ddmap.add_required_field(dd_field.tag());
-                }
-
-                if !ddmap.is_field(dd_field.tag()) {
-                    ddmap.add_field(dd_field.clone());
-                }
-
-                // if this is in a group whose delim is unset, then this must be the delim (i.e. first field)
-                // if (ddmap is DDGrp ddGroup && ddGroup.Delim == 0)
-                if TypeId::of::<D>() == TypeId::of::<DDGroup>() {
-                    unsafe {
-                        let casted: &mut DDGroup = std::mem::transmute_copy(ddmap);
-                        if casted.delim() == 0 {
-                            casted.delim = dd_field.tag();
-                        }
-                    }
-                }
-                // ddgrp grp = new ddgrp();
-                let mut grp = DDGroup {
-                    num_fld: dd_field.tag(),
-                    name: format!("{}Group", dd_field.name()),
-                    ..Default::default()
-                };
-                // if (required)
-                if required {
-                    //     grp.required = true;
-                    grp.required = true;
-                }
-
-                // parsemsgel(childnode, grp);
-                let grp =
-                    parse_msg_el(grp, &group.fields, fields_by_name, components_by_name, None)?;
-                // ddmap.groups.add(fld.tag, grp);
-                ddmap.groups.insert(dd_field.tag(), grp);
-            }
-            MessagePart::Component(component) => {
-                let component_fields = components_by_name.get(&component.name).unwrap();
-                let component = parse_msg_el(
-                    org,
-                    component_fields,
-                    fields_by_name,
-                    components_by_name,
-                    Some(component.required == "Y"),
-                )?;
-                return Ok(component);
-            }
-        }
-    }
-    Ok(org)
 }
 
 #[derive(Debug, Clone)]
@@ -1085,804 +968,396 @@ impl DerefMut for DDGroup {
     }
 }
 
-
-
-// ------------------------------
-//            FIX SPEC
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct FixSpec {
-    #[serde(rename = "type")]
-    type_name: Option<String>,
-    major: String,
-    minor: String,
-    servicepack: Option<String>,
-    header: Header,
-    messages: Messages,
-    trailer: Trailer,
-    components: Option<Components>,
-    fields: Fields,
+#[derive(Debug)]
+enum GoM<'a> {
+    Map(&'a mut DDMap),
+    Group(&'a mut DDGroup)
 }
-
-// #[derive(Serialize, Deserialize, Debug)]
-// pub enum Section {
-//     #[serde(rename = "header")]
-//     Header(Header),
-//     #[serde(rename = "messages")]
-//     Messages(Messages),
-//     #[serde(rename = "trailer")]
-//     Trailer(Trailer),
-//     #[serde(rename = "components")]
-//     Components(Components),
-//     #[serde(rename = "fields")]
-//     Fields(Fields),
-// }
-
-// #[derive(Serialize, Deserialize, Debug)]
-// pub struct Body {
-//     #[serde(rename = "header")]
-//     header: Header,
-//     #[serde(rename = "messages")]
-//     messages: Messages,
-//     #[serde(rename = "trailer")]
-//     trailer: Trailer,
-//     #[serde(rename = "components")]
-//     components: Components,
-//     #[serde(rename = "fields")]
-//     fields: Fields,
-// }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Header {
-    // #[serde(default, rename = "$value")]
-    // values: Vec<MessagePart>,
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    values: BTreeMap<String, MessagePart>,
-}
-impl Deref for Header {
-    type Target = BTreeMap<String, MessagePart>;
+impl<'a> Deref for GoM<'a> {
+    type Target = DDMap;
     fn deref(&self) -> &Self::Target {
-        &self.values
-    }
-}
-impl DerefMut for Header {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.values
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Messages {
-    // #[serde(default, rename = "$value")]
-    // values: Vec<Message>,
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    values: BTreeMap<String, MessageDefinition>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Fields {
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    values: BTreeMap<String, FieldDefinition>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct Components {
-    // #[serde(default, rename = "$value")]
-    // values: Vec<ComponentDefinition>
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    values: BTreeMap<String, ComponentDefinition>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Trailer {
-    // #[serde(default, rename = "$value")]
-    // values: Vec<MessagePart>,
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    values: BTreeMap<String, MessagePart>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Field {
-    name: String,
-    required: String,
-}
-
-impl Named for Field {
-    fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Component {
-    name: String,
-    required: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct ComponentDefinition {
-    name: String,
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    values: BTreeMap<String, MessagePart>,
-}
-
-impl Named for ComponentDefinition {
-    fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-pub(crate) trait Named {
-    fn name(&self) -> &str;
-}
-
-fn ser_peer_public<S, V: Named + Serialize>(
-    peer_public: &BTreeMap<String, V>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let map = peer_public.iter().map(|(_, v)| v);
-    serializer.collect_seq(map)
-}
-
-fn de_peer_public<'de, D, V: Named + Deserialize<'de>>(
-    deserializer: D,
-) -> Result<BTreeMap<String, V>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let v = Vec::<V>::deserialize(deserializer)?;
-    Ok(v.into_iter().map(|v| (v.name().into(), v)).collect())
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum MessagePart {
-    #[serde(rename = "field")]
-    Field(Field),
-    #[serde(rename = "component")]
-    Component(Component),
-    #[serde(rename = "group")]
-    GroupDefinition(GroupDefinition),
-}
-
-impl Named for MessagePart {
-    fn name(&self) -> &str {
         match self {
-            MessagePart::Field(f) => &f.name,
-            MessagePart::Component(f) => &f.name,
-            MessagePart::GroupDefinition(f) => &f.name,
+            GoM::Map(g) => g,
+            GoM::Group(g) => g,
+        }
+    }
+}
+impl<'a> DerefMut for GoM<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            GoM::Map(g) => g,
+            GoM::Group(g) => g,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MessageDefinition {
-    name: String,
-    msgtype: String,
-    msgcat: Option<String>,
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    fields: BTreeMap<String, MessagePart>,
+use std::io::Read;
+use std::println;
+use xmltree::Element;
+
+impl DataDictionary {
+    pub fn new() -> DataDictionary {
+        DataDictionary {
+            version: None,
+            fields_by_tag: BTreeMap::new(),
+            fields_by_name: BTreeMap::new(),
+            messages: BTreeMap::new(),
+            check_fields_out_of_order: true,
+            check_fields_have_values: true,
+            check_user_defined_fields: true,
+            allow_unknown_message_fields: false,
+            header: DDMap::default(),
+            trailer: DDMap::default(),
+        }
+    }
+
+    pub fn load(&mut self, path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = File::open(path)?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+
+        Self::load_from_string(&contents)
+    }
+
+    pub fn load_from_string(contents: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let root_doc = Element::parse(contents.as_bytes())?;
+
+        let (major_version, minor_version, version) = get_version_info(&root_doc);
+        let (fields_by_tag, fields_by_name) = parse_fields(&root_doc);
+        let components_by_name = cache_components(&root_doc);
+        let messages = parse_messages(&root_doc, &fields_by_name, &components_by_name);
+        let header = parse_header(&root_doc, &fields_by_name, &components_by_name);
+        let trailer = parse_trailer(&root_doc, &fields_by_name, &components_by_name);
+
+        Ok(DataDictionary {
+            version: Some(version),
+            fields_by_tag,
+            fields_by_name,
+            messages,
+            check_fields_out_of_order: true,
+            check_fields_have_values: true,
+            check_user_defined_fields: true,
+            allow_unknown_message_fields: false,
+            header,
+            trailer,
+        })
+    }
+
 }
 
-impl Named for MessageDefinition {
-    fn name(&self) -> &str {
-        &self.name
+fn get_version_info(doc: &Element) -> (String, String, String) {
+    let major_version = doc.attributes.get("major").unwrap().to_string();
+    let minor_version = doc.attributes.get("minor").unwrap().to_string();
+    let version = "FIX".to_string();
+    let version_type = doc.attributes.get("type").unwrap_or(&version);
+    if version_type != "FIX" && version_type != "FIXT" {
+        panic!("Type must be FIX or FIXT in config");
+    }
+    let version = format!("{}.{}.{}", version_type, major_version, minor_version);
+    return (major_version, minor_version, version);
+}
+
+fn parse_fields(doc: &Element) -> (BTreeMap<i32, DDField>, BTreeMap<String, DDField>) {
+    let mut fields_by_tag: BTreeMap<i32, DDField> = BTreeMap::new();
+    let mut fields_by_name: BTreeMap<String, DDField> = BTreeMap::new();
+    let field_nodes = doc
+        .children.iter()
+        .filter_map(|c| c.as_element())
+        .filter(|c| c.name == "fields")
+        .flat_map(|node| node.children.iter())
+        .filter_map(|c| c.as_element())
+        .filter(|node| node.name == "field");
+
+    for field_node in field_nodes {
+        let tag_str = field_node.attributes.get("number").unwrap();
+        let name = field_node.attributes.get("name").unwrap();
+        let field_type = field_node.attributes.get("type").unwrap();
+
+        let tag = tag_str.parse::<i32>().unwrap();
+        let mut enums = BTreeMap::new();
+        // if let Some(enum_nodes) = field_node.get_child("value") {
+        //     for enum_node in enum_nodes.children.iter() {
+        //         println!("{:?}", enum_node);
+        //         let enum_value = enum_node.as_element().unwrap().attributes.get("enum").unwrap().clone();
+        //         let description = enum_node.as_element().unwrap().attributes.get("description").map(|s| s.clone()).unwrap_or_default();
+        //         enums.insert(enum_value, description);
+        //     }
+        // }
+        for enum_node in field_node.children.iter()
+            .filter_map(|c| c.as_element())
+            .filter(|c| c.name == "value")
+        {
+            let enum_value = enum_node.attributes.get("enum").unwrap().clone();
+            let description = enum_node.attributes.get("description").map(|s| s.clone()).unwrap_or_default();
+            enums.insert(enum_value, description);
+        }
+
+        let is_multiple_value_field_with_enums = matches!(
+            field_type.as_str(),
+            "MULTIPLEVALUESTRING" | "MULTIPLESTRINGVALUE" | "MULTIPLECHARVALUE"
+        );
+
+        let dd_field = DDField {
+            tag,
+            name: name.clone(),
+            enum_dictionary: enums,
+            field_type: field_type.clone(),
+            is_multiple_value_field_with_enums
+        };
+
+        fields_by_tag.insert(tag, dd_field.clone());
+        fields_by_name.insert(name.clone(), dd_field);
+    }
+    return (fields_by_tag, fields_by_name);
+}
+
+fn cache_components(doc: &Element) -> BTreeMap<String, Element> {
+    let mut components_by_name: BTreeMap<String, Element> = BTreeMap::new();
+    let component_nodes = doc
+        .children.iter()
+        .filter_map(|c| c.as_element())
+        .filter(|c| c.name == "components")
+        .flat_map(|node| node.children.iter())
+        .filter_map(|c| c.as_element())
+        .filter(|node| node.name == "component");
+
+    for component_node in component_nodes {
+        let name = component_node.attributes.get("name").unwrap().clone();
+        components_by_name.insert(name, component_node.clone());
+    }
+    components_by_name
+}
+
+fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> BTreeMap<String, DDMap> {
+    let mut messages: BTreeMap<String, DDMap> = BTreeMap::new();
+    let message_nodes = doc
+        .children.iter()
+        .filter_map(|c| c.as_element())
+        .filter(|c| c.name == "messages")
+        .flat_map(|node| node.children.iter())
+        .filter_map(|c| c.as_element())
+        .filter(|node| node.name == "message");
+
+    for message_node in message_nodes {
+        let mut dd_map = DDMap::default();
+        parse_msg_element(&message_node, &mut dd_map, fields_by_name, components_by_name);
+        let msg_type = message_node.attributes.get("msgtype").unwrap().clone();
+        messages.insert(msg_type, dd_map);
+    }
+    messages
+}
+
+fn parse_header(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> DDMap {
+    let mut dd_map = DDMap::default();
+    if let Some(header_node) = doc.get_child("header") {
+        parse_msg_element(&header_node, &mut dd_map, fields_by_name, components_by_name);
+    }
+    dd_map
+}
+
+fn parse_trailer(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> DDMap {
+    let mut dd_map = DDMap::default();
+    if let Some(trailer_node) = doc.get_child("trailer") {
+        parse_msg_element(&trailer_node, &mut dd_map, fields_by_name, components_by_name);
+    }
+    dd_map
+}
+
+fn verify_child_node(child_node: &Element, parent_node: &Element) {
+    if child_node.attributes.is_empty() {
+        panic!(
+            "Malformed data dictionary: Found text-only node containing '{}'",
+            child_node.get_text().unwrap_or_default().trim()
+        );
+    }
+    if !child_node.attributes.contains_key("name") {
+        let message_type_name = parent_node
+            .attributes
+            .get("name")
+            .map(|s| s.clone())
+            .unwrap_or_else(|| parent_node.name.clone());
+        panic!(
+            "Malformed data dictionary: Found '{}' node without 'name' within parent '{}/{}'",
+            child_node.name, parent_node.name, message_type_name
+        );
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GroupDefinition {
-    name: String,
-    required: String,
-    // #[serde(rename = "$value")]
-    // fields: Vec<Field>,
-    #[serde(
-        default,
-        rename = "$value",
-        serialize_with = "ser_peer_public",
-        deserialize_with = "de_peer_public"
-    )]
-    fields: BTreeMap<String, MessagePart>,
+fn parse_msg_element(
+    node: &Element,
+    dd_map: &mut DDMap,
+    fields_by_name: &BTreeMap<String, DDField>,
+    components_by_name: &BTreeMap<String, Element>,
+) {
+    parse_msg_element_inner(node, &mut GoM::Map(dd_map), fields_by_name, components_by_name, None);
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct FieldDefinition {
-    number: String,
-    name: String,
-    #[serde(rename = "type")]
-    type_name: String,
-    #[serde(default, rename = "$value")]
-    values: Vec<FieldValue>,
-    // #[serde(default, rename = "$value", serialize_with = "ser_peer_public", deserialize_with = "de_peer_public")]
-    // values: BTreeMap<String, FieldValue>,
-}
+fn parse_msg_element_inner(
+    node: &Element,
+    dd_map: &mut GoM<'_>,
+    fields_by_name: &BTreeMap<String, DDField>,
+    components_by_name: &BTreeMap<String, Element>,
+    component_required: Option<bool>,
+) {
+    let message_type_name = node
+        .attributes
+        .get("name")
+        .map(|s| s.clone())
+        .unwrap_or_else(|| node.name.clone());
 
-impl Named for FieldDefinition {
-    fn name(&self) -> &str {
-        &self.name
+    if node.children.is_empty() {
+        return;
     }
-}
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct FieldValue {
-    #[serde(rename = "enum")]
-    enum_values: String,
-    description: String,
+    for child_node in node.children.iter() {
+        let child_node = child_node.as_element().unwrap();
+        verify_child_node(child_node, node);
+
+        let name_attribute = child_node.attributes.get("name").unwrap().clone();
+
+        match child_node.name.as_str() {
+            "field" | "group" => {
+                if !fields_by_name.contains_key(&name_attribute) {
+                    panic!(
+                        "Field '{}' is not defined in <fields> section.",
+                        name_attribute
+                    );
+                }
+                let dd_field = fields_by_name.get(&name_attribute).unwrap().clone();
+                //bool required = (childNode.Attributes["required"]?.Value == "Y") && componentRequired.GetValueOrDefault(true);
+                let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false)
+                    && component_required.unwrap_or(true);
+
+                if required {
+                    dd_map.required_fields.insert(dd_field.tag);
+                }
+
+                if !dd_map.is_field(dd_field.tag) {
+                    dd_map.fields.insert(dd_field.tag, dd_field.clone());
+                }
+
+                //TODO check if ddmap is a ddgroup and set delim!
+                if let GoM::Group(grp) = dd_map {
+                    if grp.delim == 0 {
+                        grp.delim = dd_field.tag;
+                    }
+                }
+
+                if child_node.name == "group" {
+                    let mut dd_grp = DDGroup::default();
+                    dd_grp.num_fld = dd_field.tag;
+
+                    if required {
+                        dd_grp.required = true;
+                    }
+
+                    {
+                        let mut dd_map = GoM::Group(&mut dd_grp);
+                        parse_msg_element_inner(child_node, &mut dd_map, fields_by_name, components_by_name, None);
+                    }
+
+                    dd_map.groups.insert(dd_field.tag, dd_grp);
+                }
+            }
+            "component" => {
+                let component_node = components_by_name
+                    .get(&name_attribute)
+                    .unwrap()
+                    .clone();
+
+                let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false);
+                parse_msg_element_inner(&component_node, dd_map, fields_by_name, components_by_name, Some(required));
+            }
+            _ => panic!(
+                "Malformed data dictionary: child node type should be one of {{field,group,component}} but is '{}' within parent '{}/{}'",
+                child_node.name,
+                node.name,
+                message_type_name
+            ),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, collections::BTreeMap};
+    use super::DataDictionary;
 
-    use quick_xml::{Reader, events::{Event, BytesStart}};
-
-    use crate::data_dictionary::*;
     #[test]
-    fn test_field_value() {
-        let data = "<value enum='U' description='UP' />";
-        let fd = serde_xml_rs::from_str(data);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: FieldValue = fd.unwrap();
-        assert!(fd.enum_values == "U");
-        assert!(fd.description == "UP");
+    pub fn fix40() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX40.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn test_field_definition() {
-        let data = "<field number='554' name='Password' type='STRING' />";
-        let fd = serde_xml_rs::from_str(data);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: FieldDefinition = fd.unwrap();
-        assert!(fd.number == "554");
-        assert!(fd.name == "Password");
-        assert!(fd.type_name == "STRING");
-        assert!(fd.values.is_empty());
+    pub fn fix41() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX41.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn test_field_definition_with_values() {
-        let data = r#"
-            <field number='8013' name='CancelOrdersOnDisconnect' type='CHAR'>
-                <value enum='S' description='SESSION' />
-                <value enum='Y' description='PROFILE' />
-            </field>"#;
-        let fd = serde_xml_rs::from_str(data);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: FieldDefinition = fd.unwrap();
-        assert!(fd.number == "8013");
-        assert!(fd.name == "CancelOrdersOnDisconnect");
-        assert!(fd.type_name == "CHAR");
-        assert!(fd.values.len() == 2);
+    pub fn fix42() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX42.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn test_header_field() {
-        let data = "<field name='BeginString' required='Y' />";
-        let fd = serde_xml_rs::from_str(data);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: Field = fd.unwrap();
-        assert!(fd.name == "BeginString");
-        assert!(fd.required == "Y");
+    pub fn fix43() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX43.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
+        let dd = result.unwrap();
+        let newordersingle = dd.messages().get("D");
+        assert!(newordersingle.is_some());
+        let handlinst = dd.fields_by_name.get("HandlInst");
+        assert!(handlinst.is_some());
+        let handlinst_in_message = newordersingle.unwrap().fields.contains_key(&handlinst.unwrap().tag);
+        println!("{:?}", handlinst_in_message);
+        assert!(handlinst_in_message)
     }
 
     #[test]
-    fn test_header() {
-        let data = r#"<header>
-                <field name='BeginString' required='Y' />
-                <component name='InstrmtLegIOIGrp' required='N' />
-            </header>"#;
-        let fd = serde_xml_rs::from_str(data);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: Header = fd.unwrap();
-        assert!(fd.values.len() == 2);
+    pub fn fix44() {
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX44.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn test_message_group() {
-        let data = r#"<message name='NewOrderBatch' msgtype='U6'>
-                <field name='BatchID' required='Y' />
-                <group name='NoOrders' required='Y'>
-                    <field name='ClOrdID' required='Y' />
-                    <field name='HandlInst' required='N' />
-                    <field name='Symbol' required='Y' />
-                    <field name='Side' required='Y' />
-                    <field name='Price' required='N' />
-                    <field name='OrderQty' required='N' />
-                    <field name='OrdType' required='Y' />
-                    <field name='TimeInForce' required='N' />
-                    <field name='SelfTradePrevention' required='N' />
-                    <field name='TransactTime' required='N' />
-                </group>
-            </message>"#;
-        let fd = serde_xml_rs::from_str(data);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: MessageDefinition = fd.unwrap();
-        assert!(fd.fields.len() == 2);
+    pub fn fix50() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX50.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn test_minimal_spec() {
-        let data = r#"
-<fix type='FIX' major='4' minor='2' servicepack='0'>
- <header>
-  <field name='BeginString' required='Y' />
- </header>
- <messages>
-  <message name='Heartbeat' msgtype='0' msgcat='admin'>
-   <field name='TestReqID' required='N' />
-  </message>
- </messages>
- <components />
- <fields>
-  <field number='1' name='Account' type='STRING' />
- </fields>
- <trailer>
-  <field name='SignatureLength' required='N' />
- </trailer>
-</fix>
-"#;
-        let fd = serde_xml_rs::from_str(data);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
+    pub fn fix50sp1() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX50SP1.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn test_xml_fix40() {
-        let reader = File::open("../../spec/FIX40.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
+    pub fn fix50sp2() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX50SP2.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 
     #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fix41() {
-        let reader = File::open("../../spec/FIX41.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fix42() {
-        let reader = File::open("../../spec/FIX42.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fix43() {
-        let reader = File::open("../../spec/FIX43.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fix44() {
-        let reader = File::open("../../spec/FIX44.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fix50() {
-        let reader = File::open("../../spec/FIX50.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fix50SP1() {
-        let reader = File::open("../../spec/FIX50SP1.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fix50SP2() {
-        let reader = File::open("../../spec/FIX50SP2.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fixT11() {
-        let reader = File::open("../../spec/FIXT11.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let _fd: FixSpec = fd.unwrap();
-    }
-
-    #[test]
-    #[allow(non_snake_case)]
-    fn test_xml_fixT11_dd() {
-        let reader = File::open("../../spec/FIXT11.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        //println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: FixSpec = fd.unwrap();
-        let _dd = DataDictionary::new(false, false, false, false, fd);
-    }
-
-    #[test]
-    fn quick_xml_field_empty() {
-
-        let xml_str = "<field number='140' name='PrevClosePx' type='FLOAT' />";
-        let mut reader = Reader::from_str(xml_str);
-        reader.trim_text(true);
-
-        let start = BytesStart::new("field");
-        let end   = start.to_end().into_owned();
-
-        // First, we read a start event...
-        let event = reader.read_event();
-        assert!(event.is_ok());
-        let event = event.unwrap();
-        assert!(matches!(event, Event::Empty(_)));
-
-        let start = match event {
-            Event::Empty(start) => start, // no inner values!
-            _ => unreachable!()
-        };
-
-        let number = start.try_get_attribute("number");
-        assert!(number.is_ok());
-        assert!(matches!(number.unwrap(), Some(x) if x.unescape_value().unwrap() == "140"));
-
-        // ...then, we could read text content until close tag.
-        // This call will correctly handle nested <html> elements.
-    }
-
-    #[test]
-    fn quick_xml_field_with_values() {
-
-        let inner_str = b"   <value enum='1' description='REGULATORY' />
-   <value enum='2' description='TAX' />
-   <value enum='3' description='LOCAL_COMMISSION' />
-   <value enum='4' description='EXCHANGE_FEES' />
-   <value enum='5' description='STAMP' />
-   <value enum='6' description='LEVY' />
-   <value enum='7' description='OTHER' />
-";
-        let xml_str = "
-  <field number='139' name='MiscFeeType' type='CHAR'>
-   <value enum='1' description='REGULATORY' />
-   <value enum='2' description='TAX' />
-   <value enum='3' description='LOCAL_COMMISSION' />
-   <value enum='4' description='EXCHANGE_FEES' />
-   <value enum='5' description='STAMP' />
-   <value enum='6' description='LEVY' />
-   <value enum='7' description='OTHER' />
-  </field>
-";
-        let mut reader = Reader::from_str(xml_str);
-        reader.trim_text(true);
-
-        let start = BytesStart::new("field");
-        let end   = start.to_end().into_owned();
-
-        // First, we read a start event...
-        let event = reader.read_event();
-        assert!(event.is_ok());
-        let event = event.unwrap();
-        assert!(matches!(event, Event::Start(_)));
-
-        let start = match event {
-            Event::Start(start) => start, // no inner values!
-            _ => unreachable!()
-        };
-
-        let number = start.try_get_attribute("number");
-        assert!(number.is_ok());
-        assert!(matches!(number.unwrap(), Some(x) if x.unescape_value().unwrap() == "139"));
-
-        // ...then, we could read text content until close tag.
-        // This call will correctly handle nested <html> elements.
-        let span = reader.read_to_end(end.name()).unwrap();
-        let bytes = &xml_str.as_bytes()[span];
-
-        assert_eq!(bytes.iter().map(|b| *b as char).collect::<String>().trim(), inner_str.iter().map(|b| *b as char).collect::<String>().trim());
-    }
-
-    fn messages(bytes: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
-        let mut reader = Reader::from_reader(bytes);
-        reader.trim_text(true);
-        let mut map = Vec::new();
-        while let Ok(event) = reader.read_event() {
-            match event {
-                Event::Start(e) => {
-                    match e.name().as_ref() {
-                        b"message" => {
-                            // <message name='SequenceReset' msgtype='4' msgcat='admin'>
-                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?.to_string();
-                            let msgtype = e.try_get_attribute("msgtype")?.ok_or(XmlError::NoValue { name: "msgtype" })?.unescape_value()?.to_string();
-                            let msgcat = e.try_get_attribute("msgcat")?.ok_or(XmlError::NoValue { name: "msgcat" })?.unescape_value()?.to_string();
-                            let span = reader.read_to_end(e.to_end().name())?;
-                            let bytes = &bytes[span];
-                            let message = message(bytes, fields_by_name)?;
-                            // let message = MessageDefinition { name, msgtype, msgcat: Some(msgcat), fields  };
-                            map.push(message);
-                        },
-                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <message .../> or <message ...>...</message>" })?,
-                    }
-                },
-                Event::Empty(e) => {
-                    match e.name().as_ref() {
-                        b"message" => {
-                            // <message name='SequenceReset' msgtype='4' msgcat='admin' />
-                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?.to_string();
-                            let msgtype = e.try_get_attribute("msgtype")?.ok_or(XmlError::NoValue { name: "msgtype" })?.unescape_value()?.to_string();
-                            let msgcat = e.try_get_attribute("msgcat")?.ok_or(XmlError::NoValue { name: "msgcat" })?.unescape_value()?.to_string();
-                            let message = DDMap::default();
-                            map.push(message);
-                        },
-                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <message .../> or <message ...>...</message>" })?,
-                    }
-                },
-                Event::Eof => break,
-                _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <message .../> or <message ...>...</message>" })?,
-            }
-        }
-        Ok(map)
-    }
-
-    fn message(bytes: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<DDMap, XmlError> {
-        todo!()
-    }
-
-    fn read_data_dictionary(bytes: &[u8]) -> Result<DataDictionary, XmlError> {
-        let mut reader = Reader::from_reader(bytes);
-        if let Ok(event) = reader.read_event() {
-            match event {
-                Event::Start(e) => {
-                    if let b"fix" = e.name().as_ref() {
-                        let fix_type = e.try_get_attribute("type")?.ok_or(XmlError::NoValue { name: "type" })?.unescape_value()?;
-                        let major = e.try_get_attribute("major")?.ok_or(XmlError::NoValue { name: "major" })?.unescape_value()?;
-                        let minor = e.try_get_attribute("minor")?.ok_or(XmlError::NoValue { name: "minor" })?.unescape_value()?;
-                        let servicepack = e.try_get_attribute("servicepack")?.ok_or(XmlError::NoValue { name: "servicepack" })?.unescape_value()?;
-
-                        let span = reader.read_to_end(e.to_end().name())?;
-                        let bytes = &bytes[span];
-
-                        let mut reader = Reader::from_reader(bytes);
-                        let mut header_span = None;
-                        let mut messages_span = None;
-                        let mut components_span = None;
-                        let mut trailer_span = None;
-                        let mut fields_span = None;
-                        while let Ok(ie) = reader.read_event() {
-                            match ie {
-                                Event::Start(e) => match e.name().as_ref() {
-                                    b"header" => header_span = Some(reader.read_to_end(e.to_end().name())?),
-                                    b"messages" => messages_span = Some(reader.read_to_end(e.to_end().name())?),
-                                    b"components" => components_span = Some(reader.read_to_end(e.to_end().name())?),
-                                    b"trailer" => trailer_span = Some(reader.read_to_end(e.to_end().name())?),
-                                    b"fields" => fields_span = Some(reader.read_to_end(e.to_end().name())?),
-                                    _ => return Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <messages>...</messages>" }),
-                                },
-                                Event::Empty(empty) => match empty.name().as_ref() {
-                                    b"header" => {},
-                                    b"messages" => {},
-                                    b"components" => components_span = Some(reader.read_to_end(empty.to_end().name())?), // empty components
-                                    b"trailer" => {},
-                                    b"fields" => {},
-                                    _ => return Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <messages>...</messages>" }),
-                                },
-                                Event::Eof => break,
-                                _ => return Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <messages>...</messages>" }),
-                            }
-                        }
-
-                        let header_span = header_span.ok_or(XmlError::InvalidFormat { expected: "missing header section" })?;
-                        let messages_span = messages_span.ok_or(XmlError::InvalidFormat { expected: "missing messages section" })?;
-                        let components_span = components_span.ok_or(XmlError::InvalidFormat { expected: "missing components section" })?;
-                        let trailer_span = trailer_span.ok_or(XmlError::InvalidFormat { expected: "missing trailer section" })?;
-                        let fields_span = fields_span.ok_or(XmlError::InvalidFormat { expected: "missing fields section" })?;
-
-                        let fields = fields(&bytes[fields_span])?;
-                        let fields_by_name = fields.iter().map(|v| todo!()).collect();
-                        let components = components(&bytes[components_span], &fields_by_name/*, fields*/)?;
-
-                        let messages = messages(&bytes[messages_span], &fields_by_name/*, fields, components*/)?;
-                        let header = message(&bytes[header_span], &fields_by_name/*, fields, components*/)?;
-                        let trailer = message(&bytes[trailer_span], &fields_by_name/*, fields, components*/)?;
-
-                        let data_dictionary = DataDictionary {
-                            check_fields_have_values: todo!(),
-                            check_fields_out_of_order: todo!(),
-                            check_user_defined_fields: todo!(),
-                            allow_unknown_message_fields: todo!(),
-                            version: todo!(),
-                            fields_by_tag: todo!(),
-                            fields_by_name,
-                            messages: todo!(),
-                            header: todo!(),
-                            trailer: todo!()
-                        };
-                        todo!("{e:?}")
-                    } else {
-                        Err(XmlError::InvalidFormat { expected: "xml start event: eg: <fix ...>...</fix>" })
-                    }
-                },
-                Event::Eof => Err(XmlError::InvalidFormat { expected: "empty_file" }),
-                _ => Err(XmlError::InvalidFormat { expected: "xml start event: eg: <fix ...>...</fix>" }),
-            }
-        } else {
-            Err(XmlError::InvalidFormat { expected: "failed to read xml start event: eg: <fix ...>...</fix>" })
-        }
-    }
-
-    fn components(components_span: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
-        todo!()
-    }
-
-    fn component(component_span: &[u8], fields_by_name: &BTreeMap<String, DDField>) -> Result<Vec<DDMap>, XmlError> {
-        todo!()
-    }
-
-    fn fields(bytes: &[u8]) -> Result<Vec<DDField>, XmlError> {
-        let mut reader = Reader::from_reader(bytes);
-        reader.trim_text(true);
-        let mut map = Vec::new();
-        while let Ok(event) = reader.read_event() {
-            match event {
-                Event::Start(e) => {
-                    match e.name().as_ref() {
-                        b"field" => {
-                            let number = e.try_get_attribute("number")?.ok_or(XmlError::NoValue { name: "number" })?.unescape_value()?;
-                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?;
-                            let field_type = e.try_get_attribute("type")?.ok_or(XmlError::NoValue { name: "type" })?.unescape_value()?;
-                            let span = reader.read_to_end(e.to_end().name())?;
-                            let bytes = &bytes[span];
-                            let enum_values = enum_values(bytes)?;
-                            let field = DDField::new(number.parse()?, name.to_string(), enum_values, field_type.to_string());
-                            map.push(field);
-                        },
-                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <field .../> or <field ...>...</field>" })?
-                    }
-                },
-                Event::Empty(e) => {
-                    match e.name().as_ref() {
-                        b"field" => {
-                            let number = e.try_get_attribute("number")?.ok_or(XmlError::NoValue { name: "number" })?.unescape_value()?;
-                            let name = e.try_get_attribute("name")?.ok_or(XmlError::NoValue { name: "name" })?.unescape_value()?;
-                            let field_type = e.try_get_attribute("type")?.ok_or(XmlError::NoValue { name: "type" })?.unescape_value()?;
-                            let enum_values = BTreeMap::new();
-                            let field = DDField::new(number.parse()?, name.to_string(), enum_values, field_type.to_string());
-                            map.push(field);
-                        },
-                        _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <field .../> or <field ...>...</field>" })?
-                    }
-                },
-                Event::Eof => break,
-                _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <field .../> or <field ...>...</field>" })?,
-            }
-        }
-        Ok(map)
-    }
-
-    fn enum_values(bytes: &[u8]) -> Result<BTreeMap<String, String>, XmlError> {
-        let mut values = BTreeMap::new();
-        let mut reader = Reader::from_reader(bytes);
-        reader.trim_text(true);
-
-        while let Ok(event) = reader.read_event() {
-            match event {
-                Event::Empty(e) => {
-                    match e.name().as_ref() {
-                        b"value" => Ok(()),
-                        _v => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <value/>" })
-                    }?;
-                    let enum_value = e.try_get_attribute("enum")?.ok_or(XmlError::NoValue { name: "enum" })?.unescape_value()?;
-                    let description = e.try_get_attribute("description")?.ok_or(XmlError::NoValue { name: "description" })?.unescape_value()?;
-                    values.insert(enum_value.into(), description.into());
-                }, // no inner values!
-                Event::Eof => break,
-                _ => Err(XmlError::InvalidFormat { expected: "empty xml event: eg: <value .../>" })?
-            }
-        }
-
-        Ok(values)
-    }
-
-    #[derive(Debug)]
-    enum XmlError {
-        QuickXmlError { error: quick_xml::Error },
-        NoValue { name: &'static str },
-        InvalidFormat { expected: &'static str },
-    }
-
-    impl From<quick_xml::Error> for XmlError {
-        fn from(error: quick_xml::Error) -> Self {
-            XmlError::QuickXmlError { error }
-        }
-    }
-
-    impl From<std::num::ParseIntError> for XmlError {
-        fn from(_error: std::num::ParseIntError) -> Self {
-            XmlError::InvalidFormat { expected: "Number in string" }
-        }
-    }
-
-    #[test]
-    fn quick_xml_values() {
-
-        let xml_str = b"   <value enum='1' description='REGULATORY' />
-   <value enum='2' description='TAX' />
-   <value enum='3' description='LOCAL_COMMISSION' />
-   <value enum='4' description='EXCHANGE_FEES' />
-   <value enum='5' description='STAMP' />
-   <value enum='6' description='LEVY' />
-   <value enum='7' description='OTHER' />
-";
-        let enum_values = enum_values(xml_str);
-        assert!(enum_values.is_ok());
-        assert!(enum_values.unwrap().len() == 7);
+    pub fn fixt11() {
+        //let result = DataDictionary::load("../../../spec/FIX43.xml");
+        let result = DataDictionary::load_from_string(include_str!("../../../spec/FIXT11.xml"));
+        println!("{:?}", result);
+        assert!(result.is_ok());
     }
 }

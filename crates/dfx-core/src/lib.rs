@@ -1,4 +1,5 @@
 pub mod data_dictionary;
+pub mod dd;
 pub mod data_dictionary_provider;
 pub mod field_map;
 pub mod message;

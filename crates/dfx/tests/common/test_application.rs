@@ -3,18 +3,19 @@ use std::{collections::HashSet, sync::{Mutex, Arc}};
 use dfx::{
     message::Message,
     session::{Application, ApplicationError, ApplicationExt, Session, DoNotAccept, LogonReject, FromAppError},
-    tags, fields::MsgType, session_id,
+    tags,
 };
-use lazy_static::lazy_static;
 
 #[derive(Clone)]
 pub struct TestApplication {
     ids_seen: Arc<Mutex<HashSet<String>>>,
+    stop_me_event: Option<u32>,
 }
 impl TestApplication {
     pub fn new() -> Self {
         TestApplication {
-            ids_seen: Arc::new(Mutex::new(HashSet::new()))
+            ids_seen: Arc::new(Mutex::new(HashSet::new())),
+            stop_me_event: None,
         }
     }
     fn seen(&self, cl_ord_id: &String) -> bool {
@@ -51,12 +52,24 @@ impl TestApplication {
         Session::send_to_session(session_id, message.clone()).unwrap();
     }
     fn handle_nos(&self, message: &Message, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::field_map::FieldMapError> {
+        println!("handle_nos");
         let poss_resend = message.header().get_field(tags::PossResend).is_some() && message.header().get_bool(tags::PossResend);
 
         let cl_ord_id = message.get_string(tags::ClOrdID)?;
         if poss_resend && self.seen(&cl_ord_id) {
         } else {
             self.insert(cl_ord_id);
+            Session::send_to_session(session_id, message.clone()).unwrap();
+        }
+        Ok(())
+    }
+    fn handle_news(&self, message: &Message, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::field_map::FieldMapError> {
+        println!("handle_news");
+        if message.is_field_set(tags::Headline) && message.get_string(tags::Headline)? == "STOPME" {
+            if let Some(event) = self.stop_me_event {
+                todo!("STOPME: {:?}", event);
+            }
+        } else {
             Session::send_to_session(session_id, message.clone()).unwrap();
         }
         Ok(())
@@ -113,11 +126,14 @@ impl Application for TestApplication {
         println!("TestApplication From App: {}", session_id);
 
         let msg_type = message.header().get_string(tags::MsgType)?;
+        println!("{}", msg_type);
         match msg_type.as_str() {
             "D" => self.handle_nos(message, session_id)?,
             "d" => self.echo(message, session_id),
-            "B" => todo!("Handle news"),
+            "B" => self.handle_news(message, session_id)?,
             "AE" => {},
+            "AD" => {},
+            "R" => self.echo(message, session_id),
             _ => return Err(FromAppError::UnknownMessageType { message: message.clone(), msg_type }),
         }
         Ok(())

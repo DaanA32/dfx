@@ -7,13 +7,14 @@ use crate::fields::ConversionError;
 use crate::message::Message;
 use crate::tags;
 use std::collections::BTreeMap;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Default, Clone, Debug)]
 pub struct FieldMap {
     fields: BTreeMap<Tag, Field>,
-    groups: BTreeMap<Tag, Vec<Group>>,
+    groups: HashMap<Tag, Vec<Group>>,
     // fields: HashMap<Tag, Field>,
     // groups: HashMap<Tag, Vec<Group>>,
     repeated_tags: Vec<Field>,
@@ -44,6 +45,7 @@ pub struct Group {
     delim: Tag,
     field: Tag,
     map: FieldMap,
+    field_order: Option<FieldOrder>,
 }
 impl Group {
     pub fn new(field: Tag, delim: Tag) -> Self {
@@ -51,6 +53,7 @@ impl Group {
             delim,
             field,
             map: FieldMap::default(),
+            field_order: None,
         }
     }
     pub fn delim(&self) -> Tag {
@@ -58,6 +61,14 @@ impl Group {
     }
     pub fn field(&self) -> Tag {
         self.field
+    }
+    pub fn calculate_string(&self) -> String {
+        if let Some(order) = &self.field_order {
+            todo!("calculate order: {:?}", order)
+        } else {
+            let order: Vec<Tag> = vec![self.delim];
+            self.map.calculate_string(Some(order))
+        }
     }
 }
 impl Deref for Group {
@@ -123,8 +134,8 @@ impl Field {
 
 impl FieldMap {
     pub fn from_field_order(_field_order: FieldOrder) -> Self {
-        let fields = BTreeMap::default();
-        let groups = BTreeMap::default();
+        let fields = Default::default();
+        let groups = Default::default();
         // let fields = HashMap::default();
         // let groups = HashMap::default();
         let repeated_tags = Vec::default();
@@ -241,21 +252,25 @@ impl FieldMap {
         // if (!_groups.ContainsKey(field))
         //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
+            println!("contains_key");
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (num <= 0)
         //     throw new FieldNotFoundException(field);
         if index == 0 {
+            println!("index == 0");
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (_groups[field].Count < num)
         //     throw new FieldNotFoundException(field);
         if self.groups[&field].len() < index as usize {
+            println!("self.groups[&field].len() < index as usize");
+            println!("{} < {}", self.groups[&field].len(), index as usize);
             return Err(FieldMapError::FieldNotFound(field));
         }
 
         // return _groups[field][num - 1];
-        Ok(&self.groups[&field][index as usize])
+        Ok(&self.groups[&field][(index-1) as usize])
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
@@ -322,16 +337,19 @@ impl FieldMap {
         // if (!_groups.ContainsKey(field))
         //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
+            println!("key error: {:?}, {index} {field} {group:?}", self);
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (num <= 0)
         //     throw new FieldNotFoundException(field);
         if index == 0 {
+            println!("index: {:?}, {index} {field} {group:?}", self);
             return Err(FieldMapError::FieldNotFound(field));
         }
         // if (_groups[field].Count < num)
         //     throw new FieldNotFoundException(field);
         if self.groups[&field].len() < index as usize {
+            println!("< index: {:?}, {index} {field} {group:?}", self);
             return Err(FieldMapError::FieldNotFound(field));
         }
 
@@ -354,6 +372,7 @@ impl FieldMap {
 
     pub fn group_count(&self, field: Tag) -> Result<usize, FieldMapError> {
         if !self.groups.contains_key(&field) {
+            println!("group_count_err");
             return Err(FieldMapError::FieldNotFound(field));
         }
         Ok(self.groups[&field].len())
@@ -460,7 +479,7 @@ impl FieldMap {
 
     pub fn calculate_string(&self, prefields: Option<FieldOrder>) -> String {
         // HashSet<int> groupCounterTags = new HashSet<int>(_groups.Keys);
-        let group_counter_tags: HashSet<Tag> = HashSet::new();
+        let group_counter_tags: BTreeSet<&Tag> = self.group_tags().collect();
         let prefields = prefields.unwrap_or_default();
         let mut sb = String::new();
 
@@ -485,7 +504,7 @@ impl FieldMap {
                     //             foreach (Group g in glist)
                     for g in glist {
                         //                 sb.Append(g.CalculateString());
-                        sb.push_str(&g.calculate_string(None));
+                        sb.push_str(&g.calculate_string());
                     }
                 }
             }
@@ -540,7 +559,7 @@ impl FieldMap {
             //     foreach (Group group in groupList)
             for group in grouplist {
                 //         sb.Append(group.CalculateString());
-                sb.push_str(&group.calculate_string(None));
+                sb.push_str(&group.calculate_string());
             }
         }
 

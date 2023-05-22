@@ -287,8 +287,8 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
     let other: String = other.iter().map(|b| *b as char).collect();
     // println!("Runner: Received {}", other.replace("\x01", "|"));
     let message = message.replace("|", "\x01");
-    let read_fields = to_fields(other, '\x01', true);
-    let expected_fields = to_fields(message, '\x01', true);
+    let read_fields = from_fields(to_fields(other, '\x01', true), '|');
+    let expected_fields = from_fields(to_fields(message, '\x01', true), '|');
     if read_fields != expected_fields {
         Err(format!("Expected: {expected_fields:?}\nRead: {read_fields:?}"))
     } else {
@@ -397,4 +397,10 @@ fn to_fields(message: String, delim: char, skip_time: bool) -> Vec<(String, Stri
         .filter(|value| value.0 != "122")
         .filter(|value| value.0 != "60")
         .collect()
+}
+fn from_fields(fields: Vec<(String, String)>, delim: char) -> String {
+    fields.iter()
+          .map(|f| format!("{}={}{delim}", f.0, f.1))
+        .collect::<Vec<String>>()
+        .join("")
 }

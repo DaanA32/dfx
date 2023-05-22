@@ -2,12 +2,15 @@ use crate::field_map::Group;
 use crate::field_map::Tag;
 use crate::message::Message;
 use crate::tags;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 pub trait MessageFactory: Debug + Send {
     fn get_supported_begin_strings(&self) -> Vec<String>;
     fn create(&self, begin_string: &str, msg_type: &str) -> Result<Message, MessageFactoryError>;
-    fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Group;
+    fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Option<Group>;
 }
 
 #[derive(Clone, Debug)]
@@ -26,13 +29,17 @@ impl MessageFactoryError {
 }
 
 #[derive(Clone, Debug)]
-pub struct DefaultMessageFactory;
+pub struct DefaultMessageFactory {
+    factory_map: BTreeMap<String, Arc<Mutex<Box<dyn MessageFactory>>>>,
+}
 impl DefaultMessageFactory {
     pub fn new() -> Self {
-        DefaultMessageFactory
+        DefaultMessageFactory {
+            factory_map: Default::default()
+        }
     }
     pub fn boxed() -> Box<dyn MessageFactory> {
-        Box::new(DefaultMessageFactory)
+        Box::new(DefaultMessageFactory::new())
     }
 }
 
@@ -49,8 +56,13 @@ impl MessageFactory for DefaultMessageFactory {
         Ok(msg)
     }
 
-    fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Group {
-        todo!("{begin_string} {msg_type} {group_counter_tag}")
+    fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Option<Group> {
+        // println!("# TODO create_group({begin_string}, {msg_type}, {group_counter_tag})");
+        if let Some(factory) = self.factory_map.get(begin_string) {
+            todo!("# TODO create_group({begin_string}, {msg_type}, {group_counter_tag}, {factory:?})");
+            //let _ = Group::new(0, group_counter_tag);
+        }
+        None
     }
 }
 //     factories: Hash

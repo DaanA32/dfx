@@ -22,6 +22,7 @@ impl<'a> TryFrom<&'a FieldValue> for &'a str {
     type Error = ConversionError;
 
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+        // TODO encoding latin1
         std::str::from_utf8(value).map_err(|_| ConversionError::EncodingError)
     }
 }

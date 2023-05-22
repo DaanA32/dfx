@@ -543,11 +543,11 @@ impl Message {
                     // grp = msgFactory.Create(Message.ExtractBeginString(msgstr), Message.GetMsgType(msgstr), grpNoFld.Tag);
                     let begin_string = Message::extract_begin_string(msgstr)?;
                     let msg_type = Message::get_msg_type(msgstr)?;
-                    group = Some(factory.create_group(
+                    group = factory.create_group(
                         begin_string.as_str(),
                         msg_type,
                         grp_no_fld.tag(),
-                    ));
+                    );
                 }
 
                 //If above failed (shouldn't ever happen), just use a generic Group.
@@ -582,39 +582,41 @@ impl Message {
                         f.tag(),
                     ),
                 );
-            } else {
-                // if (grp == null)
-                if group.is_none() {
-                    // This means we got into the group's fields without finding a delimiter tag.
+            }
 
-                    //throw new GroupDelimiterTagException(grpNoFld.Tag, grpEntryDelimiterTag);
-                    return Err(MessageParseError::GroupDelimiterTagException(
-                        grp_no_fld.tag(),
-                        f.tag(),
-                    ));
-                }
-                let group: &mut Group = group.as_mut().unwrap();
+            // if (grp == null)
+            if group.is_none() {
+                // This means we got into the group's fields without finding a delimiter tag.
 
-                // f is just a field in our group entry.  Add it and iterate again.
-                // grp.SetField(f);
-                group.set_field_base(f.clone(), None);
+                let b = &msgstr[pos..];
+                println!("{:?}", String::from_utf8_lossy(&b));
+                //throw new GroupDelimiterTagException(grpNoFld.Tag, grpEntryDelimiterTag);
+                return Err(MessageParseError::GroupDelimiterTagException(
+                    grp_no_fld.tag(),
+                    grp_entry_delimiter_tag,
+                ));
+            }
+            let group: &mut Group = group.as_mut().unwrap();
 
-                // if(groupDD.IsGroup(f.Tag))
-                if group_dd.is_group(f.tag()) {
-                    // f is a counter for a nested group.  Recurse!
+            // f is just a field in our group entry.  Add it and iterate again.
+            // grp.SetField(f);
+            group.set_field_base(f.clone(), None);
 
-                    //pos = SetGroup(f, msgstr, pos, grp, groupDD.GetGroupSpec(f.Tag), sessionDataDictionary, appDD, msgFactory);
-                    pos = Message::set_group(
-                        f.clone(),
-                        msgstr,
-                        pos,
-                        group,
-                        group_dd.get_group(f.tag()),
-                        session_dd,
-                        app_dd,
-                        msg_factory,
-                    )?;
-                }
+            // if(groupDD.IsGroup(f.Tag))
+            if group_dd.is_group(f.tag()) {
+                // f is a counter for a nested group.  Recurse!
+
+                //pos = SetGroup(f, msgstr, pos, grp, groupDD.GetGroupSpec(f.Tag), sessionDataDictionary, appDD, msgFactory);
+                pos = Message::set_group(
+                    f.clone(),
+                    msgstr,
+                    pos,
+                    group,
+                    group_dd.get_group(f.tag()),
+                    session_dd,
+                    app_dd,
+                    msg_factory,
+                )?;
             }
         }
 
@@ -710,10 +712,11 @@ impl Message {
 
     pub(crate) fn get_msg_type(msgstr: &[u8]) -> Result<&str, MessageParseError> {
         lazy_static! {
-            static ref RE: Regex = Regex::new(r"35=([^\x01])*\x01").unwrap();
+            static ref RE: Regex = Regex::new(r"35=([^\x01]*)\x01").unwrap();
         }
         let msgstr = std::str::from_utf8(msgstr).unwrap();
-        RE.captures(msgstr)
+        let captures = RE.captures(msgstr);
+        captures
             .and_then(|cap| cap.get(1).map(|login| login.as_str()))
             .ok_or_else(|| {
                 MessageParseError::Malformed { tag: 35, message: format!(
@@ -988,7 +991,7 @@ impl MessageParseError {
             Self::FailedToFindSohAt(_) => todo!(),
             Self::PosGreaterThanLen(_, _) => todo!(),
             Self::RepeatedTagWithoutGroupDelimiterTagException(num, delim) => todo!(),
-            Self::GroupDelimiterTagException(num, delim) => SessionRejectReason::INCORRECT_NUM_IN_GROUP_COUNT_FOR_REPEATING_GROUP(),
+            Self::GroupDelimiterTagException(num, delim) => TagException::group_delimiter_tag_exception(num, delim).session_reject_reason().clone(),
             Self::FieldMapError(_) => todo!(),
             Self::Malformed { tag: _, .. } => SessionRejectReason::INVALID_MSGTYPE(),
             Self::ConversionError(_) => todo!(),
@@ -1000,17 +1003,11 @@ impl MessageParseError {
 mod tests {
     use super::Message;
     use crate::data_dictionary::DataDictionary;
-    use crate::data_dictionary::FixSpec;
     use crate::message::MessageParseError;
     use std::fs::File;
     #[test]
     fn test_parse() {
-        let reader = File::open("../../spec/FIXT11.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        //println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: FixSpec = fd.unwrap();
-        let dd = DataDictionary::new(false, false, false, false, fd).unwrap();
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml").unwrap();
         println!("{:#?}", dd);
 
         let mut message = Message::default();
@@ -1033,12 +1030,7 @@ mod tests {
 
     #[test]
     fn test_validate() {
-        let reader = File::open("../../spec/FIX44.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        //println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: FixSpec = fd.unwrap();
-        let dd = DataDictionary::new(true, true, true, true, fd).unwrap();
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml").unwrap();
 
         let mut message = Message::default();
 
@@ -1081,18 +1073,13 @@ mod tests {
         assert!(msg_type.is_err());
         assert!(matches!(
             msg_type.err().unwrap(),
-            MessageParseError::Malformed(_)
+            MessageParseError::Malformed { .. }
         ));
     }
 
     #[test]
     fn test_get_msg_type_raw_data() {
-        let reader = File::open("../../spec/FIX44.xml").unwrap();
-        let fd = serde_xml_rs::from_reader(reader);
-        //println!("{:?}", fd);
-        assert!(fd.is_ok());
-        let fd: FixSpec = fd.unwrap();
-        let dd = DataDictionary::new(true, true, true, true, fd).unwrap();
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml").unwrap();
 
         let mut message = Message::default();
 

@@ -877,6 +877,7 @@ impl Session {
             }
         }
 
+        println!("Start validation");
         let validation_result = if self.session_id.is_fixt() && !Message::is_admin_msg_type(msg_type) {
             DataDictionary::validate(
                 &message,
@@ -895,7 +896,6 @@ impl Session {
             )
         };
 
-        println!("Validation.");
         if let Err(e) = validation_result {
             return Err(match e {
                 MessageValidationError::UnsupportedVersion { expected, actual } => SessionHandleMessageError::UnsupportedVersion { message, expected, actual },

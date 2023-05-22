@@ -1,0 +1,217 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dfx'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "dfx",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'server_ext'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=server_ext",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "server_ext",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'initiate_send'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=initiate_send",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "initiate_send",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'initiate_heartbeat'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=initiate_heartbeat",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "initiate_heartbeat",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'server_ext_macro'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=server_ext_macro",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "fix44::test_field_type_error_n",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/crates/dfx"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'accept_logon'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=accept_logon",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "accept_logon",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'initiate_logon'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=initiate_logon",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "initiate_logon",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'initiate_logon_timeout'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=initiate_logon_timeout",
+                    "--package=dfx"
+                ],
+                "filter": {
+                    "name": "initiate_logon_timeout",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dfx-core'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dfx-core"
+                ],
+                "filter": {
+                    "name": "dfx-core",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dfx-testing'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dfx-testing"
+                ],
+                "filter": {
+                    "name": "dfx-testing",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dfx-spec'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dfx-spec"
+                ],
+                "filter": {
+                    "name": "dfx-spec",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

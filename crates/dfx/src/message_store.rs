@@ -83,7 +83,7 @@ impl MessageStore for MemoryMessageStore {
     }
 
     fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<&String> {
-        assert!(begin_seq_num < end_seq_num);
+        assert!(begin_seq_num <= end_seq_num);
         self.messages
             .range(begin_seq_num..=end_seq_num)
             .map(|(_, v)| v)

@@ -165,6 +165,46 @@ pub fn value(&self) -> &dfx_core::field_map::FieldMap {{
     s
 }
 
+fn generate_message_factory(version: &str, data_dictionary: &DataDictionary) -> String {
+    format!(
+        indoc!(
+            r#"
+            use dfx_core::message_factory::MessageFactory;
+
+            #[derive(Debug, Clone, Copy)]
+            pub struct {version}MessageFactory;
+
+            impl MessageFactory for {version}MessageFactory {{
+                fn get_supported_begin_strings(&self) -> Vec<String> {{
+                    vec![String::from("{version_upper}")]
+                }}
+
+                fn create(&self, begin_string: &str, msg_type: &str) -> Result<dfx_core::message::Message, dfx_core::message_factory::MessageFactoryError> {{
+                    // check if begin string == {version_upper}
+                    todo!("{{begin_string}} {{msg_type}}")
+                }}
+
+                fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: dfx_core::field_map::Tag) -> Option<dfx_core::field_map::Group> {{
+                    {create_group}
+                }}
+            }}
+
+            "#
+        ),
+        version = version.to_pascal_case(),
+        version_upper = version.to_pascal_case().to_uppercase(),
+        create_group = generate_message_factory_create_group(data_dictionary),
+    )
+}
+
+fn generate_message_factory_create_group(data_dictionary: &DataDictionary) -> String {
+    let mut function = String::from("");
+    function.push_str(format!(r#"// TODO function
+        todo!("{{begin_string}} {{msg_type}} {{group_counter_tag}}")"#).as_str());
+    // TODO
+    function
+}
+
 fn generate_message(message: &DDMap, version: &str) -> String {
     format!(
         indoc!(
@@ -211,39 +251,45 @@ fn codegen(filename: &str) {
 
     let module_path = out_dir.join("mod.rs");
     let mut module = String::with_capacity(8192);
-    module.push_str(format!("pub mod r#{name};\n", name = "fields").as_str());
-    module.push_str(format!("pub mod r#{name};\n", name = "messages").as_str());
+    module.push_str(format!("pub mod r#{name};\n", name = "message_factory").as_str());
+    // module.push_str(format!("pub mod r#{name};\n", name = "fields").as_str());
+    // module.push_str(format!("pub mod r#{name};\n", name = "messages").as_str());
     std::fs::write(&module_path, module).unwrap();
 
-    // fields
-    let fields_dir = out_dir.join("fields");
-    if std::fs::read_dir(&fields_dir).is_err() {
-        std::fs::create_dir(&fields_dir).unwrap();
-    }
-
-    let module_path = fields_dir.join("mod.rs");
+    let module_path = out_dir.join("message_factory.rs");
     let mut module = String::with_capacity(8192);
-    for (name, field) in data_dictionary.fields_by_name() {
-        let dest_path = fields_dir.join(format!("{}.rs", name.to_snake_case()));
-        std::fs::write(dest_path, generate_field(field)).unwrap();
-        module.push_str(format!("mod r#{name};\npub use r#{name}::*;\n", name = name.to_snake_case()).as_str())
-    }
+    module.push_str(&generate_message_factory(version, &data_dictionary));
     std::fs::write(&module_path, module).unwrap();
 
-    // messages
-    let fields_dir = out_dir.join("messages");
-    if std::fs::read_dir(&fields_dir).is_err() {
-        std::fs::create_dir(&fields_dir).unwrap();
-    }
+    // // fields
+    // let fields_dir = out_dir.join("fields");
+    // if std::fs::read_dir(&fields_dir).is_err() {
+    //     std::fs::create_dir(&fields_dir).unwrap();
+    // }
 
-    let module_path = fields_dir.join("mod.rs");
-    let mut module = String::with_capacity(8192);
-    for (_, message) in data_dictionary.messages() {
-        let dest_path = fields_dir.join(format!("{}.rs", message.name().to_snake_case()));
-        std::fs::write(dest_path, generate_message(message, &version_mod_name)).unwrap();
-        module.push_str(format!("mod r#{name};\npub use r#{name}::*;\n", name = message.name().to_snake_case()).as_str())
-    }
-    std::fs::write(&module_path, module).unwrap();
+    // let module_path = fields_dir.join("mod.rs");
+    // let mut module = String::with_capacity(8192);
+    // for (name, field) in data_dictionary.fields_by_name() {
+    //     let dest_path = fields_dir.join(format!("{}.rs", name.to_snake_case()));
+    //     std::fs::write(dest_path, generate_field(field)).unwrap();
+    //     module.push_str(format!("mod r#{name};\npub use r#{name}::*;\n", name = name.to_snake_case()).as_str())
+    // }
+    // std::fs::write(&module_path, module).unwrap();
+
+    // // messages
+    // let fields_dir = out_dir.join("messages");
+    // if std::fs::read_dir(&fields_dir).is_err() {
+    //     std::fs::create_dir(&fields_dir).unwrap();
+    // }
+
+    // let module_path = fields_dir.join("mod.rs");
+    // let mut module = String::with_capacity(8192);
+    // for (_, message) in data_dictionary.messages() {
+    //     let dest_path = fields_dir.join(format!("{}.rs", message.name().to_snake_case()));
+    //     std::fs::write(dest_path, generate_message(message, &version_mod_name)).unwrap();
+    //     module.push_str(format!("mod r#{name};\npub use r#{name}::*;\n", name = message.name().to_snake_case()).as_str())
+    // }
+    // std::fs::write(&module_path, module).unwrap();
 }
 
 
