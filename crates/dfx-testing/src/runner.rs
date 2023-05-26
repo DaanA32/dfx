@@ -284,7 +284,8 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
         std::thread::sleep(Duration::from_millis(1000));
     }
     let other = other.expect("Read a message");
-    let other: String = other.iter().map(|b| *b as char).collect();
+    let other: String = String::from_utf8_lossy(&other).to_string();
+    // let other: String = other.iter().map(|b| *b as char).collect();
     // println!("Runner: Received {}", other.replace("\x01", "|"));
     let message = message.replace("|", "\x01");
     let read_fields = from_fields(to_fields(other, '\x01', true), '|');
@@ -336,7 +337,9 @@ fn do_send(message: String, s: &mut TcpStream) {
         format!("{message}10={checksum:03}\x01")
     };
     // println!("Runner: {}", message.replace("\x01", "|"));
-    s.write_all(message.as_bytes()).expect("Sent message");
+    let encoder = encoding_rs::WINDOWS_1252;
+    let (encoded, _encoder, _has_unmapped_chars) = encoder.encode(&message);
+    s.write_all(&encoded).expect("Sent message");
     s.flush().unwrap();
 }
 
@@ -350,6 +353,8 @@ fn do_checksum(message: &str) -> u32 {
         .unwrap_or(0)
 }
 fn do_length(message: &str) -> u32 {
+
+    let encoder = encoding_rs::WINDOWS_1252;
     // println!("{:?}", MESSAGE_L.captures(&message));
     let message = if message.contains("|10=") {
         format!("{}|", message[..message.find("|10=").unwrap()].to_string())
@@ -359,7 +364,7 @@ fn do_length(message: &str) -> u32 {
     MESSAGE_L
         .captures(&message)
         .map(|cap| {
-            cap.get(3).map(|mg| mg.as_str().bytes().len()).unwrap_or(0) as u32
+            cap.get(3).map(|mg| encoder.encode(mg.as_str()).0.len()).unwrap_or(0) as u32
         })
         .unwrap_or(0)
 }
@@ -367,18 +372,26 @@ fn do_length(message: &str) -> u32 {
 fn checksum(body: &str) -> u32 {
     let mut sum = 0;
     let mut _field_sum = 0;
-    for i in body.chars() {
+    let encoder = encoding_rs::WINDOWS_1252;
+    for i in encoder.encode(body).0.iter() {
+        print!("{i}|");
+        let i = *i;
         sum += i as u32;
         _field_sum += i as u32;
-        if i == '\x01' {
+        if i == 1 {
             _field_sum = 0;
         }
     }
+    println!();
+    println!("[RUNNER]: {body} {}", sum %256);
     // println!("{}", sum % 256);
     sum % 256
 }
 
-fn to_fields(message: String, delim: char, skip_time: bool) -> Vec<(String, String)> {
+// type Fields = std::collections::BTreeMap<String, String>;
+type Fields = Vec<(String, String)>;
+
+fn to_fields(message: String, delim: char, skip_time: bool) -> Fields {
     // println!("Runner: {}", message.replace("\x01", "|"));
     message
         .split(delim)
@@ -398,7 +411,7 @@ fn to_fields(message: String, delim: char, skip_time: bool) -> Vec<(String, Stri
         .filter(|value| value.0 != "60")
         .collect()
 }
-fn from_fields(fields: Vec<(String, String)>, delim: char) -> String {
+fn from_fields(fields: Fields, delim: char) -> String {
     fields.iter()
           .map(|f| format!("{}={}{delim}", f.0, f.1))
         .collect::<Vec<String>>()

@@ -714,7 +714,9 @@ impl Message {
         lazy_static! {
             static ref RE: Regex = Regex::new(r"35=([^\x01]*)\x01").unwrap();
         }
-        let msgstr = std::str::from_utf8(msgstr).unwrap();
+        let msgstr = unsafe {
+            std::str::from_utf8_unchecked(msgstr)
+        };
         let captures = RE.captures(msgstr);
         captures
             .and_then(|cap| cap.get(1).map(|login| login.as_str()))

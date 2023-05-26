@@ -15,6 +15,8 @@ fn cfg_from_version(version: &str) -> &str {
         "fix42" => include_str!("cfg/at_42.cfg"),
         "fix43" => include_str!("cfg/at_43.cfg"),
         "fix44" => include_str!("cfg/at_44.cfg"),
+        "fix44noreset" => include_str!("cfg/at_44_noreset.cfg"),
+        "fix50" => include_str!("cfg/at_50.cfg"),
         v => panic!("cfg from version {v}"),
     }
 }
@@ -26,6 +28,8 @@ fn path_from_version(version: &str) -> &str {
         "fix42" => "tests/definitions/server-ext/fix42/",
         "fix43" => "tests/definitions/server-ext/fix43/",
         "fix44" => "tests/definitions/server-ext/fix44/",
+        "fix44noreset" => "tests/definitions/server-ext/fix44noreset/",
+        "fix50" => "tests/definitions/server-ext/fix50/",
         v => panic!("path from version {v}"),
     }
 }

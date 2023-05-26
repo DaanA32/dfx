@@ -113,15 +113,19 @@ impl Field {
     }
 
     pub fn get_total(&self) -> u32 {
-        self.to_string_field()
-            .as_bytes()
+        format!("{}=", self.tag()).as_bytes()
             .iter()
+            .map(|b| *b as u32)
+            .sum::<u32>()
+            +
+        self.value().iter()
             .map(|b| *b as u32)
             .sum::<u32>()
             + 1 //incl SOH
     }
     pub fn bytes_len(&self) -> u32 {
-        self.to_string_field().as_bytes().len() as u32 + 1 //incl SOH
+        format!("{}=", self.tag()).as_bytes().len() as u32 +
+        self.value().len() as u32 + 1 //incl SOH
     }
 
     pub(crate) fn to_usize(&self) -> Option<usize> {
