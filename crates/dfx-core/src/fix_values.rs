@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use std::fmt::Display;
+
 use crate::field_map::Tag;
 
 pub struct BeginString {}
@@ -13,6 +15,82 @@ impl BeginString {
     pub const FIX42: &'static str = "FIX.4.2";
     pub const FIX41: &'static str = "FIX.4.1";
     pub const FIX40: &'static str = "FIX.4.0";
+}
+
+pub enum ApplVerID {
+    FIX27,
+    FIX30,
+    FIX40,
+    FIX41,
+    FIX42,
+    FIX43,
+    FIX44,
+    FIX50,
+    FIX50SP1,
+    FIX50SP2,
+}
+
+impl Display for ApplVerID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let c = match self {
+            ApplVerID::FIX27 => "0",
+            ApplVerID::FIX30 => "1",
+            ApplVerID::FIX40 => "2",
+            ApplVerID::FIX41 => "3",
+            ApplVerID::FIX42 => "4",
+            ApplVerID::FIX43 => "5",
+            ApplVerID::FIX44 => "6",
+            ApplVerID::FIX50 => "7",
+            ApplVerID::FIX50SP1 => "8",
+            ApplVerID::FIX50SP2 => "9",
+        };
+        f.write_str(c)
+    }
+}
+
+impl ApplVerID {
+    pub fn from_begin_string(begin_string: &str) -> &str {
+        if BeginString::FIX40 == begin_string {
+            return ApplVerID::FIX40.as_str();
+        } else if BeginString::FIX41 == begin_string {
+            return ApplVerID::FIX41.as_str();
+        } else if BeginString::FIX42 == begin_string {
+            return ApplVerID::FIX42.as_str();
+        }
+        else if BeginString::FIX43 == begin_string {
+            return ApplVerID::FIX43.as_str();
+        }
+        else if BeginString::FIX44 == begin_string {
+            return ApplVerID::FIX44.as_str();
+        }
+        else if BeginString::FIX50 == begin_string {
+            return ApplVerID::FIX50.as_str();
+        }
+        else if BeginString::FIX50SP1 == begin_string {
+            return ApplVerID::FIX50SP1.as_str();
+        }
+        else if BeginString::FIX50SP2 == begin_string {
+            return ApplVerID::FIX50SP2.as_str();
+        }
+        else {
+            return begin_string;
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            ApplVerID::FIX27 => "0",
+            ApplVerID::FIX30 => "1",
+            ApplVerID::FIX40 => "2",
+            ApplVerID::FIX41 => "3",
+            ApplVerID::FIX42 => "4",
+            ApplVerID::FIX43 => "5",
+            ApplVerID::FIX44 => "6",
+            ApplVerID::FIX50 => "7",
+            ApplVerID::FIX50SP1 => "8",
+            ApplVerID::FIX50SP2 => "9",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

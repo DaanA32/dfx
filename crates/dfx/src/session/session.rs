@@ -10,6 +10,7 @@ use chashmap::CHashMap;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 use dfx_core::data_dictionary::TagException;
+use dfx_core::fix_values::ApplVerID;
 use dfx_core::fix_values::BusinessRejectReason;
 use dfx_core::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
@@ -91,6 +92,21 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
     let options = settings.validation_options();
     if options.use_data_dictionary() {
         if settings.session_id().is_fixt() {
+            if let Some(appl_ver_id) = settings.default_appl_ver_id() {
+                // let version = ApplVerID::from(appl_ver_id);
+                let path = match options.data_dictionary() {
+                    Some(path) => path,
+                    None => settings.session_id().begin_string(), // TODO error?
+                };
+                let mut dd = DataDictionary::from_file(path).unwrap();
+                dd.set_allow_unknown_message_fields(settings.validation_options().allow_unknown_msg_fields());
+                dd.set_check_fields_have_values(settings.validation_options().validate_fields_have_values());
+                dd.set_check_fields_out_of_order(settings.validation_options().validate_fields_out_of_order());
+                dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
+
+                provider.add_application_data_dictionary(appl_ver_id, dd);
+            }
+            // https://github.com/connamara/quickfixn/blob/c4e8171e9a702be29078eab3b6dc26b713002de2/QuickFIXn/SessionFactory.cs#L193
         } else {
             let path = match options.data_dictionary() {
                 Some(path) => path,
@@ -104,7 +120,7 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
             dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
             // println!("validate fields have values: {}", dd.check_fields_have_values());
             provider.add_session_data_dictionary(settings.session_id().begin_string(), dd.clone());
-            provider.add_application_data_dictionary("", dd);
+            provider.add_application_data_dictionary(ApplVerID::from_begin_string(settings.session_id().begin_string()), dd);
             //provider.add_application_data_dictionary(&settings.session_id().to_string(), dd);
         }
     }
@@ -171,7 +187,7 @@ impl Session {
             msg_factory,
             //TODO app is IApplicationExt
             app_does_early_intercept: false,
-            sender_default_appl_ver_id: settings.default_appl_ver_id().cloned(),
+            sender_default_appl_ver_id: settings.default_appl_ver_id().map(|v| ApplVerID::from_begin_string(v).into()),
             target_default_appl_ver_id: None,
             session_data_dictionary,
             application_data_dictionary,
@@ -385,7 +401,7 @@ impl Session {
 
         if self.session_id.is_fixt() {
             logon.set_field_deref(
-                DefaultApplVerID::new(self.sender_default_appl_ver_id.as_ref().unwrap().clone()),
+                DefaultApplVerID::new(self.sender_default_appl_ver_id.as_ref().unwrap().to_string()),
                 None,
             );
         }
