@@ -6,13 +6,13 @@ A FIX protocol engine.
 
 - [x] Runtime Message verification
 - [x] Read config from file
-- [ ] Pass the test suite available
+- [x] Pass the test suite available
   - [x] FIX40
-    - TODO!: Multiple test runner.
-  - [ ] FIX41
-  - [ ] FIX42
-  - [ ] FIX43
-  - [ ] FIX44
+  - [x] FIX41
+  - [x] FIX42
+  - [x] FIX43
+  - [x] FIX44
+    - [ ] FIX: fix44::test_resend_repeating_group
   - [ ] FIX50SP1
   - [ ] FIX50SP2
   - [ ] FIX50
