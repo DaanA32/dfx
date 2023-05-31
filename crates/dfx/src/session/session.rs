@@ -10,6 +10,7 @@ use chashmap::CHashMap;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 use dfx_core::data_dictionary::TagException;
+use dfx_core::field_map::FieldValue;
 use dfx_core::fix_values::ApplVerID;
 use dfx_core::fix_values::BusinessRejectReason;
 use dfx_core::fix_values::SessionRejectReason;
@@ -94,7 +95,7 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
         if settings.session_id().is_fixt() {
             if let Some(appl_ver_id) = settings.default_appl_ver_id() {
                 // let version = ApplVerID::from(appl_ver_id);
-                let path = match options.data_dictionary() {
+                let path = match options.app_data_dictionary() {
                     Some(path) => path,
                     None => settings.session_id().begin_string(), // TODO error?
                 };
@@ -105,6 +106,18 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
                 dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
 
                 provider.add_application_data_dictionary(appl_ver_id, dd);
+
+                let path = match options.transport_data_dictionary() {
+                    Some(path) => path,
+                    None => settings.session_id().begin_string(), // TODO error?
+                };
+                let mut dd = DataDictionary::from_file(path).unwrap();
+                dd.set_allow_unknown_message_fields(settings.validation_options().allow_unknown_msg_fields());
+                dd.set_check_fields_have_values(settings.validation_options().validate_fields_have_values());
+                dd.set_check_fields_out_of_order(settings.validation_options().validate_fields_out_of_order());
+                dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
+
+                provider.add_session_data_dictionary(settings.session_id().begin_string(), dd);
             }
             // https://github.com/connamara/quickfixn/blob/c4e8171e9a702be29078eab3b6dc26b713002de2/QuickFIXn/SessionFactory.cs#L193
         } else {
@@ -135,8 +148,10 @@ impl Session {
         msg_factory: Box<dyn MessageFactory>,
         settings: SessionSetting,
     ) -> Self {
+        // REVIEW is this dumb?
         add_data_dictionaries(&mut data_dictionary_provider, &settings);
         let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&settings.session_id().begin_string()).clone();
+        println!("{:?} {} {}", session_data_dictionary.version(), settings.session_id().begin_string(), settings.session_id().is_fixt());
         let application_data_dictionary = if settings.session_id().is_fixt() {
             data_dictionary_provider.get_application_data_dictionary(settings.default_appl_ver_id().unwrap()).clone()
         } else {
@@ -328,6 +343,7 @@ impl Session {
 
         if self.state.timed_out() {
             if self.send_logout_before_timeout_disconnect {
+                println!("Send before timeout disconnect: {}", Utc::now());
                 self.generate_logout(None, None);
             }
             self.disconnect("Timed out waiting for heartbeat")
@@ -433,11 +449,16 @@ impl Session {
         logon.set_field_base(other.get_field(tags::HeartBtInt).unwrap().clone(), None);
 
         if self.enable_last_msg_seq_num_processed {
-            logon.set_field_base(other.header().get_field(tags::MsgSeqNum).unwrap().clone(), None);
+            if let Some(seq) = other.header().get_field(tags::MsgSeqNum) {
+                let value: &FieldValue = seq.value();
+                logon.header_mut().set_tag_value(tags::LastMsgSeqNumProcessed, value);
+            } else {
+                self.log.on_event(format!("Error: No message sequence number: {}", other).as_str());
+            }
         }
 
         self.initialize_header(&mut logon, None);
-        let sent_logon = self.send_raw(logon, 0).unwrap();
+        let _sent_logon = self.send_raw(logon, 0).unwrap();
         let sent_logon = true; //FIXME check if logon works?
         self.state.set_sent_logon(sent_logon);
         // println!("{sent_logon} -> {:?}", self.state);
@@ -457,15 +478,17 @@ impl Session {
             if other
                 .as_ref()
                 .unwrap()
-                .is_field_set(tags::LastMsgSeqNumProcessed)
+                .header()
+                .is_field_set(tags::MsgSeqNum)
             {
                 let field = other
                     .as_ref()
                     .unwrap()
-                    .get_field(tags::LastMsgSeqNumProcessed).unwrap();
+                    .header()
+                    .get_field(tags::MsgSeqNum).unwrap();
                 logout
                     .header_mut()
-                    .set_field_base(field.clone(), Some(true));
+                    .set_tag_value(tags::LastMsgSeqNumProcessed, field.value());
             } else {
                 self.log().on_event(
                     format!("Error: No message sequence number: {:?}", other.as_ref()).as_str(),
@@ -492,10 +515,14 @@ impl Session {
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         heartbeat.set_field_base(message.get_field(tags::TestReqID).unwrap().clone(), None);
+        self.log.on_event(format!("generate_heartbeat_other: {}", self.enable_last_msg_seq_num_processed).as_str());
         if self.enable_last_msg_seq_num_processed {
-            heartbeat
-                .header_mut()
-                .set_field_base(message.get_field(tags::MsgSeqNum).unwrap().clone(), None);
+            if let Some(seq) = message.header().get_field(tags::MsgSeqNum) {
+                let value: &FieldValue = seq.value();
+                heartbeat.header_mut().set_tag_value(tags::LastMsgSeqNumProcessed, value);
+            } else {
+                self.log.on_event(format!("Error: No message sequence number: {}", message).as_str());
+            }
         }
         self.send_raw(heartbeat, 0).unwrap()
     }
@@ -661,13 +688,14 @@ impl Session {
         // {
         //     m.Header.SetField(new LastMsgSeqNumProcessed(this.NextTargetMsgSeqNum - 1));
         // }
+        self.log.on_event(format!("initialize_header: {} && {}", self.enable_last_msg_seq_num_processed, !message.header().is_field_set(tags::LastMsgSeqNumProcessed)).as_str());
         if self.enable_last_msg_seq_num_processed
             && !message.header().is_field_set(tags::LastMsgSeqNumProcessed)
         {
             let last_seq_num = format!("{}", self.state.next_target_msg_seq_num() - 1);
             message
                 .header_mut()
-                .set_tag_value(tags::MsgSeqNum, &last_seq_num);
+                .set_tag_value(tags::LastMsgSeqNumProcessed, &last_seq_num);
         }
 
         self.insert_sending_time(message)

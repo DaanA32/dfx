@@ -4,9 +4,9 @@ use crate::data_dictionary::DataDictionary;
 
 pub trait DataDictionaryProvider: Send {
     fn get_session_data_dictionary(&self, begin_string: &str) -> &DataDictionary;
-    fn get_application_data_dictionary(&self, begin_string: &str) -> &DataDictionary;
+    fn get_application_data_dictionary(&self, appl_ver_id: &str) -> &DataDictionary;
     fn add_session_data_dictionary(&mut self, begin_string: &str, dictionary: DataDictionary);
-    fn add_application_data_dictionary(&mut self, begin_string: &str, dictionary: DataDictionary);
+    fn add_application_data_dictionary(&mut self, appl_ver_id: &str, dictionary: DataDictionary);
 }
 
 #[derive(Clone, Debug, Default)]

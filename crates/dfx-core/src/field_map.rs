@@ -96,7 +96,7 @@ impl Field {
     pub fn tag(&self) -> Tag {
         self.0
     }
-    pub fn value(&self) -> &Vec<u8> {
+    pub fn value(&self) -> &FieldValue {
         &self.1
     }
     pub(crate) fn string_value(&self) -> Result<String, ConversionError> {

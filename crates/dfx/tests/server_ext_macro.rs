@@ -17,6 +17,11 @@ fn cfg_from_version(version: &str) -> &str {
         "fix44" => include_str!("cfg/at_44.cfg"),
         "fix44noreset" => include_str!("cfg/at_44_noreset.cfg"),
         "fix50" => include_str!("cfg/at_50.cfg"),
+        "fix50sp1" => include_str!("cfg/at_50_sp1.cfg"),
+        "fix50sp2" => include_str!("cfg/at_50_sp2.cfg"),
+        "fix50sp2" => include_str!("cfg/at_50_sp2.cfg"),
+        "misc" => include_str!("cfg/at_42_misc.cfg"),
+        "future" => include_str!("cfg/at_42.cfg"),
         v => panic!("cfg from version {v}"),
     }
 }
@@ -30,6 +35,10 @@ fn path_from_version(version: &str) -> &str {
         "fix44" => "tests/definitions/server-ext/fix44/",
         "fix44noreset" => "tests/definitions/server-ext/fix44noreset/",
         "fix50" => "tests/definitions/server-ext/fix50/",
+        "fix50sp1" => "tests/definitions/server-ext/fix50sp1/",
+        "fix50sp2" => "tests/definitions/server-ext/fix50sp2/",
+        "misc" => "tests/definitions/server-ext/misc/",
+        "future" => "tests/definitions/server-ext/future/",
         v => panic!("path from version {v}"),
     }
 }
@@ -449,7 +458,7 @@ mod fix50 {
     acceptor!(fix50 -> "1c_InvalidTargetCompID");
     acceptor!(fix50 -> "1d_InvalidLogonBadSendingTime");
     acceptor!(fix50 -> "1d_InvalidLogonLengthInvalid");
-    acceptor!(fix50 -> "1d_InvalidLogonNaultApplVerID");
+    acceptor!(fix50 -> "1d_InvalidLogonNoDefaultApplVerID");
     acceptor!(fix50 -> "1d_InvalidLogonWrongBeginString");
     acceptor!(fix50 -> "1e_NotLogonMessage");
     acceptor!(fix50 -> "20_SimultaneousResendRequest");
@@ -514,7 +523,7 @@ mod fix50sp1 {
     acceptor!(fix50sp1 -> "1c_InvalidTargetCompID");
     acceptor!(fix50sp1 -> "1d_InvalidLogonBadSendingTime");
     acceptor!(fix50sp1 -> "1d_InvalidLogonLengthInvalid");
-    acceptor!(fix50sp1 -> "1d_InvalidLogonNaultApplVerID");
+    acceptor!(fix50sp1 -> "1d_InvalidLogonNoDefaultApplVerID");
     acceptor!(fix50sp1 -> "1d_InvalidLogonWrongBeginString");
     acceptor!(fix50sp1 -> "1e_NotLogonMessage");
     acceptor!(fix50sp1 -> "20_SimultaneousResendRequest");
@@ -577,7 +586,7 @@ mod fix50sp2 {
     acceptor!(fix50sp2 -> "1c_InvalidTargetCompID");
     acceptor!(fix50sp2 -> "1d_InvalidLogonBadSendingTime");
     acceptor!(fix50sp2 -> "1d_InvalidLogonLengthInvalid");
-    acceptor!(fix50sp2 -> "1d_InvalidLogonNaultApplVerID");
+    acceptor!(fix50sp2 -> "1d_InvalidLogonNoDefaultApplVerID");
     acceptor!(fix50sp2 -> "1d_InvalidLogonWrongBeginString");
     acceptor!(fix50sp2 -> "1e_NotLogonMessage");
     acceptor!(fix50sp2 -> "20_SimultaneousResendRequest");

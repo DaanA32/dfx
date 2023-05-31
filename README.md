@@ -13,16 +13,23 @@ A FIX protocol engine.
   - [x] FIX43
   - [x] FIX44
     - [ ] FIX: fix44::test_resend_repeating_group
-  - [ ] FIX50SP1
-  - [ ] FIX50SP2
-  - [ ] FIX50
-  - [ ] FIXT11
+      > Requires ordered fields to fix (so technically working, but can discuss)
+  - [x] FIXT11
+    - [x] FIX50
+    - [x] FIX50SP1
+    - [x] FIX50SP2
+  - [ ] FUTURE
+    > Currently not supported by Quickfix or Quickfix/N
+  - [x] MISC
 
 ## TODO
 
+- [ ] Remove useless comments
 - [ ] FileStore for messages
 - [ ] FileLogger
   - [ ] log4rs Logger
+- [ ] Add inline and doc comments
+- [ ] Add message factory from data dictionary.
 - [ ] Codegen static data dictionary from xml.
 - [ ] Replace with Traits where possible
 - [ ] Allow compile time message definitions

@@ -9,6 +9,8 @@ pub mod r#bool;
 mod decimal;
 pub use decimal::*;
 
+use crate::field_map::FieldValue;
+
 pub trait TryFrom<T>
 where
     Self: Sized,
@@ -24,3 +26,8 @@ where
     fn as_bytes(&self) -> T;
 }
 
+impl IntoBytes<FieldValue> for &Vec<u8> {
+    fn as_bytes(&self) -> FieldValue {
+        self.to_vec()
+    }
+}

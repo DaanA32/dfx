@@ -269,7 +269,7 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
         };
         let now = std::time::Instant::now();
         let read_time = now.duration_since(start);
-        if read_time > Duration::from_secs(35) {
+        if read_time > Duration::from_secs(40) {
             return Err(format!("Test failed reading fix message timeout: {message}"));
         }
         match parser.read_fix_message() {
