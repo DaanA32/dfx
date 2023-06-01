@@ -3,22 +3,6 @@
 //! These are constants because there are collisions in the tag numbers.
 pub use self::intern::*;
 
-// Alternative:
-// ```
-// enum TagNumber {
-//     Account,
-//     AdvId,
-//     // ...
-// }
-//
-// impl Into<Tag> for TagNumber{
-//     // ...
-// }
-// impl TryFrom<Tag> for TagNumber{
-//     // ... return multiple?
-// }
-// ```
-
 // TODO build from quick_xml
 #[allow(non_upper_case_globals)]
 mod intern {

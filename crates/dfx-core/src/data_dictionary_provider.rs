@@ -28,18 +28,10 @@ impl DataDictionaryProvider for DefaultDataDictionaryProvider {
     //TODO should this not be session id instead of begin string?
     fn get_session_data_dictionary(&self, begin_string: &str) -> &DataDictionary {
         //TODO
-        // DataDictionary.DataDictionary dd;
-        // if (!transportDataDictionaries_.TryGetValue(beginString, out dd))
-        //     return emptyDataDictionary_;
-        // return dd;
         self.transport.get(begin_string).unwrap_or_else(|| &self.default)
     }
     fn get_application_data_dictionary(&self, appl_ver_id: &str) -> &DataDictionary {
         //TODO
-        // DataDictionary.DataDictionary dd;
-        // if (!applicationDataDictionaries_.TryGetValue(applVerID, out dd))
-        //     return emptyDataDictionary_;
-        // return dd;
         self.app.get(appl_ver_id).unwrap_or_else(|| &self.default)
     }
 

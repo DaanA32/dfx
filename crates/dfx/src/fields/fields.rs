@@ -109,30 +109,3 @@ impl Deref for ResetSeqNumFlag {
         &self.0
     }
 }
-// TODO: DerefMut
-// TODO: Into/From Field?
-// TODO: codegen
-
-// pub struct ApplVerID;
-// impl ApplVerID {
-//     pub const FIX27: u32 = 0;
-//     pub const FIX30: u32 = 1;
-//     pub const FIX40: u32 = 2;
-//     pub const FIX41: u32 = 3;
-//     pub const FIX42: u32 = 4;
-//     pub const FIX43: u32 = 5;
-//     pub const FIX44: u32 = 6;
-//     pub const FIX50: u32 = 7;
-//     pub const FIX50SP1: u32 = 8;
-//     pub const FIX50SP2: u32 = 9;
-// }
-
-// pub struct SessionRejectReason;
-// impl SessionRejectReason {
-//     pub const VALUE_IS_INCORRECT: &str = "Value incorrect";
-//     pub const SENDING_TIME_ACCURACY_PROBLEM: &str = "Sending time";
-//     pub const COMPID_PROBLEM: &str = "Comp ID";
-//     pub const INVALID_MSGTYPE: &str = "Invalid MSG Type";
-//     pub const INVALID_TAG_NUMBER: &str = "Invalid Tag";
-//     pub const REQUIRED_TAG_MISSING: &str = "Required Tag";
-// }

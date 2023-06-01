@@ -57,7 +57,6 @@ impl MessageFactory for DefaultMessageFactory {
     }
 
     fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Option<Group> {
-        // println!("# TODO create_group({begin_string}, {msg_type}, {group_counter_tag})");
         if let Some(factory) = self.factory_map.get(begin_string) {
             todo!("# TODO create_group({begin_string}, {msg_type}, {group_counter_tag}, {factory:?})");
             //let _ = Group::new(0, group_counter_tag);
@@ -65,5 +64,3 @@ impl MessageFactory for DefaultMessageFactory {
         None
     }
 }
-//     factories: Hash
-// }

@@ -45,10 +45,6 @@ where App: Application + Clone + 'static,
         }
     }
 
-    // pub fn set_session(&mut self, session: Session) {
-    //     self.session = Some(session)
-    // }
-
     pub fn start(&mut self) {
         self.running
             .store(true, std::sync::atomic::Ordering::SeqCst);

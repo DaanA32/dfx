@@ -490,12 +490,6 @@ impl SessionSetting {
     }
 
     pub(crate) fn is_dynamic(&self) -> bool {
-        // println!(
-        //     "is_dynamic: {:?} {:?} {:?}",
-        //     self.is_dynamic, self.sender_comp_id, self.target_comp_id
-        // );
-        // self.is_dynamic
-        //     && (self.sender_comp_id.as_str() == "*" || self.target_comp_id.as_str() == "*")
         match self.connection {
             SettingsConnection::Acceptor { is_dynamic, .. } => {
                 is_dynamic
@@ -509,21 +503,6 @@ impl SessionSetting {
     pub(crate) fn socket_settings(&self) -> SocketSettings {
         SocketSettings::new(self.connection.socket_addr().clone(), self.socket_options.clone())
     }
-
-    // pub(crate) fn create(&self,
-    //     app: Box<dyn Application>,
-    // ) -> Session {
-    // }
-    // pub(crate) fn create(&self,
-    //     app: Box<dyn Application>,
-    //     store_factory: Box<dyn MessageStoreFactory>,
-    //     data_dictionary_provider: Box<dyn DataDictionaryProvider>,
-    //     log_factory: Option<Box<dyn LogFactory>>,
-    //     msg_factory: Box<dyn MessageFactory>,
-    //     settings: SessionSetting,
-    // ) -> Session {
-    //     Session::from_settings(app, store_factory, data_dictionary_provider, log_factory, msg_factory, settings)
-    // }
 
     pub(crate) fn accepts(&self, session_id: &SessionId) -> bool {
         if self.is_dynamic() {

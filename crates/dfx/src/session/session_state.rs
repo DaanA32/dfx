@@ -544,28 +544,17 @@ pub(crate) fn logout_timed_out(
     sent_logout && (now - last_sent_time).as_millis() >= logout_timeout
 }
 
-// public static bool WithinHeartbeat(DateTime now, int heartBtIntMillis, DateTime lastSentTime, DateTime lastReceivedTime)
-// {
-//     return ((now.Subtract(lastSentTime).TotalMilliseconds) < Convert.ToDouble(heartBtIntMillis))
-//         && ((now.Subtract(lastReceivedTime).TotalMilliseconds) < Convert.ToDouble(heartBtIntMillis));
-// }
 pub(crate) fn within_heartbeat(
     now: Instant,
     heartbeat_int_ms: u128,
     last_sent_time: Instant,
     last_received_time: Instant,
 ) -> bool {
-    //println!("ds {:?} dr {:?} {heartbeat_int_ms}", (now - last_sent_time).as_millis(), (now - last_received_time).as_millis());
     ((now - last_sent_time).as_millis() < heartbeat_int_ms)
     &&
     ((now - last_received_time).as_millis() < heartbeat_int_ms)
 }
 
-// public static bool NeedHeartbeat(DateTime now, int heartBtIntMillis, DateTime lastSentTime, int testRequestCounter)
-// {
-//     double elapsed = now.Subtract(lastSentTime).TotalMilliseconds;
-//     return (elapsed >= Convert.ToDouble(heartBtIntMillis)) && (0 == testRequestCounter);
-// }
 pub(crate) fn need_heartbeat(
     now: Instant,
     heartbeat_int_ms: u128,
@@ -575,18 +564,12 @@ pub(crate) fn need_heartbeat(
     0 == test_request_counter && (now - last_sent_time).as_millis() >= heartbeat_int_ms
 }
 
-// public static bool NeedTestRequest(DateTime now, int heartBtIntMillis, DateTime lastReceivedTime, int testRequestCounter)
-// {
-//     double elapsedMilliseconds = now.Subtract(lastReceivedTime).TotalMilliseconds;
-//     return elapsedMilliseconds >= (1.2 * ((testRequestCounter + 1) * heartBtIntMillis));
-// }
 pub(crate) fn need_test_request(
     now: Instant,
     heartbeat_int_ms: u128,
     last_received_time: Instant,
     test_request_counter: u32,
 ) -> bool {
-    // println!("{now:?} - {last_received_time:?} = {:?} >= {} (1.2* ({test_request_counter} +1) * heartbeat_int_ms )", (now - last_received_time).as_millis(), ((1.2 * ((test_request_counter as u128 + 1) * heartbeat_int_ms) as f64) as u128));
     (now - last_received_time).as_millis()
         >= (1.2 * ((test_request_counter as u128 + 1) * heartbeat_int_ms) as f64) as u128
 }

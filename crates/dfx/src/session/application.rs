@@ -142,7 +142,6 @@ pub mod tests {
         let res = app.to_admin(msg, &session_id);
         assert!(res.is_ok());
         let _res = res.unwrap();
-        //assert!(res.a == 0);
         let msg = Message::default();
         //msg.c = true;
         let res = app.to_admin(msg, &session_id);

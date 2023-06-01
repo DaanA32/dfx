@@ -131,7 +131,6 @@ pub struct DataDictionary {
     fields_by_tag: BTreeMap<Tag, DDField>,
     fields_by_name: BTreeMap<String, DDField>,
     messages: BTreeMap<String, DDMap>,
-    // spec: FixSpec,
     header: DDMap,
     trailer: DDMap,
 }
@@ -139,7 +138,6 @@ pub struct DataDictionary {
 
 impl DataDictionary {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<DataDictionary, DataDictionaryError> {
-        //let reader = File::open(path).unwrap();
         let path: &Path = path.as_ref();
         let mut reader = match File::open(&path) {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
@@ -178,11 +176,7 @@ impl DataDictionary {
         begin_string: &str,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-        // bool bodyOnly = (null == sessionDataDict);
 
-        // if ((null != sessionDataDict) && (null != sessionDataDict.Version))
-        //     if (!sessionDataDict.Version.Equals(beginString))
-        //         throw new UnsupportedVersion(beginString);
         if let Some(dictionary) = session_data_dictionary {
             if matches!(dictionary.version(), Some(version) if version != begin_string) {
                 return Err(MessageValidationError::UnsupportedVersion {
@@ -191,49 +185,26 @@ impl DataDictionary {
                 });
             }
         }
-        // println!("Checked version.");
 
-        // if (((null != sessionDataDict) && sessionDataDict.CheckFieldsOutOfOrder) || ((null != appDataDict) && appDataDict.CheckFieldsOutOfOrder))
-        // {
-        //     int field;
-        //     if (!message.HasValidStructure(out field))
-        //         throw new TagOutOfOrder(field);
-        // }
         let check_order_session = session_data_dictionary
             .map(|d| d.check_fields_out_of_order())
             .unwrap_or(false);
         let check_order_app = app_data_dictionary.check_fields_out_of_order();
         if check_order_session || check_order_app {
-            // println!("valid_structure");
             message.has_valid_structure()?;
         }
-        // println!("Checked structure.");
 
-        // if ((null != appDataDict) && (null != appDataDict.Version))
-        // {
-        //     appDataDict.CheckMsgType(msgType);
-        //     appDataDict.CheckHasRequired(message, msgType);
-        // }
         if app_data_dictionary.version().is_some() {
             app_data_dictionary.check_msg_type(msg_type)?;
             app_data_dictionary.check_has_required(message, msg_type)?;
         }
-        // println!("Checked msg_type.");
 
-        // if (!bodyOnly)
-        // {
-        //     sessionDataDict.Iterate(message.Header, msgType);
-        //     sessionDataDict.Iterate(message.Trailer, msgType);
-        // }
         if let Some(dictionary) = session_data_dictionary {
             dictionary.iterate(message.header(), msg_type)?;
             dictionary.iterate(message.trailer(), msg_type)?;
         }
-        // println!("Checked header & trailer.");
 
-        // appDataDict.Iterate(message, msgType);
         app_data_dictionary.iterate(message, msg_type)?;
-        // println!("Checked body.");
         Ok(())
     }
 
@@ -250,38 +221,20 @@ impl DataDictionary {
         message: &Message,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-        // foreach (int field in Header.ReqFields)
-        // {
-        //     if (!message.Header.IsSetField(field))
-        //         throw new RequiredTagMissing(field);
-        // }
         for field in self.header.required_fields() {
             if !message.header().is_field_set(*field) {
-                // println!("missing header_field");
                 return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
             }
         }
 
-        // foreach (int field in Trailer.ReqFields)
-        // {
-        //     if (!message.Trailer.IsSetField(field))
-        //         throw new RequiredTagMissing(field);
-        // }
         for field in self.trailer.required_fields() {
             if !message.trailer().is_field_set(*field) {
-                // println!("missing trailer_field");
                 return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
             }
         }
 
-        // foreach (int field in Messages[msgType].ReqFields)
-        // {
-        //     if (!message.IsSetField(field))
-        //         throw new RequiredTagMissing(field);
-        // }
         for field in self.messages[msg_type].required_fields() {
             if !message.is_field_set(*field) {
-                // println!("missing body_field {msg_type} {:?}", self.messages[msg_type].required_fields());
                 return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
             }
         }
@@ -308,11 +261,9 @@ impl DataDictionary {
     }
     fn check_valid_format(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
         // TODO check format based on type received.
-        // println!("check_valid_format");
+       // println!("check_valid_format");
         if let Some(field_definition) = self.fields_by_tag.get(&field.tag()) {
             let field_type = FieldType::get(field_definition.field_type().as_str());
-            // println!("{field_type:?}");
-            // println!("{field:?}");
             if matches!(field_type, Ok(ftype) if ftype == fields::types::FieldType::String) {
                 return Ok(());
             }
@@ -343,53 +294,9 @@ impl DataDictionary {
         } else {
             Ok(())
         }
-        // try
-        //     {
-        //         Type type;
-        //         if (!TryGetFieldType(field.Tag, out type))
-        //             return;
-        //         if (type == typeof(StringField))
-        //             return;
 
-        //         if (false == CheckFieldsHaveValues && field.ToString().Length < 1)
-        //         {
-        //             // If ValidateFieldsHaveValues=N, don't check empty non-string fields
-        //             // because engine should not decide how to convert empty to e.g. float or datetime.
-        //             // (User code may see IncorrectDataFormat exceptions
-        //             //  when attempting to extract fields in not-string formats.)
-        //             return;
-        //         }
-
-        //         if (type == typeof(CharField))
-        //             Fields.Converters.CharConverter.Convert(field.ToString());
-        //         else if (type == typeof(IntField))
-        //             Fields.Converters.IntConverter.Convert(field.ToString());
-        //         else if (type == typeof(DecimalField))
-        //             Fields.Converters.DecimalConverter.Convert(field.ToString());
-        //         else if (type == typeof(BooleanField))
-        //             Fields.Converters.BoolConverter.Convert(field.ToString());
-
-        //         else if (type == typeof(DateTimeField))
-        //             Fields.Converters.DateTimeConverter.ConvertToDateTime(field.ToString());
-        //         else if (type == typeof(DateOnlyField))
-        //             Fields.Converters.DateTimeConverter.ConvertToDateOnly(field.ToString());
-        //         else if (type == typeof(TimeOnlyField))
-        //             Fields.Converters.DateTimeConverter.ConvertToTimeOnly(field.ToString());
-        //         return;
-
-        //     }
-        //     catch (FieldConvertError e)
-        //     {
-        //         throw new IncorrectDataFormat(field.Tag, e);
-        //     }
     }
     fn check_valid_tag_number(&self, tag: Tag) -> Result<(), MessageValidationError> {
-        // if (AllowUnknownMessageFields)
-        //     return;
-        // if (!FieldsByTag.ContainsKey(tag))
-        // {
-        //     throw new InvalidTagNumber(tag);
-        // }
         if !self.allow_unknown_message_fields && !self.fields_by_tag.contains_key(&tag) {
             return Err(MessageValidationError::TagException(TagException::invalid_tag_number(tag)));
         }
@@ -398,7 +305,6 @@ impl DataDictionary {
     fn check_value(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
         match self.fields_by_tag.get(&field.tag()) {
             Some(fld) => {
-                // println!("{:?}", fld);
                 if fld.has_enums() {
                     if fld.is_multiple_value_field_with_enums() {
                         let string_value = field.string_value()?;
@@ -407,24 +313,14 @@ impl DataDictionary {
                             if !fld.enums().contains_key(value) {
                                 return Err(MessageValidationError::TagException(
                                     TagException::incorrect_tag_value(field.tag())
-                                    // field.tag(),
-                                    // value.to_string(),
                                 ));
                             }
                         }
                         Ok(())
                     } else if !fld.enums().contains_key(&field.string_value()?) {
-                        // println!("{:?}", field);
-                        // println!("{:?}", fld.enums());
                         Err(MessageValidationError::TagException(
                             TagException::incorrect_tag_value(field.tag())
-                            // field.tag(),
-                            // value.to_string(),
                         ))
-                        // Err(MessageValidationError::IncorrectEnumValue(
-                        //     field.tag(),
-                        //     field.string_value()?,
-                        // ))
                     } else {
                         Ok(())
                     }
@@ -440,28 +336,13 @@ impl DataDictionary {
         field: &FieldBase,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-        // println!("allow_unknown_message_fields: {}", self.allow_unknown_message_fields);
         if self.allow_unknown_message_fields {
             return Ok(());
         }
 
-        let fields: Vec<&String> = self.messages.get(msg_type).iter()
-            .map(|f| f.name())
-            .collect();
-        // println!("{} in message: {:?}", msg_type, fields);
-        // println!("{} in message: {:?}", msg_type, self.messages.get(msg_type).map(|f| f.fields.len()));
-        // if let Some(field) = self.messages.get(msg_type) {
-        //     println!("{} in message: {:?}", msg_type, field.fields.iter()
-        //     .map(|f| f.1.name())
-        //     .collect::<Vec<&String>>());
-        // }
         if matches!(self.messages.get(msg_type), Some(dd) if dd.fields.contains_key(&field.tag())) {
             return Ok(());
         }
-        // Err(MessageValidationError::TagNotDefinedForMessage(
-        //     field.tag(),
-        //     msg_type.into(),
-        // ))
         Err(MessageValidationError::TagException(
             TagException::tag_not_defined_for_message(field.tag(), msg_type.into())
         ))
@@ -472,16 +353,9 @@ impl DataDictionary {
         dd_group: &DDGroup,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-        // if (ddgrp.IsField(field.Tag))
-        //     return;
-        // throw new TagNotDefinedForMessage(field.Tag, msgType);
         if dd_group.is_field(field.tag()) {
             Ok(())
         } else {
-            // Err(MessageValidationError::TagNotDefinedForMessage(
-            //     field.tag(),
-            //     msg_type.into(),
-            // ))
             Err(MessageValidationError::TagException(
                 TagException::tag_not_defined_for_message(field.tag(), msg_type.into())
             ))
@@ -493,19 +367,9 @@ impl DataDictionary {
         map: &FieldMap,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-        // if (IsGroup(msgType, field.Tag))
-        // {
-        //     if (map.GetInt(field.Tag) != map.GroupCount(field.Tag))
-        //     {
-        //         throw new RepeatingGroupCountMismatch(field.Tag);
-        //     }
-        // }
         if self.is_group(msg_type, field.tag())
             && map.get_int(field.tag())? as usize != map.group_count(field.tag()).unwrap_or(0)
         {
-            // return Err(MessageValidationError::RepeatingGroupCountMismatch(
-            //     field.tag(),
-            // ));
             return Err(MessageValidationError::TagException(
                 TagException::repeating_group_count_mismatch(field.tag())
             ));
@@ -513,18 +377,12 @@ impl DataDictionary {
         Ok(())
     }
     fn is_group(&self, msg_type: &str, tag: Tag) -> bool {
-        // if (Messages.ContainsKey(msgType))
-        // {
-        //     return Messages[msgType].IsGroup(tag);
-        // }
-        // return false;
         if self.messages.contains_key(msg_type) {
             return self.messages[msg_type].is_group(tag);
         }
         false
     }
     fn should_check_tag(&self, field: &FieldBase) -> bool {
-        // println!("check: {} tag: {}", self.check_user_defined_fields, field.tag());
         if !self.check_user_defined_fields && (field.tag() >= fields::limits::USER_MIN) {
             return false;
         }
@@ -532,83 +390,45 @@ impl DataDictionary {
     }
 
     fn iterate(&self, message: &FieldMap, msg_type: &str) -> Result<(), MessageValidationError> {
-        // DataDictionary.CheckHasNoRepeatedTags(map);
         DataDictionary::check_has_no_repeated_tags(message)?;
-        // println!("Checked no repeated tags");
 
         // check non-group fields
-        // int lastField = 0;
-        // foreach (KeyValuePair<int, Fields.IField> kvp in map)
-        // {
         let mut last_field = 0;
         for (_k, v) in message.entries() {
-            // Fields.IField field = kvp.Value;
             let field = v;
-            // if (lastField != 0 && field.Tag == lastField)
-            //     throw new RepeatedTag(lastField);
             if last_field != 0 && field.tag() == last_field {
-                // return Err(MessageValidationError::RepeatedTag(field.tag()));
                 return Err(MessageValidationError::TagException(TagException::repeated_tag(field.tag())));
             }
-            // CheckHasValue(field);
             self.check_has_value(field)?;
 
-            // if (!string.IsNullOrEmpty(this.Version))
             if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
-                // CheckValidFormat(field);
                 self.check_valid_format(field)?;
 
-                // if (ShouldCheckTag(field))
                 if self.should_check_tag(field) {
-                    // CheckValidTagNumber(field.Tag);
-                    // println!("check_valid_tag_number");
                     self.check_valid_tag_number(field.tag())?;
 
-                    // CheckValue(field);
-                    // println!("check_value");
                     self.check_value(field)?;
-                    // if (!Message.IsHeaderField(field.Tag, this) && !Message.IsTrailerField(field.Tag, this))
                     if !Message::is_header_field(field.tag(), Some(self))
                         && !Message::is_trailer_field(field.tag(), Some(self))
                     {
-                        // println!("body field");
-                        // CheckIsInMessage(field, msgType);
                         self.check_is_in_message(field, msg_type)?;
-                        // CheckGroupDefinitionCount(field, map, msgType);
-                        // println!("check_group_count");
                         self.check_group_count(field, message, msg_type)?;
-                        // println!("check_group_count_end");
                     } else {
-                        // println!("header or trailer field");
                     }
                 }
             }
 
-            // lastField = field.Tag;
             last_field = field.tag();
         }
-        // println!("Checked fields.");
 
         // check contents of each group
-        // foreach (int groupTag in map.GetGroupDefinitionTags())
         for tag in message.group_tags() {
-            // for (int i = 1; i <= map.GroupDefinitionCount(groupTag); i++)
-            // println!("Checking group: {tag}");
             for i in 1..=message.group_count(*tag)? {
-                // GroupDefinition g = map.GetGroupDefinition(i, groupTag);
-                // DDGrp ddg = this.Messages[msgType].GetGroupDefinition(groupTag);
-                // IterateGroupDefinition(g, ddg, msgType);
-                // println!("start group {tag}:{i}");
                 let g = message.get_group(i as u32, *tag)?;
-                // println!("get group {tag}:{i}");
                 let ddg = self.messages[msg_type].get_group(*tag);
-                // println!("end group {tag}:{i}");
                 self.iterate_group(g, ddg, msg_type)?;
-                // println!("end group {tag}:{i}");
             }
-            // println!("Checked group: {tag}");
         }
-        // println!("Checked groups.");
 
         Ok(())
     }
@@ -619,79 +439,43 @@ impl DataDictionary {
         group_definition: Option<&DDGroup>,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-        // println!("-----------------------");
-        // println!("{group:?}");
         if group_definition.is_none() {
-            //return Err(MessageValidationError::MissingGroupDefinition());
             return Ok(());
         }
         let group_definition = group_definition.unwrap();
-        // DataDictionary.CheckHasNoRepeatedTags(group);
         DataDictionary::check_has_no_repeated_tags(group)?;
-        // println!("Checked has no repeated tags group");
 
-        // int lastField = 0;
         let mut last_field = 0;
-        // foreach (KeyValuePair<int, Fields.IField> kvp in group)
         for (_, v) in group.entries() {
-            // println!("{v:?}");
             let field = v;
 
-            // if (lastField != 0 && field.Tag == lastField)
-            //     throw new RepeatedTag(lastField);
             if last_field != 0 && field.tag() == last_field {
                 return Err(MessageValidationError::TagException(TagException::repeated_tag(last_field)));
             }
-            // println!("repeated tag");
-            // CheckHasValue(field);
             self.check_has_value(field)?;
-            // println!("check_has_value");
 
-            // if (!string.IsNullOrEmpty(this.Version))
             if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
-                // println!("version match");
-                // CheckValidFormat(field);
                 self.check_valid_format(field)?;
-                // println!("check_valid_format");
 
-                // if (ShouldCheckTag(field))
                 if self.should_check_tag(field) {
-                    // CheckValidTagNumber(field.Tag);
                     self.check_valid_tag_number(field.tag())?;
 
-                    // CheckValue(field);
                     self.check_value(field)?;
-                    // CheckIsInGroup(field, ddgroup, msgType);
                     self.check_is_in_group(field, group_definition, msg_type)?;
-                    // CheckGroupCount(field, map, msgType);
                     self.check_group_count(field, group, msg_type)?;
                 }
             }
             last_field = field.tag();
         }
-        // println!("Checked fields group");
 
         // check contents of each nested group
-        // foreach (int groupTag in map.GetGroupTags())
         for tag in group.group_tags() {
-            // println!("Checking group nested: {tag}");
-            // for (int i = 1; i <= map.GroupCount(groupTag); i++)
             for i in 1..=group.group_count(*tag)? {
-                // Group g = group.GetGroup(i, groupTag);
-                // DDGrp ddg = ddgroup.GetGroup(groupTag);
-                // IterateGroup(g, ddg, msgType);
-
-                // println!("start group {tag}:{i}");
                 let g = group.get_group(i as u32, *tag)?;
-                // println!("get group {tag}:{i}");
                 let ddg = group_definition.get_group(*tag);
-                // println!("end group {tag}:{i}");
                 self.iterate_group(g, ddg, msg_type)?;
-                // println!("end group {tag}:{i}");
             }
-            // println!("Checked group nested: {tag}");
         }
-        // println!("Checked groups in group");
 
         Ok(())
     }
@@ -868,16 +652,10 @@ pub enum DictionaryError {
 
 #[derive(Debug, Clone)]
 pub struct DDField {
-    // public int Tag;
     tag: Tag,
-    // public String Name;
     name: String,
-    // public Dictionary<String, String> EnumDict;
     enum_dictionary: BTreeMap<String, String>,
-    // public String FixFldType;
     field_type: String,
-    // TODO type?
-    // public Type FieldType;
     is_multiple_value_field_with_enums: bool,
 }
 impl DDField {
@@ -887,21 +665,13 @@ impl DDField {
     }
 
     pub fn new(
-        // public int Tag;
         tag: Tag,
-        // public String Name;
         name: String,
-        // public Dictionary<String, String> EnumDict;
         enum_dictionary: BTreeMap<String, String>,
-        // public String FixFldType;
         field_type: String,
         // TODO type?
-        // public Type FieldType;
         // is_multiple_value_field_with_enums: bool
     ) -> Self {
-        // case "MULTIPLEVALUESTRING": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
-        // case "MULTIPLESTRINGVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
-        // case "MULTIPLECHARVALUE": multipleValueFieldWithEnums = true; return typeof( Fields.StringField );
         let is_multiple_value_field_with_enums = matches!(
             field_type.as_str(),
             "MULTIPLEVALUESTRING" | "MULTIPLESTRINGVALUE" | "MULTIPLECHARVALUE"
@@ -1075,14 +845,6 @@ fn parse_fields(doc: &Element) -> (BTreeMap<i32, DDField>, BTreeMap<String, DDFi
 
         let tag = tag_str.parse::<i32>().unwrap();
         let mut enums = BTreeMap::new();
-        // if let Some(enum_nodes) = field_node.get_child("value") {
-        //     for enum_node in enum_nodes.children.iter() {
-        //         println!("{:?}", enum_node);
-        //         let enum_value = enum_node.as_element().unwrap().attributes.get("enum").unwrap().clone();
-        //         let description = enum_node.as_element().unwrap().attributes.get("description").map(|s| s.clone()).unwrap_or_default();
-        //         enums.insert(enum_value, description);
-        //     }
-        // }
         for enum_node in field_node.children.iter()
             .filter_map(|c| c.as_element())
             .filter(|c| c.name == "value")
@@ -1224,7 +986,6 @@ fn parse_msg_element_inner(
                     );
                 }
                 let dd_field = fields_by_name.get(&name_attribute).unwrap().clone();
-                //bool required = (childNode.Attributes["required"]?.Value == "Y") && componentRequired.GetValueOrDefault(true);
                 let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false)
                     && component_required.unwrap_or(true);
 
@@ -1284,7 +1045,6 @@ mod tests {
 
     #[test]
     pub fn fix40() {
-        //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX40.xml"));
         println!("{:?}", result);
         assert!(result.is_ok());
@@ -1292,7 +1052,6 @@ mod tests {
 
     #[test]
     pub fn fix41() {
-        //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX41.xml"));
         println!("{:?}", result);
         assert!(result.is_ok());

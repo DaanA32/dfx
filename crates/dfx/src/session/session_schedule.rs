@@ -21,18 +21,6 @@ pub(crate) enum SessionSchedule {
     },
 }
 
-// #[derive(Debug)]
-// pub(crate) struct SessionSchedule {
-//     non_stop_session: bool,
-//     start_time: u32,
-//     end_time: u32,
-//     weekly_session: bool,
-//     start_day: Option<Weekday>,
-//     end_day: Option<Weekday>,
-//     use_local_timezone: bool,
-//     timezone: Option<u32>,
-// }
-
 impl SessionSchedule {
 
     pub(crate) fn is_new_session(&self, old_time: DateTime<Utc>, test_time: DateTime<Utc>) -> bool {
@@ -78,15 +66,6 @@ impl SessionSchedule {
     }
 
     pub(crate) fn is_session_time(&self, time: &DateTime<Utc>) -> bool {
-        // if (utc.Kind != System.DateTimeKind.Utc)
-        //     throw new System.ArgumentException("Only UTC time is supported", "time");
-
-        // System.DateTime adjusted = AdjustUtcDateTime(utc);
-
-        // if (WeeklySession)
-        //     return CheckDay(adjusted);
-        // else
-        //     return CheckTime(adjusted.TimeOfDay);
         let now = self.adjust_utc_datetime(*time);
         match self {
             SessionSchedule::NonStop => true,
@@ -176,10 +155,8 @@ impl SessionSchedule {
 
     fn adjust_utc_datetime(&self, now: DateTime<Utc>) -> NaiveDateTime {
         if self.use_local_time() {
-            //return utc.ToLocalTime();
             now.naive_local()
         } else if let Some(timezone) = self.timezone() {
-            // return System.TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZone);
             now.with_timezone(timezone).naive_local()
         } else {
             now.naive_utc()

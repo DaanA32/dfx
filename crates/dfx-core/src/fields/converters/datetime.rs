@@ -140,11 +140,3 @@ impl IntoBytes<FieldValue> for Time {
         todo!()
     }
 }
-
-// impl<'a> TryFrom<&'a FieldValue> for &'a str {
-//     type Error = ConversionError;
-
-//     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
-//         std::str::from_utf8(value).map_err(|_| ConversionError::EncodingError)
-//     }
-// }

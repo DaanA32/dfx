@@ -72,54 +72,6 @@ impl Find<char> for [u8] {
     }
 }
 
-// void addToStream( const std::string& str )
-// { m_buffer.append( str ); }
-
-// bool Parser::readFixMessage( std::string& str )
-// EXCEPT ( MessageParseError )
-//     {
-//     std::string::size_type pos = 0;
-
-//     if( m_buffer.length() < 2 ) return false;
-//     pos = m_buffer.find( "8=" );
-//     if( pos == std::string::npos ) return false;
-//     m_buffer.erase( 0, pos );
-
-//     int length = 0;
-
-//     try
-//     {
-//         if( extractLength(length, pos, m_buffer) )
-//         {
-//         pos += length;
-//         if( m_buffer.size() < pos )
-//             return false;
-
-//         pos = m_buffer.find( "\00110=", pos-1 );
-//         if( pos == std::string::npos ) return false;
-//         pos += 4;
-//         pos = m_buffer.find( "\001", pos );
-//         if( pos == std::string::npos ) return false;
-//         pos += 1;
-
-//         str.assign( m_buffer, 0, pos );
-//         m_buffer.erase( 0, pos );
-//         return true;
-//         }
-//     }
-//     catch( MessageParseError& e )
-//     {
-//         if( length > 0 )
-//         m_buffer.erase( 0, pos + length );
-//         else
-//         m_buffer.erase();
-
-//         throw e;
-//     }
-
-//     return false;
-//     }
-// }
 /// Returns `Some<String>` if it can find a potential fix message otherwise returns `None`
 /// Drains the buffer.
 pub fn read_fix(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {

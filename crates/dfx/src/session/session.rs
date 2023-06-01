@@ -93,8 +93,8 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
     let options = settings.validation_options();
     if options.use_data_dictionary() {
         if settings.session_id().is_fixt() {
+            // https://github.com/connamara/quickfixn/blob/c4e8171e9a702be29078eab3b6dc26b713002de2/QuickFIXn/SessionFactory.cs#L193
             if let Some(appl_ver_id) = settings.default_appl_ver_id() {
-                // let version = ApplVerID::from(appl_ver_id);
                 let path = match options.app_data_dictionary() {
                     Some(path) => path,
                     None => settings.session_id().begin_string(), // TODO error?
@@ -119,7 +119,6 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
 
                 provider.add_session_data_dictionary(settings.session_id().begin_string(), dd);
             }
-            // https://github.com/connamara/quickfixn/blob/c4e8171e9a702be29078eab3b6dc26b713002de2/QuickFIXn/SessionFactory.cs#L193
         } else {
             let path = match options.data_dictionary() {
                 Some(path) => path,
@@ -131,10 +130,8 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
             dd.set_check_fields_have_values(settings.validation_options().validate_fields_have_values());
             dd.set_check_fields_out_of_order(settings.validation_options().validate_fields_out_of_order());
             dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
-            // println!("validate fields have values: {}", dd.check_fields_have_values());
             provider.add_session_data_dictionary(settings.session_id().begin_string(), dd.clone());
             provider.add_application_data_dictionary(ApplVerID::from_begin_string(settings.session_id().begin_string()), dd);
-            //provider.add_application_data_dictionary(&settings.session_id().to_string(), dd);
         }
     }
 }
@@ -158,8 +155,6 @@ impl Session {
             session_data_dictionary.clone()
         };
 
-        // println!("Session: validate fields have values: {}", session_data_dictionary.check_fields_have_values());
-        // println!("App: validate fields have values: {}", application_data_dictionary.check_fields_have_values());
         let log = log_factory
             .as_ref()
             .map(|l| l.create(settings.session_id()))
@@ -281,7 +276,6 @@ impl Session {
     }
     pub(crate) fn next(&mut self) {
         if self.responder.is_none() {
-            // panic!()
             return;
         }
 
@@ -461,7 +455,6 @@ impl Session {
         let _sent_logon = self.send_raw(logon, 0).unwrap();
         let sent_logon = true; //FIXME check if logon works?
         self.state.set_sent_logon(sent_logon);
-        // println!("{sent_logon} -> {:?}", self.state);
         self.state.sent_logon()
     }
 
@@ -602,7 +595,6 @@ impl Session {
         match message {
             Ok(mut message) => {
                 let message_string = message.to_string_mut();
-                //println!("{:?}", message.header().get_field(tags::BodyLength));
                 if 0 == seq_num {
                     self.persist(&message, &message_string);
                 }
@@ -626,54 +618,38 @@ impl Session {
 
     fn initialize_header(&mut self, message: &mut Message, seq_num: Option<u32>) {
         let seq_num = seq_num.unwrap_or(0);
-        // state_.LastSentTimeDT = DateTime.UtcNow;
         self.state.set_last_sent_time_dt(Instant::now());
 
-        // m.Header.SetField(new Fields.BeginString>(this.SessionID.BeginString));
-        // m.Header.SetField(new Fields.SenderCompID(this.SessionID.SenderCompID));
         message
             .header_mut()
             .set_tag_value(tags::BeginString, &self.session_id.begin_string());
         message
             .header_mut()
             .set_tag_value(tags::SenderCompID, &self.session_id.sender_comp_id());
-        // if (SessionID.IsSet(this.SessionID.SenderSubID))
-        //     m.Header.SetField(new Fields.SenderSubID(this.SessionID.SenderSubID));
         if !self.session_id.sender_sub_id().is_empty() {
             message
                 .header_mut()
                 .set_tag_value(tags::SenderSubID, &self.session_id.sender_sub_id());
         }
-        // if (SessionID.IsSet(this.SessionID.SenderLocationID))
-        //     m.Header.SetField(new Fields.SenderLocationID(this.SessionID.SenderLocationID));
         if !self.session_id.sender_location_id().is_empty() {
             message
                 .header_mut()
                 .set_tag_value(tags::SenderLocationID, &self.session_id.sender_location_id());
         }
-        // m.Header.SetField(new Fields.TargetCompID(this.SessionID.TargetCompID));
         message
             .header_mut()
             .set_tag_value(tags::TargetCompID, &self.session_id.target_comp_id());
-        // if (SessionID.IsSet(this.SessionID.TargetSubID))
-        //     m.Header.SetField(new Fields.TargetSubID(this.SessionID.TargetSubID));
         if !self.session_id.target_sub_id().is_empty() {
             message
                 .header_mut()
                 .set_tag_value(tags::TargetSubID, &self.session_id.target_sub_id());
         }
-        // if (SessionID.IsSet(this.SessionID.TargetLocationID))
-        //     m.Header.SetField(new Fields.TargetLocationID(this.SessionID.TargetLocationID));
         if !self.session_id.target_location_id().is_empty() {
             message
                 .header_mut()
                 .set_tag_value(tags::TargetLocationID, &self.session_id.target_location_id());
         }
 
-        // if (msgSeqNum > 0)
-        //     m.Header.SetField(new Fields.MsgSeqNum(msgSeqNum));
-        // else
-        //     m.Header.SetField(new Fields.MsgSeqNum(state_.GetNextSenderMsgSeqNum()));
         let seq_num = format!(
             "{}",
             if seq_num > 0 {
@@ -684,10 +660,6 @@ impl Session {
         );
         message.header_mut().set_tag_value(tags::MsgSeqNum, &seq_num);
 
-        // if (this.EnableLastMsgSeqNumProcessed && !m.Header.IsSetField(Tags.LastMsgSeqNumProcessed))
-        // {
-        //     m.Header.SetField(new LastMsgSeqNumProcessed(this.NextTargetMsgSeqNum - 1));
-        // }
         self.log.on_event(format!("initialize_header: {} && {}", self.enable_last_msg_seq_num_processed, !message.header().is_field_set(tags::LastMsgSeqNumProcessed)).as_str());
         if self.enable_last_msg_seq_num_processed
             && !message.header().is_field_set(tags::LastMsgSeqNumProcessed)
@@ -702,13 +674,6 @@ impl Session {
     }
 
     fn insert_orig_sending_time(&self, message: &mut Message, sending_time: NaiveDateTime) {
-        // bool fix42OrAbove = false;
-        // if (this.SessionID.BeginString == FixValues.BeginString.FIXT11)
-        //     fix42OrAbove = true;
-        // else
-        //     fix42OrAbove = this.SessionID.BeginString.CompareTo(FixValues.BeginString.FIX42) >= 0;
-
-        // header.SetField(new OrigSendingTime(sendingTime, fix42OrAbove ? TimeStampPrecision : TimeStampPrecision.Second ) );
         let fix42_or_above = self.session_id.begin_string() == BeginString::FIXT11 || self.session_id.begin_string() >= BeginString::FIX42;
         let precision = if fix42_or_above {
             self.time_stamp_precision.as_datetime_format()
@@ -722,12 +687,6 @@ impl Session {
     }
 
     fn insert_sending_time(&self, message: &mut Message) {
-        // bool fix42OrAbove = false;
-        // if (this.SessionID.BeginString == FixValues.BeginString.FIXT11)
-        //     fix42OrAbove = true;
-        // else
-        //     fix42OrAbove = this.SessionID.BeginString.CompareTo(FixValues.BeginString.FIX42) >= 0;
-        // TODO check if original is correct?
         let fix42_or_above = self.session_id.begin_string() == BeginString::FIXT11
             || self.session_id.begin_string() >= BeginString::FIX42;
         let precision = if fix42_or_above {
@@ -735,7 +694,6 @@ impl Session {
         } else {
             DateTimeFormat::Seconds.as_datetime_format()
         };
-        // header.SetField(new Fields.SendingTime(System.DateTime.UtcNow, fix42OrAbove ? TimeStampPrecision : TimeStampPrecision.Second ) );
         // TODO fix timeformatting
         let send_time = format!("{}", Utc::now().format(precision));
         message
@@ -782,14 +740,6 @@ impl Session {
             match e {
                 SessionHandleMessageError::InvalidMessageError(e) => {
                     self.log.on_event(&e.message());
-                    //     try
-                    //     {
-                    //         if (MsgType.LOGON.Equals(msgBuilder.MsgType.Obj))
-                    //             Disconnect("Logon message is not valid");
-                    //     }
-                    //     catch (MessageParseError)
-                    //     { }
-                    // return e;
                 },
                 SessionHandleMessageError::MessageParseError { message, parse_error } => {
                     self.log.on_event(format!("MessageParse Error: {parse_error:?}").as_str());
@@ -801,11 +751,7 @@ impl Session {
                         self.log.on_event("Skipping message!.");
                     }
                 },
-                //Tag Exception
                 SessionHandleMessageError::TagException(msg, e) => {
-                    //     if (null != e.InnerException)
-                    //         this.Log.OnEvent(e.InnerException.Message);
-                    //     GenerateReject(msgBuilder, e.sessionRejectReason, e.Field);
                     if let Some(msg) = e.inner() {
                         self.log.on_event(msg.as_str());
                     }
@@ -838,42 +784,6 @@ impl Session {
                 }
             }
         }
-        // catch (UnsupportedVersion uvx)
-        // {
-        //     if (MsgType.LOGOUT.Equals(msgBuilder.MsgType.Obj))
-        //     {
-        //         NextLogout(message);
-        //     }
-        //     else
-        //     {
-        //         this.Log.OnEvent(uvx.ToString());
-        //         GenerateLogout(uvx.Message);
-        //         state_.IncrNextTargetMsgSeqNum();
-        //     }
-        // }
-        // catch (UnsupportedMessageType e)
-        // {
-        //     this.Log.OnEvent("Unsupported message type: " + e.Message);
-        //     GenerateBusinessMessageReject(message, Fields.BusinessRejectReason.UNKNOWN_MESSAGE_TYPE, 0);
-        // }
-        // catch (FieldNotFoundException e)
-        // {
-        //     this.Log.OnEvent("Rejecting invalid message, field not found: " + e.Message);
-        //     if ((SessionID.BeginString.CompareTo(FixValues.BeginString.FIX42) >= 0) && (message.IsApp()))
-        //     {
-        //         GenerateBusinessMessageReject(message, Fields.BusinessRejectReason.CONDITIONALLY_REQUIRED_FIELD_MISSING, e.Field);
-        //     }
-        //     else
-        //     {
-        //         if (MsgType.LOGON.Equals(msgBuilder.MsgType.Obj))
-        //         {
-        //             this.Log.OnEvent("Required field missing from logon");
-        //             Disconnect("Required field missing from logon");
-        //         }
-        //         else
-        //             GenerateReject(msgBuilder, new QuickFix.FixValues.SessionRejectReason(SessionRejectReason.REQUIRED_TAG_MISSING, "Required Tag Missing"), e.Field);
-        //     }
-        // }
 
         self.next()
     }
@@ -897,9 +807,6 @@ impl Session {
 
     fn handle_msg(&mut self, message: Message, begin_string: &str, msg_type: &str) -> Result<(), SessionHandleMessageError> {
         if self.app_does_early_intercept {
-            // if let Some(func) = self.application.get_early_intercept() {
-            //     message = func(self.application.as_mut(), message, &self.session_id)?;
-            // }
             todo!("Do early intercept")
         }
 
@@ -977,10 +884,8 @@ impl Session {
 
     fn next_queued(&mut self) {
         while let Some(msg) = self.state.dequeue(self.state.msg_store().next_target_msg_seq_num()) {
-            // Log.OnEvent("Processing queued message: " + num);
             self.log.on_event(format!("Processing queued message: {}", self.state.msg_store().next_target_msg_seq_num()).as_str());
 
-            // string msgType = msg.Header.GetString(Tags.MsgType);
             match (msg.header().get_string(tags::MsgType), msg.header().get_string(tags::BeginString)) {
                 (Ok(msg_type), Ok(begin_string)) => {
                     if msg_type == MsgType::LOGON || msg_type == MsgType::RESEND_REQUEST {
@@ -991,14 +896,6 @@ impl Session {
                 },
                 e => todo!("session::next_queued {e:?}")
             }
-            // if (msgType.Equals(MsgType.LOGON) || msgType.Equals(MsgType.RESEND_REQUEST))
-            // {
-            //     state_.IncrNextTargetMsgSeqNum();
-            // }
-            // else
-            // {
-            //     NextMessage(msg.ToString());
-            // }
         }
     }
 
@@ -1245,8 +1142,6 @@ impl Session {
         check_too_high: bool,
         check_too_low: bool,
     ) -> Result<Option<Message>, SessionHandleMessageError> {
-        // int msgSeqNum = 0;
-        // string msgType = "";
         let mut msg_seq_num = 0;
         let msg_type = message.header().get_string(tags::MsgType)?;
 
@@ -1319,13 +1214,6 @@ impl Session {
             self.generate_logout(None, None);
             return Ok(None);
         }
-        // }
-        // catch (System.Exception e)
-        // {
-        //     this.Log.OnEvent("Verify failed: " + e.Message);
-        //     Disconnect("Verify failed: " + e.Message);
-        //     return false;
-        // }
 
         self.state.set_last_received_time_dt(Instant::now());
         self.state.set_test_request_counter(0);
@@ -1353,10 +1241,8 @@ impl Session {
     }
 
     fn do_target_too_high(&mut self, msg: Message, msg_seq_num: u32) -> Result<(), SessionHandleMessageError> {
-        // string beginString = msg.Header.GetString(Fields.Tags.BeginString);
         let begin_string = msg.header().get_string(tags::BeginString)?;
 
-        // this.Log.OnEvent("MsgSeqNum too high, expecting " + state_.GetNextTargetMsgSeqNum() + " but received " + msgSeqNum);
         self.log.on_event(
             format!(
                 "MsgSeqNum too high, expecting {} but received {}",
@@ -1365,7 +1251,6 @@ impl Session {
             )
             .as_str(),
         );
-        // state_.Queue(msgSeqNum, msg);
         self.state.queue(msg_seq_num, msg);
 
         if self.state.resend_requested() {
@@ -1404,8 +1289,6 @@ impl Session {
     }
 
     fn is_good_time(&self, message: &Message) -> bool {
-        // if (!CheckLatency)
-        //     return true;
         if !self.check_latency {
             return true;
         }
@@ -1492,12 +1375,6 @@ impl Session {
             if msg_type.len() > 0 {
                 reject.set_tag_value(tags::RefMsgType, &msg_type);
             }
-            //TODO
-            // if ((FixValues.BeginString.FIX42.Equals(beginString) && reason.Value <= FixValues.SessionRejectReason.INVALID_MSGTYPE.Value)
-            //  || (beginString.CompareTo(FixValues.BeginString.FIX42) > 0))
-            //     {
-            //         reject.SetField(new Fields.SessionRejectReason(reason.Value));
-            //     }
             if (&BeginString::FIX42 == begin_string
                 && reason.tag() <= SessionRejectReason::INVALID_MSGTYPE().tag()/*.value*/)
                 || begin_string > &BeginString::FIX42
@@ -1594,15 +1471,12 @@ impl Session {
     }
 
     fn do_poss_dup(&mut self, message: Message) -> Result<(), SessionHandleMessageError> {
-        // If config RequiresOrigSendingTime=N, then tolerate SequenceReset messages that lack OrigSendingTime (issue #102).
-        // (This field doesn't really make sense in this message, so some parties omit it, even though spec requires it.)
 
         let msg_type = message.header().get_string(tags::MsgType)?;
         if msg_type == MsgType::SEQUENCE_RESET && !self.requires_orig_sending_time {
             return Ok(());
         }
 
-        // Reject if messages don't have OrigSendingTime set
         if !message.header().is_field_set(tags::OrigSendingTime) {
             self.generate_reject(
                 message,
@@ -1612,13 +1486,11 @@ impl Session {
             return Ok(());
         }
 
-        // Ensure sendingTime is later than OrigSendingTime, else reject and logout
         let orig_send_time = message.header().get_datetime(tags::OrigSendingTime)?;
         let sending_time = message.header().get_datetime(tags::SendingTime)?;
         let timespan = orig_send_time - sending_time;
 
         if timespan.num_seconds() > 0 {
-            // Original does not include tag!
             self.generate_reject(
                 message,
                 SessionRejectReason::SENDING_TIME_ACCURACY_PROBLEM(),
@@ -1661,36 +1533,18 @@ impl Session {
         begin_seq_no: u32,
         end_seq_no: u32,
     ) -> Result<(), SessionHandleMessageError> {
-        // string beginString = this.SessionID.BeginString;
         let begin_string = self.session_id.begin_string();
-        // Message sequenceReset = msgFactory_.Create(beginString, Fields.MsgType.SEQUENCE_RESET);
         let mut sequence_reset = self.msg_factory.create(begin_string, MsgType::SEQUENCE_RESET)?;
-        // InitializeHeader(sequenceReset);
         self.initialize_header(&mut sequence_reset, None);
-        // int newSeqNo = endSeqNo;
         let new_seq_no = end_seq_no;
-        // sequenceReset.Header.SetField(new PossDupFlag(true));
         sequence_reset.header_mut().set_tag_value(tags::PossDupFlag, true);
-        // InsertOrigSendingTime(sequenceReset.Header, sequenceReset.Header.GetDateTime(Tags.SendingTime));
         let sending_time = sequence_reset.header().get_datetime(tags::SendingTime)?;
         self.insert_orig_sending_time(&mut sequence_reset, sending_time.naive_local());
 
-        // sequenceReset.Header.SetField(new MsgSeqNum(beginSeqNo));
         sequence_reset.header_mut().set_tag_value(tags::MsgSeqNum, begin_seq_no as i64);
-        // sequenceReset.SetField(new NewSeqNo(newSeqNo));
         sequence_reset.set_tag_value(tags::NewSeqNo, new_seq_no as i64);
-        // sequenceReset.SetField(new GapFillFlag(true));
         sequence_reset.set_tag_value(tags::GapFillFlag, true);
-        // if (receivedMessage != null && this.EnableLastMsgSeqNumProcessed)
         if /* resend_request.is_some() && */ self.enable_last_msg_seq_num_processed {
-        //     try
-        //     {
-        //         sequenceReset.Header.SetField(new Fields.LastMsgSeqNumProcessed(receivedMessage.Header.GetInt(Tags.MsgSeqNum)));
-        //     }
-        //     catch (FieldNotFoundException)
-        //     {
-        //         this.Log.OnEvent("Error: Received message without MsgSeqNum: " + receivedMessage);
-        //     }
             let seq_num: Option<Result<i64, _>> = received_message.get_field(tags::MsgSeqNum).map(|v| v.as_value());
             if let Some(result) = seq_num {
                 sequence_reset.header_mut().set_tag_value(tags::LastMsgSeqNumProcessed, result?);
@@ -1700,9 +1554,7 @@ impl Session {
         }
 
         self.send_raw(sequence_reset, begin_seq_no)?;
-        // SendRaw(sequenceReset, beginSeqNo);
         self.log().on_event(format!("Sent SequenceReset TO: {}", begin_seq_no).as_str());
-        // this.Log.OnEvent("Sent SequenceReset TO: " + newSeqNo);
         Ok(())
     }
 
@@ -1722,17 +1574,10 @@ impl Session {
     }
 
     fn generate_business_message_reject(&mut self, message: Message, business_reject_reason: BusinessRejectReason) -> Result<(), SessionHandleMessageError> {
-        // string msgType = message.Header.GetString(Tags.MsgType);
         let msg_type = message.header().get_string(tags::MsgType)?;
-        // int msgSeqNum = message.Header.GetInt(Tags.MsgSeqNum);
         let msg_seq_num = message.header().get_int(tags::MsgSeqNum)?;
-        // string reason = FixValues.BusinessRejectReason.RejText[err];
         let reason = business_reject_reason.reason();
-        // Message reject;
         let mut reject = if self.session_id.begin_string() >= BeginString::FIX42 {
-        //     reject = msgFactory_.Create(this.SessionID.BeginString, MsgType.BUSINESS_MESSAGE_REJECT);
-        //     reject.SetField(new RefMsgType(msgType));
-        //     reject.SetField(new BusinessRejectReason(err));
             let mut reject = self.msg_factory.create(self.session_id.begin_string(), MsgType::BUSINESS_MESSAGE_REJECT)?;
             reject.set_tag_value(tags::RefMsgType, msg_type);
             reject.set_tag_value(tags::BusinessRejectReason, format!("{}", business_reject_reason.index()));
@@ -1747,18 +1592,12 @@ impl Session {
             reject
         };
 
-        // InitializeHeader(reject);
         self.initialize_header(&mut reject, None);
-        // reject.SetField(new RefSeqNum(msgSeqNum));
         reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num));
-        // state_.IncrNextTargetMsgSeqNum();
         self.state.incr_next_target_msg_seq_num();
 
-        // reject.SetField(new Text(reason));
         reject.set_tag_value(tags::Text, reason);
-        // Log.OnEvent("Reject sent for Message: " + msgSeqNum + " Reason:" + reason);
         self.log.on_event("Reject sent for Message: {msg_seq_num} Reason:{reason}");
-        // SendRaw(reject, 0);
         self.send_raw(reject, 0)?;
         Ok(())
     }

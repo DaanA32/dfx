@@ -140,8 +140,6 @@ impl FieldMap {
     pub fn from_field_order(_field_order: FieldOrder) -> Self {
         let fields = Default::default();
         let groups = Default::default();
-        // let fields = HashMap::default();
-        // let groups = HashMap::default();
         let repeated_tags = Vec::default();
         FieldMap {
             fields,
@@ -225,72 +223,47 @@ impl FieldMap {
 
     // Groups
     pub fn add_group(&mut self, _tag: Tag, group: &Group, set_count: Option<bool>) {
-        // if (!_groups.ContainsKey(group.Field))
-        //     _groups.Add(group.Field, new List<Group>());
-        // _groups[group.Field].Add(group);
         self.groups.entry(group.field()).or_insert_with(Vec::new);
         self.groups
             .get_mut(&group.field())
             .unwrap() //checked
             .push(group.clone());
 
-        // if (autoIncCounter)
         if set_count.unwrap_or(true) {
             // increment group size
 
-            // int groupsize = _groups[group.Field].Count;
             let groupsize = self.groups[&group.field()].len();
-            // int counttag = group.Field;
             let counttag = group.field();
-            // IntField count = null;
             // count = new IntField(couttag, groupsize);
             let count = Field::new(counttag, format!("{}", groupsize));
 
-            // this.SetField(count, true);
             self.set_field_base(count, Some(true));
         }
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
     pub fn get_group(&self, index: u32, field: Tag) -> Result<&Group, FieldMapError> {
-        // if (!_groups.ContainsKey(field))
-        //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
-            println!("contains_key");
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (num <= 0)
-        //     throw new FieldNotFoundException(field);
         if index == 0 {
-            println!("index == 0");
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (_groups[field].Count < num)
-        //     throw new FieldNotFoundException(field);
         if self.groups[&field].len() < index as usize {
-            println!("self.groups[&field].len() < index as usize");
-            println!("{} < {}", self.groups[&field].len(), index as usize);
             return Err(FieldMapError::FieldNotFound(field));
         }
 
-        // return _groups[field][num - 1];
         Ok(&self.groups[&field][(index-1) as usize])
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
     pub fn get_group_mut(&mut self, index: u32, field: Tag) -> Result<&mut Group, FieldMapError> {
-        // if (!_groups.ContainsKey(field))
-        //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (num <= 0)
-        //     throw new FieldNotFoundException(field);
         if index == 0 {
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (_groups[field].Count < num)
-        //     throw new FieldNotFoundException(field);
         if self.groups[&field].len() < index as usize {
             return Err(FieldMapError::FieldNotFound(field));
         }
@@ -301,29 +274,19 @@ impl FieldMap {
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
     pub fn remove_group(&mut self, index: u32, field: Tag) -> Result<(), FieldMapError> {
-        // if (!_groups.ContainsKey(field))
-        //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (num <= 0)
-        //     throw new FieldNotFoundException(field);
         if index == 0 {
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (_groups[field].Count < num)
-        //     throw new FieldNotFoundException(field);
         if self.groups[&field].len() < index as usize {
             return Err(FieldMapError::FieldNotFound(field));
         }
 
-        // if (_groups[field].Count.Equals(1))
         if self.groups[&field].len() == 1 {
-            //     _groups.Remove(field);
             self.groups.remove(&field);
-        // else
         } else {
-            //     _groups[field].RemoveAt(num - 1);
             self.groups
                 .get_mut(&field)
                 .ok_or_else(|| FieldMapError::FieldNotFound(field))?
@@ -338,26 +301,16 @@ impl FieldMap {
         field: Tag,
         group: Group,
     ) -> Result<Group, FieldMapError> {
-        // if (!_groups.ContainsKey(field))
-        //     throw new FieldNotFoundException(field);
         if !self.groups.contains_key(&field) {
-            println!("key error: {:?}, {index} {field} {group:?}", self);
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (num <= 0)
-        //     throw new FieldNotFoundException(field);
         if index == 0 {
-            println!("index: {:?}, {index} {field} {group:?}", self);
             return Err(FieldMapError::FieldNotFound(field));
         }
-        // if (_groups[field].Count < num)
-        //     throw new FieldNotFoundException(field);
         if self.groups[&field].len() < index as usize {
-            println!("< index: {:?}, {index} {field} {group:?}", self);
             return Err(FieldMapError::FieldNotFound(field));
         }
 
-        // return _groups[field][num - 1] = group;
         let group_ref = self
             .groups
             .get_mut(&field)
@@ -387,76 +340,49 @@ impl FieldMap {
     }
 
     pub fn calculate_total(&self) -> Total {
-        // int total = 0;
         let mut total = 0;
-        // foreach (Fields.IField field in _fields.Values)
         for field in self.fields.values() {
-            //  if (field.Tag != Fields.Tags.CheckSum)
             if field.tag() != tags::CheckSum {
-                //      total += field.getTotal();
                 total += field.get_total();
             }
         }
 
-        // foreach (Fields.IField field in this.RepeatedTags)
         for field in self.repeated_tags() {
-            //  if (field.Tag != Fields.Tags.CheckSum)
             if field.tag() != tags::CheckSum {
-                //      total += field.getTotal();
                 total += field.get_total();
             }
         }
 
-        // foreach (List<Group> groupList in _groups.Values)
         for group_list in self.groups.values() {
-            //     foreach (Group group in groupList)
             for group in group_list {
-                //         total += group.CalculateTotal();
                 total += group.calculate_total();
             }
         }
-        // return total;
         total
     }
 
     pub fn len(&self) -> Length {
-        // int total = 0;
         let mut total = 0;
-        // foreach (Fields.IField field in _fields.Values)
         for field in self.fields.values() {
-            //     if (field != null
-            //         && field.Tag != Tags.BeginString
-            //         && field.Tag != Tags.BodyLength
-            //         && field.Tag != Tags.CheckSum)
             if field.tag() != tags::CheckSum
                 && field.tag() != tags::BeginString
                 && field.tag() != tags::BodyLength
             {
-                //      total += field.getLength();
                 total += field.bytes_len();
             }
         }
 
-        // foreach (Fields.IField field in this.RepeatedTags)
         for field in self.repeated_tags() {
-            //     if (field != null
-            //         && field.Tag != Tags.BeginString
-            //         && field.Tag != Tags.BodyLength
-            //         && field.Tag != Tags.CheckSum)
             if field.tag() != tags::CheckSum
                 && field.tag() != tags::BeginString
                 && field.tag() != tags::BodyLength
             {
-                //      total += field.getLength();
                 total += field.bytes_len();
             }
         }
 
-        // foreach (List<Group> groupList in _groups.Values)
         for group_list in self.groups.values() {
-            //     foreach (Group group in groupList)
             for group in group_list {
-                //         total += group.CalculateLength();
                 total += group.len();
             }
         }
@@ -482,16 +408,12 @@ impl FieldMap {
     }
 
     pub fn calculate_string(&self, prefields: Option<FieldOrder>) -> String {
-        // HashSet<int> groupCounterTags = new HashSet<int>(_groups.Keys);
         let group_counter_tags: BTreeSet<&Tag> = self.group_tags().collect();
         let prefields = prefields.unwrap_or_default();
         let mut sb = String::new();
 
-        // foreach (int preField in preFields)
         for prefield in &prefields {
-            //     if (IsSetField(preField))
             if self.is_field_set(*prefield) {
-                //         sb.Append(preField + "=" + GetString(preField)).Append(Message.SOH);
                 sb.push_str(
                     format!(
                         "{}={}{}",
@@ -501,56 +423,37 @@ impl FieldMap {
                     )
                     .as_str(),
                 );
-                //         if (groupCounterTags.Contains(preField))
                 if group_counter_tags.contains(prefield) {
-                    //             List<Group> glist = _groups[preField];
                     let glist = &self.groups[prefield];
-                    //             foreach (Group g in glist)
                     for g in glist {
-                        //                 sb.Append(g.CalculateString());
                         sb.push_str(&g.calculate_string());
                     }
                 }
             }
         }
 
-        // foreach (Fields.IField field in _fields.Values)
         for field in self.fields.values() {
-            //     if (groupCounterTags.Contains(field.Tag))
             if group_counter_tags.contains(&field.tag()) {
-                //         continue;
                 continue;
             }
-            //     if (preFields.Contains(field.Tag))
             if prefields.contains(&field.tag()) {
-                //         continue; //already did this one
                 continue; //already did this one
             }
-            //     sb.Append(field.Tag.ToString() + "=" + field.ToString());
-            //     sb.Append(Message.SOH);
             sb.push_str(
                 format!("{}={}{}", field.tag(), field.string_value().unwrap(), Message::SOH).as_str(),
             );
         }
 
-        // foreach(int counterTag in _groups.Keys)
         for counter_tag in self.groups.keys() {
-            //     if (preFields.Contains(counterTag))
             if prefields.contains(counter_tag) {
-                //         continue; //already did this one
                 continue; //already did this one
             }
 
-            //     List<Group> groupList = _groups[counterTag];
             let grouplist = &self.groups[counter_tag];
-            //     if (groupList.Count == 0)
             if grouplist.is_empty() {
-                //         continue; //probably unnecessary, but it doesn't hurt to check
                 continue; //probably unnecessary, but it doesn't hurt to check
             }
 
-            //     sb.Append(_fields[counterTag].toStringField());
-            //     sb.Append(Message.SOH);
             sb.push_str(
                 format!(
                     "{}{}",
@@ -560,9 +463,7 @@ impl FieldMap {
                 .as_str(),
             );
 
-            //     foreach (Group group in groupList)
             for group in grouplist {
-                //         sb.Append(group.CalculateString());
                 sb.push_str(&group.calculate_string());
             }
         }

@@ -134,43 +134,10 @@ impl Message {
             Ok(())
         } else {
             Err(MessageValidationError::TagException(TagException::tag_out_of_order(self.field_)))
-            // Err(MessageValidationError::InvalidStructure(self.field_))
         }
     }
 
     pub fn is_header_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
-        // switch (tag)
-        // {
-        //     case Tags.BeginString:
-        //     case Tags.BodyLength:
-        //     case Tags.MsgType:
-        //     case Tags.SenderCompID:
-        //     case Tags.TargetCompID:
-        //     case Tags.OnBehalfOfCompID:
-        //     case Tags.DeliverToCompID:
-        //     case Tags.SecureDataLen:
-        //     case Tags.MsgSeqNum:
-        //     case Tags.SenderSubID:
-        //     case Tags.SenderLocationID:
-        //     case Tags.TargetSubID:
-        //     case Tags.TargetLocationID:
-        //     case Tags.OnBehalfOfSubID:
-        //     case Tags.OnBehalfOfLocationID:
-        //     case Tags.DeliverToSubID:
-        //     case Tags.DeliverToLocationID:
-        //     case Tags.PossDupFlag:
-        //     case Tags.PossResend:
-        //     case Tags.SendingTime:
-        //     case Tags.OrigSendingTime:
-        //     case Tags.XmlDataLen:
-        //     case Tags.XmlData:
-        //     case Tags.MessageEncoding:
-        //     case Tags.LastMsgSeqNumProcessed:
-        //         // case Tags.OnBehalfOfSendingTime: TODO
-        //         return true;
-        //     default:
-        //         return false;
-        // }
         match tag {
             tags::BeginString => true,
             tags::BodyLength => true,
@@ -197,7 +164,7 @@ impl Message {
             tags::XmlData => true,
             tags::MessageEncoding => true,
             tags::LastMsgSeqNumProcessed => true,
-            //tags::OnBehalfOfSendingTime => true, TODO
+            tags::OnBehalfOfSendingTime => true, //TODO
             _ => match data_dictionary {
                 Some(dd) => dd.is_header_field(tag),
                 None => false,
@@ -206,15 +173,6 @@ impl Message {
     }
 
     pub fn is_trailer_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
-        // switch (tag)
-        // {
-        //     case Tags.SignatureLength:
-        //     case Tags.Signature:
-        //     case Tags.CheckSum:
-        //         return true;
-        //     default:
-        //         return false;
-        // }
         match tag {
             tags::SignatureLength => true,
             tags::Signature => true,
@@ -226,7 +184,6 @@ impl Message {
         }
     }
 
-    // public static StringField ExtractField(string msgstr, ref int pos, DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD)
     fn extract_field(
         msgstr: &[u8],
         pos: &mut usize,
@@ -234,15 +191,12 @@ impl Message {
         _app_dd: Option<&DataDictionary>,
         size_hint: Option<usize>,
     ) -> Result<FieldBase, MessageParseError> {
-        // int tagend = msgstr.IndexOf('=', pos);
         let tagend = msgstr[*pos..].iter().position(|c| *c == '=' as u8);
         if tagend.is_none() {
             return Err(MessageParseError::FailedToFindEqualsAt(*pos));
         }
 
         let tagend = *pos + tagend.unwrap();
-        // println!("{:?}", tagend);
-        // int tag = Convert.ToInt32(msgstr.Substring(pos, tagend - pos));
         if *pos > tagend {
             return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
         }
@@ -259,21 +213,17 @@ impl Message {
         }
         let tag = tag.unwrap();
 
-        //     pos = tagend + 1;
         *pos = tagend + 1;
 
-        //     int fieldvalend = msgstr.IndexOf((char)1, pos);
         let fieldend = if let Some(value) = size_hint {
             Some(value)
         } else {
             msgstr[*pos..].iter().position(|c| *c == Message::SOH as u8)
         };
-        // println!("{}", msgstr[*pos..].chars().collect::<String>());
         if fieldend.is_none() {
             return Err(MessageParseError::FailedToFindSohAt(*pos));
         }
         let fieldend = *pos + fieldend.unwrap();
-        //     StringField field =  new StringField(tag, msgstr.Substring(pos, fieldvalend - pos));
         let value = &msgstr[*pos..fieldend];
         let field = FieldBase::from_bytes(tag, value.into());
 
@@ -300,14 +250,10 @@ impl Message {
         }
         */
 
-        // pos = fieldvalend + 1;
         *pos = fieldend + 1;
         Ok(field)
     }
 
-    // public void FromString(string msgstr, bool validate,
-    //     DataDictionary.DataDictionary sessionDD, DataDictionary.DataDictionary appDD, IMessageFactory msgFactory,
-    //     bool ignoreBody)
     /// Creates a Message from a FIX string.
     ///
     /// msg_factory
@@ -326,29 +272,18 @@ impl Message {
         msg_factory: Option<&dyn MessageFactory>,
         ignore_body: bool,
     ) -> Result<(), MessageParseError> {
-        //      this.ApplicationDataDictionary = appDD;
         self.application_data_dictionary = app_dd.cloned();
-        //      Clear();
         self.clear();
 
-        //      string msgType = "";
         let mut msg_type;
-        //      bool expectingHeader = true;
         let mut expecting_header = true;
-        //      bool expectingBody = true;
         let mut expecting_body = true;
-        //      int count = 0;
         let mut count = 0;
-        //      int pos = 0;
         let mut pos = 0;
-        //      DataDictionary.IFieldMapSpec msgMap = null;
         let mut msg_map: Option<&DDMap> = None;
         let mut size_hint = None;
 
-        //      while (pos < msgstr.Length)
         while pos < msgstr.len() {
-            // println!("{}", pos);
-            //          StringField f = ExtractField(msgstr, ref pos, sessionDD, appDD);
             let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
             match (session_dd, app_dd) {
                 (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
@@ -357,52 +292,35 @@ impl Message {
                 (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
                 _ => size_hint = None,
             };
-            // println!("{:?}", f);
 
-            //          if (validate && (count < 3) && (Header.HEADER_FIELD_ORDER[count++] != f.Tag))
             if validate && count < 3 && HEADER_FIELD_ORDER[count] != f.tag() {
-                //              throw new InvalidMessage("Header fields out of order");
                 return Err(MessageParseError::InvalidMessage(
                     "Header fields out of order".into(),
                 ));
             }
             count += 1;
 
-            //          if (IsHeaderField(f.Tag, sessionDD))
-            //          {
             if Message::is_header_field(f.tag(), session_dd) {
-                //              if (!expectingHeader)
                 if !expecting_header {
-                    //                  if (0 == field_)
                     if 0 == self.field_ {
-                        //                      field_ = f.Tag;
                         self.field_ = f.tag();
                     }
-                    //                  validStructure_ = false;
                     self.valid_structure_ = false;
                 }
 
-                //              if (Tags.MsgType.Equals(f.Tag))
                 if tags::MsgType == f.tag() {
-                    //                  msgType = string.Copy(f.Obj);
                     msg_type = f.string_value();
-                    //                  if (appDD != null)
                     if let Some(app_dd) = app_dd {
-                        //                      msgMap = appDD.GetMapForMessage(msgType);
                         msg_map = app_dd.get_map_for_message(msg_type?.as_str());
                     }
                 }
 
-                //              if (!this.Header.SetField(f, false))
                 if !self.header.set_field_base(f.clone(), Some(false)) {
-                    //                  this.Header.RepeatedTags.Add(f);
                     self.header.repeated_tags_mut().push(f.clone());
                 }
 
-                //              if ((null != sessionDD) && sessionDD.Header.IsGroup(f.Tag))
                 if matches!(session_dd, Some(dd) if dd.header().is_group(f.tag())) {
                     let dd = session_dd.unwrap();
-                    //                  pos = SetGroup(f, msgstr, pos, this.Header, sessionDD.Header.GetGroupSpec(f.Tag), sessionDD, appDD, msgFactory);
                     pos = Message::set_group(
                         f.clone(),
                         msgstr,
@@ -414,22 +332,15 @@ impl Message {
                         msg_factory,
                     )?;
                 }
-            //          else if (IsTrailerField(f.Tag, sessionDD))
             } else if Message::is_trailer_field(f.tag(), session_dd) {
-                //              expectingHeader = false;
                 expecting_header = false;
-                //              expectingBody = false;
                 expecting_body = false;
-                //              if (!this.Trailer.SetField(f, false))
                 if !self.trailer.set_field_base(f.clone(), Some(false)) {
-                    //                  this.Trailer.RepeatedTags.Add(f);
                     self.trailer.repeated_tags_mut().push(f.clone());
                 }
 
-                //              if ((null != sessionDD) && sessionDD.Trailer.IsGroup(f.Tag))
                 if matches!(session_dd, Some(dd) if dd.trailer().is_group(f.tag())) {
                     let dd = session_dd.unwrap();
-                    //                  pos = SetGroup(f, msgstr, pos, this.Trailer, sessionDD.Trailer.GetGroup(f.Tag), sessionDD, appDD, msgFactory);
                     pos = Message::set_group(
                         f.clone(),
                         msgstr,
@@ -442,31 +353,21 @@ impl Message {
                     )?;
                 }
 
-            //          else if (ignoreBody==false)
             } else if !ignore_body {
-                //              if (!expectingBody)
                 if !expecting_body {
-                    //                  if (0 == field_)
                     if self.field_ == 0 {
-                        //                      field_ = f.Tag;
                         self.field_ = f.tag();
                     }
-                    //                  validStructure_ = false;
                     self.valid_structure_ = false;
                 }
 
-                //              expectingHeader = false;
                 expecting_header = false;
-                //              if (!SetField(f, false))
                 if !self.set_field_base(f.clone(), Some(false)) {
-                    //                  this.RepeatedTags.Add(f);
                     self.repeated_tags_mut().push(f.clone());
                 }
 
-                //              if((null != msgMap) && (msgMap.IsGroup(f.Tag)))
                 if matches!(msg_map, Some(map) if map.is_group(f.tag())) {
                     let map = msg_map.unwrap();
-                    //                  pos = SetGroup(f, msgstr, pos, this, msgMap.GetGroupSpec(f.Tag), sessionDD, appDD, msgFactory);
                     pos = Message::set_group(
                         f.clone(),
                         msgstr,
@@ -481,9 +382,7 @@ impl Message {
             }
         }
 
-        //      if (validate)
         if validate {
-            //          Validate();
             self.validate()?;
         }
         Ok(())
@@ -503,19 +402,13 @@ impl Message {
         let group_dd = group_dd.unwrap();
 
         let mut pos = pos;
-        // int grpEntryDelimiterTag = groupDD.Delim;
         let grp_entry_delimiter_tag = group_dd.delim();
-        // int grpPos = pos;
         let grp_pos = pos;
-        // Group grp = null; // the group entry being constructed
         let mut group: Option<Group> = None;
         let mut size_hint = None;
 
-        // while (pos < msgstr.Length)
         while pos < msgstr.len() {
-            // grpPos = pos;
             let grp_pos = pos;
-            // StringField f = ExtractField(msgstr, ref pos, sessionDataDictionary, appDD);
             let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
             match (session_dd, app_dd) {
                 (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
@@ -524,23 +417,16 @@ impl Message {
                 (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
                 _ => size_hint = None,
             };
-            // if (f.Tag == grpEntryDelimiterTag)
             if f.tag() == grp_entry_delimiter_tag {
-                // This is the start of a group entry.
 
-                // if (grp != null)
                 if group.is_some() {
-                    // // We were already building an entry, so the delimiter means it's done.
-                    // fieldMap.AddGroup(grp, false);
+                    // We were already building an entry, so the delimiter means it's done.
                     map.add_group(f.tag(), group.as_ref().unwrap(), Some(false));
-                    // grp = null; // prepare for new Group
                     group = None;
                 }
 
                 // Create a new group!
-                // if (msgFactory != null)
                 if let Some(factory) = msg_factory.as_ref() {
-                    // grp = msgFactory.Create(Message.ExtractBeginString(msgstr), Message.GetMsgType(msgstr), grpNoFld.Tag);
                     let begin_string = Message::extract_begin_string(msgstr)?;
                     let msg_type = Message::get_msg_type(msgstr)?;
                     group = factory.create_group(
@@ -551,23 +437,17 @@ impl Message {
                 }
 
                 //If above failed (shouldn't ever happen), just use a generic Group.
-                // if (grp == null)
                 if group.is_none() {
-                    // grp = new Group(grpNoFld.Tag, grpEntryDelimiterTag);
                     group = Some(Group::new(grp_no_fld.tag(), grp_entry_delimiter_tag));
                 }
 
-            //} else if (!groupDD.IsField(f.Tag)) {
             } else if !group_dd.is_field(f.tag()) {
                 // This field is not in the group, thus the repeating group is done.
 
-                // if (grp != null)
                 if let Some(group) = group {
-                    // fieldMap.AddGroup(grp, false);
                     map.add_group(f.tag(), &group, Some(false));
                 }
                 return Ok(grp_pos);
-            // else if(groupDD.IsField(f.Tag) && grp != null && grp.IsSetField(f.Tag))
             } else if group_dd.is_field(f.tag())
                 && group.is_some()
                 && group.as_ref().unwrap().is_field_set(f.tag())
@@ -575,7 +455,6 @@ impl Message {
                 // Tag is appearing for the second time within a group element.
                 // Presumably the sender didn't set the delimiter (or their DD has a different delimiter).
 
-                // throw new RepeatedTagWithoutGroupDelimiterTagException(grpNoFld.Tag, f.Tag);
                 return Err(
                     MessageParseError::RepeatedTagWithoutGroupDelimiterTagException(
                         grp_no_fld.tag(),
@@ -584,13 +463,10 @@ impl Message {
                 );
             }
 
-            // if (grp == null)
             if group.is_none() {
                 // This means we got into the group's fields without finding a delimiter tag.
 
                 let b = &msgstr[pos..];
-                println!("{:?}", String::from_utf8_lossy(&b));
-                //throw new GroupDelimiterTagException(grpNoFld.Tag, grpEntryDelimiterTag);
                 return Err(MessageParseError::GroupDelimiterTagException(
                     grp_no_fld.tag(),
                     grp_entry_delimiter_tag,
@@ -599,14 +475,11 @@ impl Message {
             let group: &mut Group = group.as_mut().unwrap();
 
             // f is just a field in our group entry.  Add it and iterate again.
-            // grp.SetField(f);
             group.set_field_base(f.clone(), None);
 
-            // if(groupDD.IsGroup(f.Tag))
             if group_dd.is_group(f.tag()) {
                 // f is a counter for a nested group.  Recurse!
 
-                //pos = SetGroup(f, msgstr, pos, grp, groupDD.GetGroupSpec(f.Tag), sessionDataDictionary, appDD, msgFactory);
                 pos = Message::set_group(
                     f.clone(),
                     msgstr,
@@ -624,25 +497,6 @@ impl Message {
     }
 
     fn validate(&self) -> Result<(), MessageParseError> {
-        // try
-        // {
-        //     int receivedBodyLength = this.Header.GetInt(Tags.BodyLength);
-        //     if (BodyLength() != receivedBodyLength)
-        //         throw new InvalidMessage("Expected BodyLength=" + BodyLength() + ", Received BodyLength=" + receivedBodyLength + ", Message.SeqNum=" + this.Header.GetInt(Tags.MsgSeqNum));
-
-        //     int receivedCheckSum = this.Trailer.GetInt(Tags.CheckSum);
-        //     if (CheckSum() != receivedCheckSum)
-        //         throw new InvalidMessage("Expected CheckSum=" + CheckSum() + ", Received CheckSum=" + receivedCheckSum + ", Message.SeqNum=" + this.Header.GetInt(Tags.MsgSeqNum));
-        // }
-        // catch (FieldNotFoundException e)
-        // {
-        //     throw new InvalidMessage("BodyLength or CheckSum missing", e);
-        // }
-        // catch (FieldConvertError e)
-        // {
-        //     throw new InvalidMessage("BodyLength or Checksum has wrong format", e);
-        // }
-
         let received_body_length = self.header.get_int(tags::BodyLength)?;
         if self.body_length() != received_body_length {
             return Err(MessageParseError::InvalidMessage(format!(
@@ -734,28 +588,6 @@ impl Message {
     }
 
     pub fn get_appl_ver_id(begin_string: &str) -> Result<u32, String> {
-        // switch (beginString)
-        // {
-        //     case FixValues.BeginString.FIX40:
-        //         return new ApplVerID(ApplVerID.FIX40);
-        //     case FixValues.BeginString.FIX41:
-        //         return new ApplVerID(ApplVerID.FIX41);
-        //     case FixValues.BeginString.FIX42:
-        //         return new ApplVerID(ApplVerID.FIX42);
-        //     case FixValues.BeginString.FIX43:
-        //         return new ApplVerID(ApplVerID.FIX43);
-        //     case FixValues.BeginString.FIX44:
-        //         return new ApplVerID(ApplVerID.FIX44);
-        //     case FixValues.BeginString.FIX50:
-        //         return new ApplVerID(ApplVerID.FIX50);
-        //     case FixValues.BeginString.FIX50SP1:
-        //         return new ApplVerID(ApplVerID.FIX50SP1);
-        //     case FixValues.BeginString.FIX50SP2:
-        //         return new ApplVerID(ApplVerID.FIX50SP2);
-        //     default:
-        //         throw new System.ArgumentException(String.Format());
-        // }
-
         match begin_string {
             fix_values::BeginString::FIX40 => Ok(ApplVerID::FIX40),
             fix_values::BeginString::FIX41 => Ok(ApplVerID::FIX41),
@@ -853,7 +685,7 @@ impl Message {
             }
         }
 
-        // // optional routing tags
+        // optional routing tags
         self.header.remove_field(tags::OnBehalfOfCompID);
         self.header.remove_field(tags::OnBehalfOfSubID);
         self.header.remove_field(tags::DeliverToCompID);
@@ -890,7 +722,6 @@ impl Message {
                     .set_tag_value(tags::OnBehalfOfSubID, &deliver_to_sub_id);
             }
         }
-        //todo!("reverse_route: {:?}", header)
     }
 
     pub fn extract_contra_session_id(&self) -> SessionId {
