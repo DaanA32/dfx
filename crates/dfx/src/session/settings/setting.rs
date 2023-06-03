@@ -506,10 +506,6 @@ impl SessionSetting {
 
     pub(crate) fn accepts(&self, session_id: &SessionId) -> bool {
         if self.is_dynamic() {
-            println!(
-                "dynamic accept: {:?} {:?} == {}",
-                self.session_id.sender_comp_id(), self.session_id.target_comp_id(), session_id
-            );
             let sender_comp_ok = match self.session_id.sender_comp_id() {
                 "*" => true,
                 s => s == session_id.sender_comp_id(),
@@ -520,7 +516,6 @@ impl SessionSetting {
             };
             sender_comp_ok && target_comp_ok
         } else {
-            println!("accept: {} == {}", self.session_id(), session_id);
             self.session_id() == session_id
         }
     }

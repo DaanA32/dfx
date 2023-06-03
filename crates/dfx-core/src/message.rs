@@ -202,8 +202,7 @@ impl Message {
         }
         let result = std::str::from_utf8(&msgstr[*pos..tagend]);
         if let Err(e) = result {
-            println!("{:?}", &msgstr[*pos..tagend]);
-            panic!("{}", e);
+            panic!("{:?} in {}", &msgstr[*pos..tagend], e);
         }
         let tag: Result<Tag, _> = result.unwrap().parse();
         if tag.is_err() {

@@ -1,20 +1,5 @@
 use dfx_core::session_id::SessionId;
 
-// #[macro_export]
-// macro_rules! on_event {
-//     ($target:expr, $($arg:tt)+) => ($target.on_event($($arg)+))
-// }
-
-// #[macro_export]
-// macro_rules! on_outgoing {
-//     ($target:expr, $($arg:tt)+) => ($target.on_outgoing($($arg)+))
-// }
-
-// #[macro_export]
-// macro_rules! on_incoming {
-//     ($target:expr, $($arg:tt)+) => ($target.on_incoming($($arg)+))
-// }
-
 pub trait Logger: Send + std::fmt::Debug {
     fn on_incoming(&self, incoming: &str);
     fn on_outgoing(&self, outgoing: &str);

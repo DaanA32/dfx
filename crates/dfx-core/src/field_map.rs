@@ -329,7 +329,6 @@ impl FieldMap {
 
     pub fn group_count(&self, field: Tag) -> Result<usize, FieldMapError> {
         if !self.groups.contains_key(&field) {
-            println!("group_count_err");
             return Err(FieldMapError::FieldNotFound(field));
         }
         Ok(self.groups[&field].len())

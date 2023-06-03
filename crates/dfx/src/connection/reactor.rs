@@ -218,7 +218,6 @@ where App: Application + Clone + 'static,
 
     fn process_stream(&mut self) -> Result<(), ReactorError> {
         while let Some(msg) = self.parser.read_fix_message()? {
-            // println!("{}", msg.iter().map(|b| *b as char).collect::<String>());
             if let Some(session) = self.session.as_mut() {
                 session.next_msg(msg);
             } else {

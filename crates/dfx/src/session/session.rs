@@ -148,7 +148,6 @@ impl Session {
         // REVIEW is this dumb?
         add_data_dictionaries(&mut data_dictionary_provider, &settings);
         let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&settings.session_id().begin_string()).clone();
-        println!("{:?} {} {}", session_data_dictionary.version(), settings.session_id().begin_string(), settings.session_id().is_fixt());
         let application_data_dictionary = if settings.session_id().is_fixt() {
             data_dictionary_provider.get_application_data_dictionary(settings.default_appl_ver_id().unwrap()).clone()
         } else {
@@ -337,18 +336,15 @@ impl Session {
 
         if self.state.timed_out() {
             if self.send_logout_before_timeout_disconnect {
-                println!("Send before timeout disconnect: {}", Utc::now());
                 self.generate_logout(None, None);
             }
             self.disconnect("Timed out waiting for heartbeat")
         } else if self.state.need_test_request() {
-            println!("Need test request: {}", Utc::now());
             self.generate_test_request("TEST");
             self.state
                 .set_test_request_counter(self.state.test_request_counter() + 1);
             self.log.on_event("Sent test request TEST")
         } else if self.state.need_heartbeat() {
-            println!("Need heartbeat: {}", Utc::now());
             self.generate_heartbeat();
         }
     }
@@ -828,7 +824,6 @@ impl Session {
             }
         }
 
-        println!("Start validation");
         let validation_result = if self.session_id.is_fixt() && !Message::is_admin_msg_type(msg_type) {
             DataDictionary::validate(
                 &message,
@@ -855,7 +850,6 @@ impl Session {
                 MessageValidationError::ConversionError(ce) => SessionHandleMessageError::ConversionError(ce),
             });
         }
-        println!("Finish Validation.");
 
         if MsgType::LOGON == msg_type {
             self.next_logon(message)
@@ -1120,9 +1114,7 @@ impl Session {
                 }
             }
             let msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
-            println!("4.");
             if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num) {
-                println!("4.1");
                 self.state.incr_next_target_msg_seq_num();
             }
             Ok(())
@@ -1297,7 +1289,6 @@ impl Session {
         let timespan = Utc::now() - sending_time;
 
         // TODO change to <=
-        println!("{} < {}", timespan.num_seconds().abs(), self.max_latency);
         timespan.num_seconds().abs() < self.max_latency as i64
     }
 

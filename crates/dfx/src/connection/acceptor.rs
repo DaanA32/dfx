@@ -166,6 +166,7 @@ where App: Application + Sync + Clone + 'static,
             .name("socket-acceptor-thread".into())
             .spawn(move || match self.event_loop(rt, ref_endpoint) {
                 Ok(()) => {}
+                // TODO log error to main logger
                 Err(e) => println!("{e}"),
             })
             .expect("socket-acceptor-thread started");
@@ -188,6 +189,7 @@ where App: Application + Sync + Clone + 'static,
         while running.load(std::sync::atomic::Ordering::Relaxed) {
             match listener.accept() {
                 Ok((stream, _addr)) => {
+                    // TODO replace with connected event.
                     println!("Connected: {_addr}");
                     let session_setting = &self.session_settings[0];
                     let stream = StreamFactory::configure_stream(

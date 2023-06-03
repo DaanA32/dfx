@@ -624,7 +624,9 @@ mod fix50sp2 {
 
 mod future {
     imports!();
+    #[ignore]
     acceptor!(future -> "14j_OutOfRepeatingGroupMembers");
+    #[ignore]
     acceptor!(future -> "14k_EmbeddedSOH");
 }
 

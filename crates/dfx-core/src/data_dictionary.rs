@@ -261,7 +261,6 @@ impl DataDictionary {
     }
     fn check_valid_format(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
         // TODO check format based on type received.
-       // println!("check_valid_format");
         if let Some(field_definition) = self.fields_by_tag.get(&field.tag()) {
             let field_type = FieldType::get(field_definition.field_type().as_str());
             if matches!(field_type, Ok(ftype) if ftype == fields::types::FieldType::String) {
