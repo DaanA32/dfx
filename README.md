@@ -19,12 +19,12 @@ A FIX protocol engine.
     - [x] FIX50SP1
     - [x] FIX50SP2
   - [ ] FUTURE
+    > IGNORED!
     > Currently not supported by Quickfix or Quickfix/N
   - [x] MISC
 
 ## TODO
 
-- [ ] Remove useless comments
 - [ ] FileStore for messages
 - [ ] FileLogger
   - [ ] log4rs Logger
