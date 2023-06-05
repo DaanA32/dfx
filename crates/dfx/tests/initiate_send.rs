@@ -16,9 +16,9 @@ pub fn test_send() {
     let app = SendTestApplication::new();
     let session_settings = SessionSettings::from_file("tests/initiator.cfg").unwrap();
     let mut initiator = SocketInitiator::new(
-        session_settings,
+        session_settings.clone(),
         app,
-        DefaultStoreFactory::new(),
+        DefaultStoreFactory::new(&session_settings),
         DefaultDataDictionaryProvider::new(),
         PrintlnLogFactory::new(),
         DefaultMessageFactory::new(),

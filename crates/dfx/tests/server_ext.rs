@@ -10,7 +10,7 @@ use walkdir::DirEntry;
 
 use dfx::{
     connection::SocketAcceptor,
-    session::{Session, SessionSettings}, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message::DefaultMessageFactory,
+    session::{Session, SessionSettings}, message_store::{DefaultStoreFactory, MemoryStoreFactory}, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message::DefaultMessageFactory,
 };
 
 mod common;
@@ -59,7 +59,7 @@ pub fn test_accept() {
         let mut acceptor = SocketAcceptor::new(
             &session_settings,
             app,
-            DefaultStoreFactory::new(),
+            MemoryStoreFactory::new(),
             DefaultDataDictionaryProvider::new(),
             PrintlnLogFactory::new(),
             DefaultMessageFactory::new(),

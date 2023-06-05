@@ -16,9 +16,9 @@ pub fn test_logout_timeout() {
     let app = TestApplication::new();
     let session_settings = SessionSettings::from_file("tests/logon.cfg").unwrap();
     let mut initiator = SocketInitiator::new(
-        session_settings,
+        session_settings.clone(),
         app,
-        DefaultStoreFactory::new(),
+        DefaultStoreFactory::new(&session_settings),
         DefaultDataDictionaryProvider::new(),
         PrintlnLogFactory::new(),
         DefaultMessageFactory::new(),

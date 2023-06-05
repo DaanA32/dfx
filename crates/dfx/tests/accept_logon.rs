@@ -21,7 +21,7 @@ pub fn test_accept() {
     let mut acceptor = SocketAcceptor::new(
         &session_settings,
         app,
-        FileStoreFactory::new(&session_settings),
+        DefaultStoreFactory::new(&session_settings),
         DefaultDataDictionaryProvider::new(),
         FileLogFactory::new(&session_settings),
         DefaultMessageFactory::new(),

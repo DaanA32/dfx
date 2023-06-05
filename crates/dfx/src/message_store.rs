@@ -22,16 +22,16 @@ pub trait MessageStore: Send + std::fmt::Debug {
 }
 
 #[derive(Debug)]
-pub(crate) struct MemoryMessageStore {
+pub(crate) struct MemoryStore {
     messages: BTreeMap<u32, String>,
     next_sender_msg_seq_num: u32,
     next_target_msg_seq_num: u32,
     creation_time: Option<DateTime<Utc>>,
 }
 
-impl MemoryMessageStore {
+impl MemoryStore {
     pub fn new() -> Self {
-        MemoryMessageStore {
+        MemoryStore {
             messages: BTreeMap::new(),
             next_sender_msg_seq_num: 1,
             next_target_msg_seq_num: 1,
@@ -40,7 +40,7 @@ impl MemoryMessageStore {
     }
 }
 
-impl MessageStore for MemoryMessageStore {
+impl MessageStore for MemoryStore {
     fn reset(&mut self) {
         self.messages.clear();
         self.next_sender_msg_seq_num = 1;
@@ -96,20 +96,20 @@ pub trait MessageStoreFactory {
 }
 
 #[derive(Clone, Debug)]
-pub struct DefaultStoreFactory;
+pub struct MemoryStoreFactory;
 
-impl DefaultStoreFactory {
+impl MemoryStoreFactory {
     pub fn new() -> Self {
-        DefaultStoreFactory
+        MemoryStoreFactory
     }
     pub fn boxed() -> Box<dyn MessageStoreFactory> {
-        Box::new(DefaultStoreFactory)
+        Box::new(MemoryStoreFactory)
     }
 }
 
-impl MessageStoreFactory for DefaultStoreFactory {
+impl MessageStoreFactory for MemoryStoreFactory {
     fn create(&self, _session_id: &SessionId) -> Box<dyn MessageStore> {
-        Box::new(MemoryMessageStore::new())
+        Box::new(MemoryStore::new())
     }
 }
 use std::collections::HashMap;
@@ -130,7 +130,7 @@ pub struct FileStore {
     msg_file: Option<File>,
     header_file: Option<File>,
 
-    cache: MemoryMessageStore,
+    cache: MemoryStore,
     offsets: HashMap<u32, MsgDef>,
 }
 
@@ -160,7 +160,7 @@ impl FileStore {
             seq_nums_file: None,
             msg_file: None,
             header_file: None,
-            cache: MemoryMessageStore::new(),
+            cache: MemoryStore::new(),
             offsets: HashMap::new(),
         };
 
@@ -405,5 +405,34 @@ impl MessageStoreFactory for FileStoreFactory {
         };
         let store = FileStore::new(session_id, &path);
         Box::new(store.unwrap())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DefaultStoreFactory {
+    settings: SessionSettings,
+}
+
+impl DefaultStoreFactory {
+    pub fn new(settings: &SessionSettings) -> Self {
+        DefaultStoreFactory {
+            settings: settings.clone()
+        }
+    }
+    pub fn boxed(settings: &SessionSettings) -> Box<dyn MessageStoreFactory> {
+        Box::new(DefaultStoreFactory::new(settings))
+    }
+}
+
+impl MessageStoreFactory for DefaultStoreFactory {
+    fn create(&self, session_id: &SessionId) -> Box<dyn MessageStore> {
+        let path = self.settings.for_session_id(session_id)
+            .unwrap().persistence();
+        match path {
+            crate::session::Persistence::FileStore { path } => Box::new(FileStore::new(session_id, path).unwrap()),
+            crate::session::Persistence::Memory => Box::new(MemoryStore::new()),
+            // REVIEW what should the default be?
+            crate::session::Persistence::None => Box::new(MemoryStore::new()),
+        }
     }
 }

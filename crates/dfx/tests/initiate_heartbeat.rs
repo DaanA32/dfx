@@ -16,9 +16,9 @@ pub fn test_client_heartbeat() {
     let app = TestApplication::new();
     let session_settings = SessionSettings::from_file("tests/initiator.cfg").unwrap();
     let mut initiator = SocketInitiator::new(
-        session_settings,
+        session_settings.clone(),
         app,
-        DefaultStoreFactory::new(),
+        DefaultStoreFactory::new(&session_settings),
         DefaultDataDictionaryProvider::new(),
         PrintlnLogFactory::new(),
         DefaultMessageFactory::new(),

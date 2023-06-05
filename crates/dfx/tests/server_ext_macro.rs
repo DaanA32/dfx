@@ -53,7 +53,7 @@ macro_rules! imports {
         use dfx::{
             connection::SocketAcceptor,
             session::{Session, SessionSettings},
-            message_store::DefaultStoreFactory,
+            message_store::MemoryStoreFactory,
             data_dictionary_provider::DefaultDataDictionaryProvider,
             logging::PrintlnLogFactory,
             message::DefaultMessageFactory,
@@ -74,7 +74,8 @@ macro_rules! acceptor {
                     let mut acceptor = SocketAcceptor::new(
                         &session_settings,
                         app,
-                        DefaultStoreFactory::new(),
+                        MemoryStoreFactory::new(),
+                        // DefaultStoreFactory::new(&session_settings),
                         DefaultDataDictionaryProvider::new(),
                         PrintlnLogFactory::new(),
                         DefaultMessageFactory::new(),
