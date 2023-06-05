@@ -1,4 +1,8 @@
+use std::{fs::{OpenOptions, File}, io::Write, writeln};
+
 use dfx_core::session_id::SessionId;
+
+use crate::session::{SessionSettings, LoggingOptions};
 
 pub trait Logger: Send + std::fmt::Debug {
     fn on_incoming(&self, incoming: &str);
@@ -63,5 +67,71 @@ impl PrintlnLogFactory {
 impl LogFactory for PrintlnLogFactory {
     fn create(&self, session_id: &SessionId) -> Box<dyn Logger> {
         PrintLnLogger::new(session_id)
+    }
+}
+
+#[derive(Debug)]
+pub struct FileLogger {
+    messages_file: File,
+    event_file: File,
+}
+
+impl FileLogger {
+    pub fn new(session_id: &SessionId, options: &LoggingOptions) -> std::io::Result<Self> {
+        let log_path = options.file_log_path().map(|f| f.as_str()).unwrap_or_else(|| ".");
+        let prefix = session_id.prefix();
+        let messages_file_name = format!("{log_path}/{prefix}.messages");
+        let event_file_name = format!("{log_path}/{prefix}.event");
+        let messages_file = OpenOptions::new().read(true).write(true).create(true).open(messages_file_name)?;
+        let event_file = OpenOptions::new().read(true).write(true).create(true).open(event_file_name)?;
+        Ok(FileLogger {
+            messages_file,
+            event_file
+        })
+    }
+}
+
+impl Logger for FileLogger {
+    fn on_incoming(&self, incoming: &str) {
+        let mut file = &self.messages_file;
+        file.write_all(incoming.as_bytes()).unwrap();
+        writeln!(file).unwrap();
+    }
+
+    fn on_outgoing(&self, outgoing: &str) {
+        let mut file = &self.messages_file;
+        file.write_all(outgoing.as_bytes()).unwrap();
+        writeln!(file).unwrap();
+    }
+
+    fn on_event(&self, event: &str) {
+        let mut file = &self.event_file;
+        file.write_all(event.as_bytes()).unwrap();
+        writeln!(file).unwrap();
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FileLogFactory {
+    settings: SessionSettings
+}
+impl FileLogFactory {
+    pub fn new(settings: &SessionSettings) -> Self {
+        FileLogFactory {
+            settings: settings.clone()
+        }
+    }
+    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory> {
+        Box::new(FileLogFactory::new(settings))
+    }
+}
+
+impl LogFactory for FileLogFactory {
+    fn create(&self, session_id: &SessionId) -> Box<dyn Logger> {
+        let path = self.settings.for_session_id(session_id)
+            .unwrap().logging();
+        let logger = FileLogger::new(session_id, path);
+        Box::new(logger.unwrap())
+
     }
 }

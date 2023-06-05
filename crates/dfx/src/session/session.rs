@@ -138,6 +138,7 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
 
 impl Session {
     pub(crate) fn from_settings(
+        session_id: SessionId,
         app: Box<dyn Application>,
         store_factory: Box<dyn MessageStoreFactory>,
         mut data_dictionary_provider: Box<dyn DataDictionaryProvider>,
@@ -156,14 +157,14 @@ impl Session {
 
         let log = log_factory
             .as_ref()
-            .map(|l| l.create(settings.session_id()))
+            .map(|l| l.create(&session_id))
             .unwrap_or_else(|| Box::new(NoLogger));
-        let msg_store = store_factory.create(settings.session_id());
+        let msg_store = store_factory.create(&session_id);
         let mut state = SessionState::new(settings.connection().is_initiator(), log, settings.connection().heart_bt_int().unwrap_or(30), msg_store);
         state.set_logon_timeout(settings.connection().logon_timeout());
         state.set_logout_timeout(settings.connection().logout_timeout());
         let log = log_factory
-            .map(|l| l.create(settings.session_id()))
+            .map(|l| l.create(&session_id))
             .unwrap_or_else(|| Box::new(NoLogger)); //TODO clone?
 
         if !is_session_time(&settings.schedule().clone()) {
@@ -190,7 +191,7 @@ impl Session {
 
         Session {
             application,
-            session_id: settings.session_id().clone(),
+            session_id,
             _data_dictionary_provider: data_dictionary_provider,
             schedule: settings.schedule().clone(),
             msg_factory,

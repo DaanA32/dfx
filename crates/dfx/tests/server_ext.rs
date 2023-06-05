@@ -57,7 +57,7 @@ pub fn test_accept() {
         let app = TestApplication::new();
         let session_settings = SessionSettings::from_file(cfg).unwrap();
         let mut acceptor = SocketAcceptor::new(
-            session_settings,
+            &session_settings,
             app,
             DefaultStoreFactory::new(),
             DefaultDataDictionaryProvider::new(),

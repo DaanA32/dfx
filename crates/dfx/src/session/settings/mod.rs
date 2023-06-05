@@ -8,7 +8,6 @@ use builder::*;
 mod setting;
 pub(crate) use setting::*;
 
-#[cfg(test)]
 use dfx_core::session_id::SessionId;
 
 #[derive(Debug)]
@@ -368,7 +367,6 @@ impl SessionSettings {
     //     &self.default
     // }
 
-    #[cfg(test)]
     pub(crate) fn for_session_id(&self, session_id: &SessionId) -> Option<&SessionSetting> {
         let best_match = self
             .sessions

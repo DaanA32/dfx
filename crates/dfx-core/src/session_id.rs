@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 //TODO partial match on sender + target comp?
-#[derive(Debug, Clone, Default, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub struct SessionId {
     pub(crate) id: String,
     pub(crate) begin_string: String,
@@ -105,6 +105,23 @@ impl SessionId {
 
     pub fn is_fixt(&self) -> bool {
         self.is_fixt
+    }
+
+
+    pub fn prefix(&self) -> String {
+        format!("{}-{}{}{}{}{}-{}{}{}{}{}",
+            self.begin_string(),
+            self.sender_comp_id(),
+            if self.sender_sub_id().is_empty() { "" } else { "-" },
+            self.sender_sub_id(),
+            if self.sender_location_id().is_empty() { "" } else { "-" },
+            self.sender_location_id(),
+            self.target_comp_id(),
+            if self.target_sub_id().is_empty() { "" } else { "-" },
+            self.target_sub_id(),
+            if self.target_location_id().is_empty() { "" } else { "-" },
+            self.target_location_id(),
+        )
     }
 }
 

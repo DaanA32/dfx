@@ -23,11 +23,15 @@ A FIX protocol engine.
     > Currently not supported by Quickfix or Quickfix/N
   - [x] MISC
 
+## WIP
+
+- [x] FileStore for messages
+- [x] FileLogger
+  - [x] Similar to quickfix
+  - [ ] log4rs Logger
+
 ## TODO
 
-- [ ] FileStore for messages
-- [ ] FileLogger
-  - [ ] log4rs Logger
 - [ ] Add inline and doc comments
 - [ ] Add message factory from data dictionary.
 - [ ] Codegen static data dictionary from xml.

@@ -94,10 +94,17 @@ where App: Application + Clone + 'static,
             log_factory,
             message_factory,
         };
-        if reactor.settings.len() == 1 && reactor.settings[0].connection().is_initiator() {
-            reactor.session = Some(reactor.create_session(&reactor.settings[0]));
-        }
-        if reactor.settings.len() >= 1 && reactor.settings[0].connection().is_acceptor() {
+        if reactor.settings.len() == 1 {
+            let session_setting = &reactor.settings[0];
+            if session_setting.connection().is_initiator() {
+                eprintln!("Is initiator");
+                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
+            }
+            if session_setting.connection().is_acceptor()
+            && !session_setting.is_dynamic(){
+                eprintln!("Is acceptor");
+                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
+            }
         }
         reactor.create_responder();
         reactor
@@ -223,12 +230,12 @@ where App: Application + Clone + 'static,
             } else {
                 let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
                 let session_id = message.extract_contra_session_id();
+                eprintln!("Extracted session id {session_id}");
                 let session_settings = self.for_session_id(&session_id);
                 match session_settings {
                     Some(settings) => {
                         if settings.accepts(&session_id) {
-                            let mut session = self.create_session(settings);
-                            session.set_session_id(session_id.clone());
+                            let session = self.create_session(session_id.clone(), settings);
                             self.session = Some(session);
                             self.create_responder();
                             // queue instead?
@@ -247,8 +254,9 @@ where App: Application + Clone + 'static,
         Ok(())
     }
 
-    fn create_session(&self, settings: &SessionSetting) -> Session {
+    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> Session {
         Session::from_settings(
+            session_id,
             Box::new(self.app.clone()),
             Box::new(self.store_factory.clone()),
             Box::new(self.data_dictionary_provider.clone()),

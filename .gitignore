@@ -1,3 +1,4 @@
 /target
 Cargo.lock
 runtime.log
+crates/dfx/logs

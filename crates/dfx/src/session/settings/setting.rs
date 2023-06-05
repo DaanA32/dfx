@@ -143,7 +143,7 @@ impl SocketOptions {
 pub(crate) struct SslOptions {}
 
 #[derive(Builder, Clone, Debug, PartialEq, Eq)]
-pub(crate) struct LoggingOptions {
+pub struct LoggingOptions {
     file_log_path: Option<String>,
     debug_file_log_path: Option<String>,
 }

@@ -52,7 +52,11 @@ macro_rules! imports {
 
         use dfx::{
             connection::SocketAcceptor,
-            session::{Session, SessionSettings}, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message::DefaultMessageFactory,
+            session::{Session, SessionSettings},
+            message_store::DefaultStoreFactory,
+            data_dictionary_provider::DefaultDataDictionaryProvider,
+            logging::PrintlnLogFactory,
+            message::DefaultMessageFactory,
         };
         use super::*;
     };
@@ -68,7 +72,7 @@ macro_rules! acceptor {
                     let cfg = cfg_from_version(stringify!($cfg));
                     let session_settings = SessionSettings::from_string(cfg).unwrap();
                     let mut acceptor = SocketAcceptor::new(
-                        session_settings,
+                        &session_settings,
                         app,
                         DefaultStoreFactory::new(),
                         DefaultDataDictionaryProvider::new(),

@@ -67,14 +67,14 @@ where App: Application + Sync + Clone + 'static,
       LF: LogFactory + Send + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
 {
-    pub fn new(session_settings: SessionSettings, app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF) -> Self {
+    pub fn new(session_settings: &SessionSettings, app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF) -> Self {
         SocketAcceptor {
             app,
             store_factory,
             data_dictionary_provider,
             log_factory,
             message_factory,
-            session_settings,
+            session_settings: session_settings.clone(),
             thread: Vec::new(),
             running: Arc::new(AtomicBool::new(false)),
         }

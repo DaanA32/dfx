@@ -7,7 +7,7 @@ use std::{
 
 use dfx::{
     connection::SocketAcceptor,
-    session::{Session, SessionSettings}, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message::DefaultMessageFactory,
+    session::{Session, SessionSettings}, message_store::{DefaultStoreFactory, FileStoreFactory}, data_dictionary_provider::DefaultDataDictionaryProvider, logging::{PrintlnLogFactory, FileLogFactory}, message::DefaultMessageFactory,
 };
 
 mod common;
@@ -19,11 +19,11 @@ pub fn test_accept() {
     let app = TestApplication::new();
     let session_settings = SessionSettings::from_file("tests/acceptor.cfg").unwrap();
     let mut acceptor = SocketAcceptor::new(
-        session_settings,
+        &session_settings,
         app,
-        DefaultStoreFactory::new(),
+        FileStoreFactory::new(&session_settings),
         DefaultDataDictionaryProvider::new(),
-        PrintlnLogFactory::new(),
+        FileLogFactory::new(&session_settings),
         DefaultMessageFactory::new(),
     );
 
