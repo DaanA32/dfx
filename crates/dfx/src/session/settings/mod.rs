@@ -295,6 +295,7 @@ impl SessionSettings {
         for line in string.lines() {
             n += 1;
             //Comment
+            println!("Read Line: {}", line.trim());
             if line.trim().starts_with('#') {
                 continue;
             }

@@ -135,3 +135,64 @@ impl LogFactory for FileLogFactory {
 
     }
 }
+#[derive(Debug)]
+#[cfg(feature = "log")]
+pub struct MacroLogger {
+    session_id: SessionId,
+}
+
+#[cfg(feature = "log")]
+impl MacroLogger {
+    pub fn new(session_id: &SessionId, _options: &LoggingOptions) -> Self {
+        MacroLogger {
+            session_id: session_id.clone()
+        }
+    }
+}
+#[cfg(feature = "log")]
+use log::info;
+#[cfg(feature = "log")]
+impl Logger for MacroLogger {
+    fn on_incoming(&self, incoming: &str) {
+        let target = format!("{}.in", self.session_id.prefix());
+        info!(target: &target, "{}", incoming);
+    }
+
+    fn on_outgoing(&self, outgoing: &str) {
+        let target = format!("{}.out", self.session_id.prefix());
+        info!(target: &target, "{}", outgoing);
+    }
+
+    fn on_event(&self, event: &str) {
+        let target = format!("{}.event", self.session_id.prefix());
+        info!(target: &target, "{}", event);
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg(feature = "log")]
+pub struct MacroLogFactory {
+    settings: SessionSettings
+}
+#[cfg(feature = "log")]
+impl MacroLogFactory {
+    pub fn new(settings: &SessionSettings) -> Self {
+        MacroLogFactory {
+            settings: settings.clone()
+        }
+    }
+    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory> {
+        Box::new(MacroLogFactory::new(settings))
+    }
+}
+
+#[cfg(feature = "log")]
+impl LogFactory for MacroLogFactory {
+    fn create(&self, session_id: &SessionId) -> Box<dyn Logger> {
+        let path = self.settings.for_session_id(session_id)
+            .unwrap().logging();
+        let logger = MacroLogger::new(session_id, path);
+        Box::new(logger)
+
+    }
+}

@@ -49,6 +49,10 @@ impl From<ConnectionError> for AcceptorError {
     }
 }
 
+/// # Multi-Threaded Socket Acceptor
+/// Creates one thread per port to listen to incoming connections, which then creates a new thread per connection.
+/// ## Example
+#[doc = include_str!("../../docs/acceptor.md")]
 pub struct SocketAcceptor<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
     app: App,
     store_factory: StoreFactory,
@@ -80,6 +84,7 @@ where App: Application + Sync + Clone + 'static,
         }
     }
 
+    /// Starts the engine, creates one thread per socket address.
     pub fn start(&mut self) -> &mut Self {
         self.running
             .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -102,10 +107,12 @@ where App: Application + Sync + Clone + 'static,
         self
     }
 
+    /// Wait for all threads to finish.
     pub fn join(&mut self) {
         while self.thread.iter().any(|t| !t.thread().is_finished()) {}
     }
 
+    /// List available endpoints, useful for random port allocation.
     pub fn endpoints(&self) -> Vec<SocketAddr>{
         self.thread
             .iter()
@@ -113,6 +120,7 @@ where App: Application + Sync + Clone + 'static,
             .collect()
     }
 
+    /// Stops the engine, and waits for the threads to finish
     pub fn stop(&mut self) {
         self.running
             .store(false, std::sync::atomic::Ordering::Relaxed);

@@ -4,7 +4,7 @@ use dfx_core::tags;
 
 use std::ops::Deref;
 
-pub struct MsgType(Field);
+pub(crate) struct MsgType(Field);
 impl MsgType {
     pub const TAG: Tag = tags::MsgType;
 
@@ -26,7 +26,7 @@ impl MsgType {
 }
 
 #[derive(Debug, Clone)]
-pub struct EncryptMethod(Field);
+pub(crate) struct EncryptMethod(Field);
 impl EncryptMethod {
     pub const TAG: Tag = tags::EncryptMethod;
     pub fn new(val: u32) -> Self {
@@ -48,7 +48,7 @@ impl Deref for EncryptMethod {
 }
 
 #[derive(Debug, Clone)]
-pub struct HeartBtInt(Field);
+pub(crate) struct HeartBtInt(Field);
 impl HeartBtInt {
     pub const TAG: Tag = tags::HeartBtInt;
     pub fn new(val: u32) -> Self {
@@ -70,7 +70,7 @@ impl Deref for HeartBtInt {
 }
 
 #[derive(Debug, Clone)]
-pub struct DefaultApplVerID(Field);
+pub(crate) struct DefaultApplVerID(Field);
 impl DefaultApplVerID {
     pub const TAG: Tag = tags::DefaultApplVerID;
     pub fn new(val: String) -> Self {
@@ -85,7 +85,7 @@ impl Deref for DefaultApplVerID {
 }
 
 #[derive(Debug, Clone)]
-pub struct ResetSeqNumFlag(Field);
+pub(crate) struct ResetSeqNumFlag(Field);
 impl ResetSeqNumFlag {
     pub const TAG: Tag = tags::ResetSeqNumFlag;
     pub fn new(val: bool) -> Self {

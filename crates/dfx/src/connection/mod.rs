@@ -1,3 +1,4 @@
+//! Connection helpers
 mod initiator;
 use std::{
     fmt::Display,

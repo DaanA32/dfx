@@ -436,3 +436,78 @@ impl MessageStoreFactory for DefaultStoreFactory {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{path::Path, assert_eq, fs::File};
+
+    use dfx_core::session_id::SessionId;
+
+    use crate::message_store::MessageStore;
+
+    use super::FileStore;
+
+    #[test]
+    fn file_store_rw_test() {
+        let session_id = SessionId::new("FIX4.4", "TEST", "", "", "STORE", "", "");
+        let path = Path::new("/tmp").to_path_buf();
+        {
+            let store = FileStore::new(&session_id, &path);
+            assert!(store.is_ok());
+            let mut store: Box<dyn MessageStore> = Box::new(store.unwrap());
+            store.reset();
+            store.set_next_sender_msg_seq_num(4);
+            store.set_next_target_msg_seq_num(5);
+        }
+        {
+            let store = FileStore::new(&session_id, &path);
+            assert!(store.is_ok());
+            let store: Box<dyn MessageStore> = Box::new(store.unwrap());
+            let sender_seq_num = store.next_sender_msg_seq_num();
+            let target_seq_num = store.next_target_msg_seq_num();
+            assert_eq!(sender_seq_num, 4);
+            assert_eq!(target_seq_num, 5);
+        }
+    }
+
+    #[test]
+    fn file_store_time_test() {
+        let session_id = SessionId::new("FIX4.4", "TEST", "", "", "TIME", "", "");
+        let path = Path::new("/tmp").to_path_buf();
+        let time = {
+            let store = FileStore::new(&session_id, &path);
+            assert!(store.is_ok());
+            let mut store: Box<dyn MessageStore> = Box::new(store.unwrap());
+            store.reset();
+            store.creation_time()
+        };
+        {
+            let store = FileStore::new(&session_id, &path);
+            assert!(store.is_ok());
+            let store: Box<dyn MessageStore> = Box::new(store.unwrap());
+            assert_eq!(store.creation_time(), time);
+        }
+    }
+
+    #[test]
+    fn file_store_messages_test() {
+        let session_id = SessionId::new("FIX4.4", "TEST", "", "", "MESSAGE", "", "");
+        let path = Path::new("/tmp").to_path_buf();
+        {
+            let store = FileStore::new(&session_id, &path);
+            assert!(store.is_ok());
+            let mut store: Box<dyn MessageStore> = Box::new(store.unwrap());
+            store.set(2, "ONE");
+            store.set(3, "TWO");
+        }
+        {
+            let store = FileStore::new(&session_id, &path);
+            assert!(store.is_ok());
+            let store: Box<dyn MessageStore> = Box::new(store.unwrap());
+            let messages = store.get(2, 3);
+            assert_eq!(messages.len(), 2);
+            assert_eq!(messages[0], "ONE");
+            assert_eq!(messages[1], "TWO");
+        }
+    }
+}

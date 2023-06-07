@@ -1,53 +1,3 @@
-# DFX
-
-A FIX protocol engine.
-
-## Goals
-
-- [x] Runtime Message verification
-- [x] Read config from file
-- [x] Pass the test suite available
-  - [x] FIX40
-  - [x] FIX41
-  - [x] FIX42
-  - [x] FIX43
-  - [x] FIX44
-    - [ ] FIX: fix44::test_resend_repeating_group
-      > Requires ordered fields to fix (so technically working, but can discuss)
-  - [x] FIXT11
-    - [x] FIX50
-    - [x] FIX50SP1
-    - [x] FIX50SP2
-  - [ ] FUTURE
-    > IGNORED!
-    > Currently not supported by Quickfix or Quickfix/N
-  - [x] MISC
-
-## WIP
-
-- [x] FileStore for messages
-- [x] FileLogger
-  - [x] Similar to quickfix
-  - [x] [`log`](https://docs.rs/log/latest/log/) Logger
-
-## TODO
-
-- [ ] Add inline and doc comments
-- [ ] Add message factory from data dictionary.
-- [ ] Codegen static data dictionary from xml.
-- [ ] Replace with Traits where possible
-- [ ] Allow compile time message definitions
-- [ ] MessageCracker
-- [ ] Cleanup session.rs
-  - [ ] Simplify message handling
-  - [ ] Simplify next / next_msg()
-- [ ] Generate report from test suite (For easier tracking)
-- [ ] SSL / TLS
-
-## Credits
-Heavily derived / inspired from [QuickfixN](https://github.com/connamara/quickfixn/)
-
-## Examples
 ```rust
 use dfx::{
     connection::SocketAcceptor,
@@ -121,10 +71,31 @@ impl dfx::session::Application for Application {
     }
 }
 
+let config = r#"
+[DEFAULT]
+FileLogPath=log
+ConnectionType=acceptor
+SocketAcceptPort=0
+NonStopSession=Y
+SenderCompID=ISLD
+TargetCompID=TW
+ResetOnLogon=Y
+FileStorePath=store
+UseDataDictionary=Y
+HeartBtInt=10
+LogonTimeout=1
+LogoutTimeout=1
+MaxLatency=2
+
+[SESSION]
+BeginString=FIX.4.0
+DataDictionary=../../spec/FIX40.xml
+"#;
+
 let app = Application::default();
-// TODO Use the following to read it from file:
+// Use the following to read it from file:
 // let session_settings = SessionSettings::from_file("fix.cfg").unwrap();
-let session_settings = SessionSettings::default();
+let session_settings = SessionSettings::from_string(config).unwrap();
 let mut acceptor = SocketAcceptor::new(
     &session_settings,
     app,

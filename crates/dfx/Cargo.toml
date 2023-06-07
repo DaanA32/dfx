@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = [ "log" ]
+log = [ "dep:log" ]
 
 [dependencies]
 dfx-core = { version = "0.1.0", path = "../dfx-core" }
@@ -17,12 +20,14 @@ chrono-tz = "0.8.0"
 chashmap = "2.2.2"
 derive_builder = "0.11.2"
 openssl = "0.10.42"
+log = { version = "0.4.18", optional = true }
 
 [dev-dependencies]
 walkdir = "2.3.2"
 rusty-fork = "0.3.0"
 paste = "1.0"
 dfx-testing = { path = "../dfx-testing" }
+env_logger = "0.10.0"
 
 [build-dependencies]
 indoc = "1"

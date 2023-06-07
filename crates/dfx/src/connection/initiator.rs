@@ -13,6 +13,10 @@ use crate::{
 
 use super::{ConnectionError, SocketReactor};
 
+/// # Multi-Threaded Socket Initiator
+/// Creates one thread per session
+/// ## Usage
+/// See index.
 pub struct SocketInitiator<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
     app: App,
     store_factory: StoreFactory,
