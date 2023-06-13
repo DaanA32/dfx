@@ -167,12 +167,11 @@ where App: Application + Clone + 'static,
             .session_id()
             .clone();
         self.set_disconnected(session_id);
-        let remote = self.stream.as_ref().unwrap().peer_addr().unwrap();
+        let remote = self.stream.as_ref().unwrap().peer_addr()?;
         self.stream
             .as_mut()
             .unwrap()
-            .shutdown(std::net::Shutdown::Both)
-            .unwrap();
+            .shutdown(std::net::Shutdown::Both)?;
         println!("Disconnected: {remote}");
         Ok(())
     }

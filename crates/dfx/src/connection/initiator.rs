@@ -1,6 +1,6 @@
 use std::{
     sync::{atomic::AtomicBool, Arc},
-    thread::{self, JoinHandle},
+    thread::{self, JoinHandle}, eprintln,
 };
 
 use dfx_core::data_dictionary_provider::DataDictionaryProvider;
@@ -124,7 +124,7 @@ where App: Application + Clone + 'static,
             .spawn(move || {
                 if let Err(e) = self.event_loop() {
                     match e {
-                        e => todo!("SocketInitiator::start: Error {:?}", e),
+                        e => println!("SocketInitiator Connect error to {:?}: {:?}", self.session_settings.socket_settings(), e),
                     }
                 }
             })

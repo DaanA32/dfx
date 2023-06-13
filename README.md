@@ -29,10 +29,13 @@ A FIX protocol engine.
 - [x] FileLogger
   - [x] Similar to quickfix
   - [x] [`log`](https://docs.rs/log/latest/log/) Logger
+- [ ] Add inline and doc comments
+ - [ ] Doc External
+ - [ ] Doc Internal
+ - [ ] Inline
 
 ## TODO
 
-- [ ] Add inline and doc comments
 - [ ] Add message factory from data dictionary.
 - [ ] Codegen static data dictionary from xml.
 - [ ] Replace with Traits where possible
