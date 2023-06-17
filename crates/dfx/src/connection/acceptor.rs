@@ -10,7 +10,7 @@ use dfx_core::message_factory::MessageFactory;
 use crate::{
     session::{Application, SessionSetting, SessionSettings},
     message_store::MessageStoreFactory,
-    logging::LogFactory,
+    logging::LogFactory, connection::Stream,
 };
 
 use super::{ConnectionError, SocketReactor, StreamFactory};
@@ -203,7 +203,9 @@ where App: Application + Sync + Clone + 'static,
                     let stream = StreamFactory::configure_stream(
                         stream,
                         &session_setting.socket_settings(),
+                        true,
                     )?;
+                    let stream = stream;
                     let session_settings = self.session_settings.clone();
                     let app = self.app.clone();
                     let store_factory = self.store_factory.clone();

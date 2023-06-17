@@ -537,7 +537,7 @@ impl Message {
         let len = self.body_length().to_string();
         self.header
             .set_field_base(FieldBase::new(tags::BodyLength, len), Some(true));
-        let checksum = self.checksum().to_string();
+        let checksum = format!("{:03}", self.checksum());
         self.trailer
             .set_field_base(FieldBase::new(tags::CheckSum, checksum), Some(true));
         format!(

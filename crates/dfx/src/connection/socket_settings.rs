@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use crate::session::SocketOptions;
+use crate::session::{SocketOptions, SslOptions};
 
 use super::ConnectionError;
 
@@ -12,11 +12,12 @@ pub(crate) struct SocketSettings {
     // receive_buffer_size: usize,
     send_timeout: u64,
     receive_timeout: u64,
+    ssl_options: Option<SslOptions>,
 }
 
 impl SocketSettings {
     /// Creates a new [`SocketSettings`].
-    pub(crate) fn new(socket_addr: SocketAddr, socket_options: SocketOptions) -> Self {
+    pub(crate) fn new(socket_addr: SocketAddr, socket_options: SocketOptions, ssl_options: Option<SslOptions>) -> Self {
         Self {
             addr: socket_addr,
             no_delay: socket_options.no_delay(),
@@ -24,6 +25,7 @@ impl SocketSettings {
             // receive_buffer_size: socket_options.receive_buffer_size(),
             send_timeout: socket_options.send_timeout(),
             receive_timeout: socket_options.receive_timeout(),
+            ssl_options
         }
     }
 
@@ -50,5 +52,9 @@ impl SocketSettings {
 
     pub(crate) fn receive_timeout(&self) -> u64 {
         self.receive_timeout
+    }
+
+    pub(crate) fn ssl_options(&self) -> &Option<SslOptions> {
+        &self.ssl_options
     }
 }

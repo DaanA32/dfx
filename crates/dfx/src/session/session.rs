@@ -533,6 +533,7 @@ impl Session {
                 format!("Session {} disconnecting: {}", self.session_id, reason).as_str(),
             );
             responder.disconnect();
+            self.responder = None;
         } else {
             self.log.on_event(
                 format!(
@@ -657,7 +658,6 @@ impl Session {
         );
         message.header_mut().set_tag_value(tags::MsgSeqNum, &seq_num);
 
-        self.log.on_event(format!("initialize_header: {} && {}", self.enable_last_msg_seq_num_processed, !message.header().is_field_set(tags::LastMsgSeqNumProcessed)).as_str());
         if self.enable_last_msg_seq_num_processed
             && !message.header().is_field_set(tags::LastMsgSeqNumProcessed)
         {

@@ -18,13 +18,13 @@ use crate::{
     }, message_store::MessageStoreFactory, logging::LogFactory,
 };
 
-use super::ConnectionError;
+use super::{ConnectionError, Stream, StreamError};
 
 pub(crate) const BUF_SIZE: usize = 512;
 pub(crate) struct SocketReactor<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
     session: Option<Session>,
     parser: Parser,
-    stream: Option<TcpStream>,
+    stream: Option<Stream>,
     buffer: [u8; BUF_SIZE],
     rx: Option<Receiver<ResponderEvent>>,
     tx: Option<Sender<ResponderResponse>>,
@@ -42,6 +42,7 @@ pub(crate) enum ReactorError {
     ParserError(ParserError),
     MessageParseError(MessageParseError),
     IoError(std::io::Error),
+    StreamError(StreamError),
     Disconnect,
 }
 
@@ -65,6 +66,11 @@ impl From<std::io::Error> for ReactorError {
         ReactorError::IoError(e)
     }
 }
+impl From<StreamError> for ReactorError {
+    fn from(e: StreamError) -> ReactorError {
+        ReactorError::StreamError(e)
+    }
+}
 
 impl<App, SF, DDP, LF, MF> SocketReactor<App, SF, DDP, LF, MF>
 where App: Application + Clone + 'static,
@@ -74,7 +80,7 @@ where App: Application + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
 {
     pub(crate) fn new(
-        connection: TcpStream,
+        connection: Stream,
         settings: Vec<SessionSetting>,
         app: App,
         store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF
@@ -124,6 +130,7 @@ where App: Application + Clone + 'static,
     }
 
     pub(crate) fn start(mut self) -> Option<Session> {
+        // TODO while within session time
         if let Err(e) = self.event_loop() {
             match e {
                 ReactorError::Disconnect => {
@@ -214,7 +221,10 @@ where App: Application + Clone + 'static,
         if let Some(stream) = self.stream.as_mut() {
             match stream.read(&mut self.buffer) {
                 Ok(read) => Ok(read),
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
+                Err(ref e) if e.as_io_error().is_some() && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock => {
+                    // println!("Would block {e:?}");
+                    Ok(0)
+                },
                 Err(e) => Err(e.into()),
             }
         } else {
@@ -270,10 +280,12 @@ where App: Application + Clone + 'static,
             (Some(tx), Some(rx)) => match rx.recv_timeout(Duration::from_millis(1)) {
                 Ok(event) => match event {
                     ResponderEvent::Send(message) => {
-                        match self.stream.as_mut().unwrap().write_all(message.as_bytes()) {
-                            Ok(_) => Ok(tx.send(ResponderResponse::Sent(true)).unwrap_or(())),
-                            Err(_) => Ok(tx.send(ResponderResponse::Sent(false)).unwrap_or(())),
-                        }
+                        let stream = &mut self.stream.as_mut().unwrap();
+                        match stream.write_all(message.as_bytes()) {
+                            Ok(_) => tx.send(ResponderResponse::Sent(true)).unwrap_or(()),
+                            Err(_) => tx.send(ResponderResponse::Sent(false)).unwrap_or(()),
+                        };
+                        Ok(stream.flush()?)
                     }
                     ResponderEvent::Disconnect => {
                         println!("Reactor: Disconnect");

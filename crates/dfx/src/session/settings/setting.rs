@@ -140,7 +140,29 @@ impl SocketOptions {
 }
 
 #[derive(Builder, Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SslOptions {}
+pub(crate) struct SslOptions {
+}
+impl SslOptions {
+    pub(crate) fn builder() -> SslOptionsBuilder {
+        SslOptionsBuilder::create_empty()
+    }
+}
+
+#[derive(Builder, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SslAcceptorOptions {
+    identity: IdentityOptions,
+}
+impl SslAcceptorOptions {
+    pub(crate) fn builder() -> SslAcceptorOptionsBuilder {
+        SslAcceptorOptionsBuilder::create_empty()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum IdentityOptions {
+    Pkcs12 { der: String, pass: String },
+}
+
 
 #[derive(Builder, Clone, Debug, PartialEq, Eq)]
 pub struct LoggingOptions {
@@ -501,7 +523,7 @@ impl SessionSetting {
     }
 
     pub(crate) fn socket_settings(&self) -> SocketSettings {
-        SocketSettings::new(self.connection.socket_addr().clone(), self.socket_options.clone())
+        SocketSettings::new(self.connection.socket_addr().clone(), self.socket_options.clone(), self.ssl_options.clone())
     }
 
     pub(crate) fn accepts(&self, session_id: &SessionId) -> bool {

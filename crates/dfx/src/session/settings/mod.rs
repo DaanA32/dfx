@@ -71,15 +71,16 @@ pub(crate) enum SettingOption {
     RequiresOrigSendingTime,
     CheckLatency,
     MaxLatency,
-    // SSLEnable,
-    // SSLServerName,
-    // SSLProtocols,
-    // SSLValidateCertificates,
-    // SSLCheckCertificateRevocation,
-    // SSLCertificate,
-    // SSLCertificatePassword,
-    // SSLRequireClientCertificate,
-    // SSLCACertificate,
+    // TODO add feature ssl
+    SSLEnable,
+    SSLServerName,
+    SSLProtocols,
+    SSLValidateCertificates,
+    SSLCheckCertificateRevocation,
+    SSLCertificate,
+    SSLCertificatePassword,
+    SSLRequireClientCertificate,
+    SSLCACertificate,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -172,15 +173,16 @@ impl TryFrom<&str> for SettingOption {
             "RequiresOrigSendingTime" => Ok(Self::RequiresOrigSendingTime),
             "CheckLatency" => Ok(Self::CheckLatency),
             "MaxLatency" => Ok(Self::MaxLatency),
-            // "SSLEnable" => Ok(Self::SSLEnable),
-            // "SSLServerName" => Ok(Self::SSLServerName),
-            // "SSLProtocols" => Ok(Self::SSLProtocols),
-            // "SSLValidateCertificates" => Ok(Self::SSLValidateCertificates),
-            // "SSLCheckCertificateRevocation" => Ok(Self::SSLCheckCertificateRevocation),
-            // "SSLCertificate" => Ok(Self::SSLCertificate),
-            // "SSLCertificatePassword" => Ok(Self::SSLCertificatePassword),
-            // "SSLRequireClientCertificate" => Ok(Self::SSLRequireClientCertificate),
-            // "SSLCACertificate" => Ok(Self::SSLCACertificate),
+            // TODO add feature ssl
+            "SSLEnable" => Ok(Self::SSLEnable),
+            "SSLServerName" => Ok(Self::SSLServerName),
+            "SSLProtocols" => Ok(Self::SSLProtocols),
+            "SSLValidateCertificates" => Ok(Self::SSLValidateCertificates),
+            "SSLCheckCertificateRevocation" => Ok(Self::SSLCheckCertificateRevocation),
+            "SSLCertificate" => Ok(Self::SSLCertificate),
+            "SSLCertificatePassword" => Ok(Self::SSLCertificatePassword),
+            "SSLRequireClientCertificate" => Ok(Self::SSLRequireClientCertificate),
+            "SSLCACertificate" => Ok(Self::SSLCACertificate),
             _ => Err(Self::Error::NoSuchSetting(value.into())),
         }
     }
@@ -256,15 +258,16 @@ impl Into<&'static str> for SettingOption {
             Self::RequiresOrigSendingTime => "RequiresOrigSendingTime",
             Self::CheckLatency => "CheckLatency",
             Self::MaxLatency => "MaxLatency",
-            // Self::SSLEnable => "SSLEnable",
-            // Self::SSLServerName => "SSLServerName",
-            // Self::SSLProtocols => "SSLProtocols",
-            // Self::SSLValidateCertificates => "SSLValidateCertificates",
-            // Self::SSLCheckCertificateRevocation => "SSLCheckCertificateRevocation",
-            // Self::SSLCertificate => "SSLCertificate",
-            // Self::SSLCertificatePassword => "SSLCertificatePassword",
-            // Self::SSLRequireClientCertificate => "SSLRequireClientCertificate",
-            // Self::SSLCACertificate => "SSLCACertificate",
+            // TODO add feature ssl
+            Self::SSLEnable => "SSLEnable",
+            Self::SSLServerName => "SSLServerName",
+            Self::SSLProtocols => "SSLProtocols",
+            Self::SSLValidateCertificates => "SSLValidateCertificates",
+            Self::SSLCheckCertificateRevocation => "SSLCheckCertificateRevocation",
+            Self::SSLCertificate => "SSLCertificate",
+            Self::SSLCertificatePassword => "SSLCertificatePassword",
+            Self::SSLRequireClientCertificate => "SSLRequireClientCertificate",
+            Self::SSLCACertificate => "SSLCACertificate",
         }
     }
 }
@@ -295,7 +298,7 @@ impl SessionSettings {
         for line in string.lines() {
             n += 1;
             //Comment
-            println!("Read Line: {}", line.trim());
+            // println!("Read Line: {}", line.trim());
             if line.trim().starts_with('#') {
                 continue;
             }

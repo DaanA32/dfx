@@ -1,0 +1,11 @@
+[package]
+name = "coinbase"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dfx = { path = "../../crates/dfx" }
+hmac-sha256 = "1.1.7"
+base64 = "0.21.2"

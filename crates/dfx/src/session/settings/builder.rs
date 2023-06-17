@@ -1,3 +1,5 @@
+use std::net::ToSocketAddrs;
+
 use chrono::NaiveTime;
 
 use dfx_core::session_id::SessionId;
@@ -5,7 +7,7 @@ use dfx_core::fields::converters::datetime::DateTimeFormat;
 use crate::session::SessionSchedule;
 
 use super::{
-    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions,
+    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions, SslOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -87,15 +89,15 @@ pub(crate) struct DynamicSessionSettingBuilder {
     socket_receive_timeout: Option<String>,
 
     // SSL options
-    // ssl_enable: Option<String>,
-    // ssl_server_name: Option<String>,
-    // ssl_protocols: Option<String>,
-    // ssl_validate_certificates: Option<String>,
-    // ssl_check_certificate_revocation: Option<String>,
-    // ssl_certificate: Option<String>,
-    // ssl_certificate_password: Option<String>,
-    // ssl_require_client_certificate: Option<String>,
-    // ssl_ca_certificate: Option<String>,
+    ssl_enable: Option<String>,
+    ssl_server_name: Option<String>,
+    ssl_protocols: Option<String>,
+    ssl_validate_certificates: Option<String>,
+    ssl_check_certificate_revocation: Option<String>,
+    ssl_certificate: Option<String>,
+    ssl_certificate_password: Option<String>,
+    ssl_require_client_certificate: Option<String>,
+    ssl_ca_certificate: Option<String>,
 }
 
 pub(crate) struct Validated(DynamicSessionSettingBuilder);
@@ -199,23 +201,23 @@ impl DynamicSessionSettingBuilder {
             }
             SettingOption::CheckLatency => self.check_latency = Some(value.into()),
             SettingOption::MaxLatency => self.max_latency = Some(value.into()),
-            // SettingOption::SSLEnable => self.ssl_enable = Some(value.into()),
-            // SettingOption::SSLServerName => self.ssl_server_name = Some(value.into()),
-            // SettingOption::SSLProtocols => self.ssl_protocols = Some(value.into()),
-            // SettingOption::SSLValidateCertificates => {
-            //     self.ssl_validate_certificates = Some(value.into())
-            // }
-            // SettingOption::SSLCheckCertificateRevocation => {
-            //     self.ssl_check_certificate_revocation = Some(value.into())
-            // }
-            // SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
-            // SettingOption::SSLCertificatePassword => {
-            //     self.ssl_certificate_password = Some(value.into())
-            // }
-            // SettingOption::SSLRequireClientCertificate => {
-            //     self.ssl_require_client_certificate = Some(value.into())
-            // }
-            // SettingOption::SSLCACertificate => self.ssl_ca_certificate = Some(value.into()),
+            SettingOption::SSLEnable => self.ssl_enable = Some(value.into()),
+            SettingOption::SSLServerName => self.ssl_server_name = Some(value.into()),
+            SettingOption::SSLProtocols => self.ssl_protocols = Some(value.into()),
+            SettingOption::SSLValidateCertificates => {
+                self.ssl_validate_certificates = Some(value.into())
+            }
+            SettingOption::SSLCheckCertificateRevocation => {
+                self.ssl_check_certificate_revocation = Some(value.into())
+            }
+            SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
+            SettingOption::SSLCertificatePassword => {
+                self.ssl_certificate_password = Some(value.into())
+            }
+            SettingOption::SSLRequireClientCertificate => {
+                self.ssl_require_client_certificate = Some(value.into())
+            }
+            SettingOption::SSLCACertificate => self.ssl_ca_certificate = Some(value.into()),
         }
     }
 
@@ -381,23 +383,23 @@ impl DynamicSessionSettingBuilder {
             .or(other.socket_receive_timeout.clone());
 
         // SSL options
-        // self.ssl_enable = self.ssl_enable.or(other.ssl_enable.clone());
-        // self.ssl_server_name = self.ssl_server_name.or(other.ssl_server_name.clone());
-        // self.ssl_protocols = self.ssl_protocols.or(other.ssl_protocols.clone());
-        // self.ssl_validate_certificates = self
-        //     .ssl_validate_certificates
-        //     .or(other.ssl_validate_certificates.clone());
-        // self.ssl_check_certificate_revocation = self
-        //     .ssl_check_certificate_revocation
-        //     .or(other.ssl_check_certificate_revocation.clone());
-        // self.ssl_certificate = self.ssl_certificate.or(other.ssl_certificate.clone());
-        // self.ssl_certificate_password = self
-        //     .ssl_certificate_password
-        //     .or(other.ssl_certificate_password.clone());
-        // self.ssl_require_client_certificate = self
-        //     .ssl_require_client_certificate
-        //     .or(other.ssl_require_client_certificate.clone());
-        // self.ssl_ca_certificate = self.ssl_ca_certificate.or(other.ssl_ca_certificate.clone());
+
+        self.ssl_server_name = self.ssl_server_name.or(other.ssl_server_name.clone());
+        self.ssl_protocols = self.ssl_protocols.or(other.ssl_protocols.clone());
+        self.ssl_validate_certificates = self
+            .ssl_validate_certificates
+            .or(other.ssl_validate_certificates.clone());
+        self.ssl_check_certificate_revocation = self
+            .ssl_check_certificate_revocation
+            .or(other.ssl_check_certificate_revocation.clone());
+        self.ssl_certificate = self.ssl_certificate.or(other.ssl_certificate.clone());
+        self.ssl_certificate_password = self
+            .ssl_certificate_password
+            .or(other.ssl_certificate_password.clone());
+        self.ssl_require_client_certificate = self
+            .ssl_require_client_certificate
+            .or(other.ssl_require_client_certificate.clone());
+        self.ssl_ca_certificate = self.ssl_ca_certificate.or(other.ssl_ca_certificate.clone());
         self
     }
 
@@ -469,8 +471,9 @@ impl DynamicSessionSettingBuilder {
                     self.socket_connect_host.unwrap(),
                     self.socket_connect_port.unwrap()
                 )
-                .parse()
-                .unwrap(),
+                .to_socket_addrs()
+                .unwrap()
+                .next().unwrap(),
                 reconnect_interval: self.reconnect_interval.map(|v| v.parse().ok()).flatten().unwrap_or(30),
                 heart_bt_int: self.heart_bt_int.map(|v| v.parse().ok()).flatten().unwrap_or(30),
                 logon_timeout: self.logon_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(10),
@@ -565,7 +568,14 @@ impl DynamicSessionSettingBuilder {
         builder.validation_options(validation_options);
 
         // TODO
-        builder.ssl_options(None);
+
+        if self.ssl_enable.map(|v| v == "Y").unwrap_or(false) {
+            let mut ssl_options = SslOptions::builder();
+            let ssl_options = ssl_options.build().unwrap();
+            builder.ssl_options(Some(ssl_options));
+        } else {
+            builder.ssl_options(None);
+        }
         builder.build().unwrap()
     }
 }
