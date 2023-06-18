@@ -7,7 +7,7 @@ use dfx_core::fields::converters::datetime::DateTimeFormat;
 use crate::session::SessionSchedule;
 
 use super::{
-    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions, SslOptions,
+    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions, SslOptions, SslInitiatorOptions, SslAcceptorOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -481,6 +481,7 @@ impl DynamicSessionSettingBuilder {
             },
             _ => unreachable!(),
         };
+        let is_initiator = connection.is_initiator();
         builder.connection(connection);
 
         let mut socket_options = SocketOptions::builder();
@@ -570,9 +571,15 @@ impl DynamicSessionSettingBuilder {
         // TODO
 
         if self.ssl_enable.map(|v| v == "Y").unwrap_or(false) {
-            let mut ssl_options = SslOptions::builder();
-            let ssl_options = ssl_options.build().unwrap();
-            builder.ssl_options(Some(ssl_options));
+            if is_initiator {
+                let mut ssl_options = SslInitiatorOptions::builder();
+                let ssl_options = ssl_options.build().unwrap();
+                builder.ssl_options(Some(SslOptions::Initiator(ssl_options)));
+            } else {
+                let mut ssl_options = SslAcceptorOptions::builder();
+                let ssl_options = ssl_options.build().unwrap();
+                builder.ssl_options(Some(SslOptions::Acceptor(ssl_options)));
+            }
         } else {
             builder.ssl_options(None);
         }

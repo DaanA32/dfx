@@ -7,6 +7,7 @@ use std::{
 use derive_builder::Builder;
 
 use dfx_core::fields::converters::datetime::DateTimeFormat;
+use native_tls::Protocol;
 use crate::{
     connection::SocketSettings,
     session::SessionSchedule,
@@ -139,28 +140,88 @@ impl SocketOptions {
     }
 }
 
-#[derive(Builder, Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SslOptions {
-}
-impl SslOptions {
-    pub(crate) fn builder() -> SslOptionsBuilder {
-        SslOptionsBuilder::create_empty()
-    }
+#[derive(Clone, Debug)]
+pub(crate) enum SslOptions {
+    Acceptor(SslAcceptorOptions),
+    Initiator(SslInitiatorOptions),
 }
 
-#[derive(Builder, Clone, Debug, PartialEq, Eq)]
+#[derive(Builder, Clone, Debug)]
 pub(crate) struct SslAcceptorOptions {
     identity: IdentityOptions,
+    min_protocol: Option<Protocol>,
+    max_protocol: Option<Protocol>,
 }
 impl SslAcceptorOptions {
     pub(crate) fn builder() -> SslAcceptorOptionsBuilder {
         SslAcceptorOptionsBuilder::create_empty()
     }
+
+    pub(crate) fn identity(&self) -> &IdentityOptions {
+        &self.identity
+    }
+
+    pub(crate) fn min_protocol(&self) -> Option<Protocol> {
+        self.min_protocol
+    }
+
+    pub(crate) fn max_protocol(&self) -> Option<Protocol> {
+        self.max_protocol
+    }
+}
+
+#[derive(Builder, Clone, Debug)]
+pub(crate) struct SslInitiatorOptions {
+    identity: Option<IdentityOptions>,
+    min_protocol: Option<Protocol>,
+    max_protocol: Option<Protocol>,
+    use_sni: bool,
+    accept_invalid_certs: bool,
+    accept_invalid_hostnames: bool,
+    disable_built_in_roots: bool,
+    domain: String,
+}
+impl SslInitiatorOptions {
+    pub(crate) fn builder() -> SslInitiatorOptionsBuilder {
+        SslInitiatorOptionsBuilder::create_empty()
+    }
+
+    pub(crate) fn identity(&self) -> Option<&IdentityOptions> {
+        self.identity.as_ref()
+    }
+
+    pub(crate) fn use_sni(&self) -> bool {
+        self.use_sni
+    }
+
+    pub(crate) fn accept_invalid_certs(&self) -> bool {
+        self.accept_invalid_certs
+    }
+
+    pub(crate) fn accept_invalid_hostnames(&self) -> bool {
+        self.accept_invalid_hostnames
+    }
+
+    pub(crate) fn disable_built_in_roots(&self) -> bool {
+        self.disable_built_in_roots
+    }
+
+    pub(crate) fn domain(&self) -> &String {
+        &self.domain
+    }
+
+    pub(crate) fn min_protocol(&self) -> Option<Protocol> {
+        self.min_protocol
+    }
+
+    pub(crate) fn max_protocol(&self) -> Option<Protocol> {
+        self.max_protocol
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum IdentityOptions {
-    Pkcs12 { der: String, pass: String },
+    Pkcs12 { der: Vec<u8>, pass: String },
 }
 
 
@@ -323,7 +384,7 @@ impl ValidationOptions {
     }
 }
 
-#[derive(Builder, Clone, Debug, PartialEq, Eq)]
+#[derive(Builder, Clone, Debug)]
 pub(crate) struct SessionSetting {
     session_id: SessionId,
     connection: SettingsConnection,

@@ -1,9 +1,13 @@
 use native_tls::Identity;
 use native_tls::TlsAcceptor;
+use native_tls::TlsAcceptorBuilder;
 use native_tls::TlsConnector;
 
 use crate::connection::ConnectionError;
 use crate::connection::SocketSettings;
+use crate::session::IdentityOptions;
+use crate::session::SslAcceptorOptions;
+use crate::session::SslInitiatorOptions;
 use crate::session::SslOptions;
 use std::io::Read;
 use std::io::Write;
@@ -101,20 +105,20 @@ impl StreamFactory {
         settings: &SocketSettings,
         acceptor: bool,
     ) -> Result<Stream, ConnectionError> {
-        match (settings.ssl_options(), acceptor) {
-            (Some(ssl), true) => {
+        match settings.ssl_options() {
+            Some(SslOptions::Acceptor(ssl)) => {
                 let connector = get_acceptor_from_settings(ssl);
                 let mut stream = connector.accept(stream).unwrap();
                 StreamFactory::configure_stream_mut(stream.get_mut(), settings)?;
                 Ok(Stream::Ssl(stream))
             },
-            (Some(ssl), false) => {
+            Some(SslOptions::Initiator(ssl)) => {
                 let (connector, domain) = get_connector_from_settings(ssl);
                 let mut stream = connector.connect(domain, stream).unwrap();
                 StreamFactory::configure_stream_mut(stream.get_mut(), settings)?;
                 Ok(Stream::Ssl(stream))
             },
-            (None, _) => {
+            None => {
                 StreamFactory::configure_stream_mut(&mut stream, settings)?;
                 Ok(Stream::Tcp(stream))
             }
@@ -140,32 +144,47 @@ impl StreamFactory {
     }
 }
 
-fn get_connector_from_settings(ssl_options: &SslOptions,) -> (TlsConnector, &str) {
-    // identity: None,
-    // min_protocol: Some(Protocol::Tlsv10),
-    // max_protocol: None,
+fn get_connector_from_settings(ssl_options: &SslInitiatorOptions,) -> (TlsConnector, &str) {
+    let mut builder = TlsConnector::builder();
+    match ssl_options.identity() {
+        Some(identity) => {
+            match identity {
+                IdentityOptions::Pkcs12 { der, pass } => {
+                    let identity = Identity::from_pkcs12(der, pass).unwrap();
+                    builder.identity(identity);
+                },
+            }
+        }
+        _ => (),
+    }
+    builder.min_protocol_version(ssl_options.min_protocol());
+    builder.max_protocol_version(ssl_options.max_protocol());
+    builder.use_sni(ssl_options.use_sni());
+    builder.danger_accept_invalid_certs(ssl_options.accept_invalid_certs());
+    builder.danger_accept_invalid_hostnames(ssl_options.accept_invalid_hostnames());
+    builder.disable_built_in_roots(ssl_options.disable_built_in_roots());
+
     // root_certificates: vec![],
-    // use_sni: true,
-    // accept_invalid_certs: false,
-    // accept_invalid_hostnames: false,
-    // disable_built_in_roots: false,
     // #[cfg(feature = "alpn")]
     // alpn: vec![],
-    let connector = TlsConnector::builder()
-        .use_sni(false)
-        .danger_accept_invalid_hostnames(true)
+
+    let domain = ssl_options.domain();
+    let connector = builder
         .build()
         .unwrap();
-    let domain = "";
     (connector, domain)
 }
 
-fn get_acceptor_from_settings(ssl_options: &SslOptions,) -> TlsAcceptor {
-    if let Some()
-    // let identity = Identity::from_pkcs12(der, pass).unwrap();
-    // let connector = TlsAcceptor::builder(identity)
-    //     .build()
-    //     .unwrap();
-    // connector
-    todo!("{ssl_options:?}")
+fn get_acceptor_from_settings(ssl_options: &SslAcceptorOptions,) -> TlsAcceptor {
+    let mut builder = match ssl_options.identity() {
+        IdentityOptions::Pkcs12 { der, pass } => {
+            let identity = Identity::from_pkcs12(der, pass).unwrap();
+            TlsAcceptor::builder(identity)
+        },
+    };
+    builder.min_protocol_version(ssl_options.min_protocol());
+    builder.max_protocol_version(ssl_options.max_protocol());
+    builder
+        .build()
+        .unwrap()
 }
