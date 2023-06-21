@@ -202,7 +202,7 @@ where App: Application + Sync + Clone + 'static,
                     let session_setting = &self.session_settings[0];
                     let stream = StreamFactory::configure_stream(
                         stream,
-                        &session_setting.socket_settings(),
+                        session_setting.socket_settings(),
                         true,
                     )?;
                     let stream = stream;

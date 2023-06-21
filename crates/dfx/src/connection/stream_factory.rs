@@ -1,13 +1,5 @@
-use native_tls::Identity;
-use native_tls::TlsAcceptor;
-use native_tls::TlsAcceptorBuilder;
-use native_tls::TlsConnector;
-
 use crate::connection::ConnectionError;
 use crate::connection::SocketSettings;
-use crate::session::IdentityOptions;
-use crate::session::SslAcceptorOptions;
-use crate::session::SslInitiatorOptions;
 use crate::session::SslOptions;
 use std::io::Read;
 use std::io::Write;
@@ -93,7 +85,7 @@ impl Write for Stream {
 pub(crate) struct StreamFactory;
 impl StreamFactory {
     pub(crate) fn create_client_stream(
-        settings: &SocketSettings,
+        settings: SocketSettings,
     ) -> Result<Stream, ConnectionError> {
         let endpoint: SocketAddr = settings.get_endpoint()?;
         let stream = TcpStream::connect(endpoint)?;
@@ -102,24 +94,22 @@ impl StreamFactory {
     }
     pub(crate) fn configure_stream(
         mut stream: TcpStream,
-        settings: &SocketSettings,
+        settings: SocketSettings,
         acceptor: bool,
     ) -> Result<Stream, ConnectionError> {
         match settings.ssl_options() {
-            Some(SslOptions::Acceptor(ssl)) => {
-                let connector = get_acceptor_from_settings(ssl);
-                let mut stream = connector.accept(stream).unwrap();
-                StreamFactory::configure_stream_mut(stream.get_mut(), settings)?;
+            Some(SslOptions::Acceptor { acceptor }) => {
+                let mut stream = acceptor.accept(stream).unwrap();
+                StreamFactory::configure_stream_mut(stream.get_mut(), &settings)?;
                 Ok(Stream::Ssl(stream))
             },
-            Some(SslOptions::Initiator(ssl)) => {
-                let (connector, domain) = get_connector_from_settings(ssl);
-                let mut stream = connector.connect(domain, stream).unwrap();
-                StreamFactory::configure_stream_mut(stream.get_mut(), settings)?;
+            Some(SslOptions::Initiator { initiator, domain }) => {
+                let mut stream = initiator.connect(domain, stream).unwrap();
+                StreamFactory::configure_stream_mut(stream.get_mut(), &settings)?;
                 Ok(Stream::Ssl(stream))
             },
             None => {
-                StreamFactory::configure_stream_mut(&mut stream, settings)?;
+                StreamFactory::configure_stream_mut(&mut stream, &settings)?;
                 Ok(Stream::Tcp(stream))
             }
         }
@@ -142,49 +132,4 @@ impl StreamFactory {
         stream.set_nonblocking(true)?;
         Ok(())
     }
-}
-
-fn get_connector_from_settings(ssl_options: &SslInitiatorOptions,) -> (TlsConnector, &str) {
-    let mut builder = TlsConnector::builder();
-    match ssl_options.identity() {
-        Some(identity) => {
-            match identity {
-                IdentityOptions::Pkcs12 { der, pass } => {
-                    let identity = Identity::from_pkcs12(der, pass).unwrap();
-                    builder.identity(identity);
-                },
-            }
-        }
-        _ => (),
-    }
-    builder.min_protocol_version(ssl_options.min_protocol());
-    builder.max_protocol_version(ssl_options.max_protocol());
-    builder.use_sni(ssl_options.use_sni());
-    builder.danger_accept_invalid_certs(ssl_options.accept_invalid_certs());
-    builder.danger_accept_invalid_hostnames(ssl_options.accept_invalid_hostnames());
-    builder.disable_built_in_roots(ssl_options.disable_built_in_roots());
-
-    // root_certificates: vec![],
-    // #[cfg(feature = "alpn")]
-    // alpn: vec![],
-
-    let domain = ssl_options.domain();
-    let connector = builder
-        .build()
-        .unwrap();
-    (connector, domain)
-}
-
-fn get_acceptor_from_settings(ssl_options: &SslAcceptorOptions,) -> TlsAcceptor {
-    let mut builder = match ssl_options.identity() {
-        IdentityOptions::Pkcs12 { der, pass } => {
-            let identity = Identity::from_pkcs12(der, pass).unwrap();
-            TlsAcceptor::builder(identity)
-        },
-    };
-    builder.min_protocol_version(ssl_options.min_protocol());
-    builder.max_protocol_version(ssl_options.max_protocol());
-    builder
-        .build()
-        .unwrap()
 }

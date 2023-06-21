@@ -74,9 +74,14 @@ pub(crate) enum SettingOption {
     // TODO add feature ssl
     SSLEnable,
     SSLServerName,
-    SSLProtocols,
-    SSLValidateCertificates,
-    SSLCheckCertificateRevocation,
+    SSLMinProtocol,
+    SSLMaxProtocol,
+    SSLUseSNI,
+    SSLAcceptInvalidCerts,
+    SSLAcceptInvalidHostnames,
+    SSLDisableBuiltInRoots,
+    // SSLValidateCertificates,
+    // SSLCheckCertificateRevocation,
     SSLCertificate,
     SSLCertificatePassword,
     SSLRequireClientCertificate,
@@ -176,9 +181,14 @@ impl TryFrom<&str> for SettingOption {
             // TODO add feature ssl
             "SSLEnable" => Ok(Self::SSLEnable),
             "SSLServerName" => Ok(Self::SSLServerName),
-            "SSLProtocols" => Ok(Self::SSLProtocols),
-            "SSLValidateCertificates" => Ok(Self::SSLValidateCertificates),
-            "SSLCheckCertificateRevocation" => Ok(Self::SSLCheckCertificateRevocation),
+            "SSLMinProtocol" => Ok(Self::SSLMinProtocol),
+            "SSLMaxProtocol" => Ok(Self::SSLMaxProtocol),
+            "SSLUseSNI" => Ok(Self::SSLUseSNI),
+            "SSLAcceptInvalidCerts" => Ok(Self::SSLAcceptInvalidCerts),
+            "SSLAcceptInvalidHostnames" => Ok(Self::SSLAcceptInvalidHostnames),
+            "SSLDisableBuiltInRoots" => Ok(Self::SSLDisableBuiltInRoots),
+            // "SSLValidateCertificates" => Ok(Self::SSLValidateCertificates),
+            // "SSLCheckCertificateRevocation" => Ok(Self::SSLCheckCertificateRevocation),
             "SSLCertificate" => Ok(Self::SSLCertificate),
             "SSLCertificatePassword" => Ok(Self::SSLCertificatePassword),
             "SSLRequireClientCertificate" => Ok(Self::SSLRequireClientCertificate),
@@ -261,9 +271,14 @@ impl Into<&'static str> for SettingOption {
             // TODO add feature ssl
             Self::SSLEnable => "SSLEnable",
             Self::SSLServerName => "SSLServerName",
-            Self::SSLProtocols => "SSLProtocols",
-            Self::SSLValidateCertificates => "SSLValidateCertificates",
-            Self::SSLCheckCertificateRevocation => "SSLCheckCertificateRevocation",
+            Self::SSLMinProtocol => "SSLMinProtocol",
+            Self::SSLMaxProtocol => "SSLMaxProtocol",
+            Self::SSLUseSNI => "SSLUseSNI",
+            Self::SSLAcceptInvalidCerts => "SSLAcceptInvalidCerts",
+            Self::SSLAcceptInvalidHostnames => "SSLAcceptInvalidHostnames",
+            Self::SSLDisableBuiltInRoots => "SSLDisableBuiltInRoots",
+            // Self::SSLValidateCertificates => "SSLValidateCertificates",
+            // Self::SSLCheckCertificateRevocation => "SSLCheckCertificateRevocation",
             Self::SSLCertificate => "SSLCertificate",
             Self::SSLCertificatePassword => "SSLCertificatePassword",
             Self::SSLRequireClientCertificate => "SSLRequireClientCertificate",
@@ -338,9 +353,9 @@ impl SessionSettings {
                     last_setting.replace(DynamicSessionSettingBuilder::default())
                 {
                     if let Some(default) = default.as_ref() {
-                        settings.push(value.merge(default).validate()?.build());
+                        settings.push(value.merge(default).validate()?.build()?);
                     } else {
-                        settings.push(value.validate()?.build());
+                        settings.push(value.validate()?.build()?);
                     }
                 }
             } else if let Some(setting) = last_setting.as_mut() {
@@ -351,9 +366,9 @@ impl SessionSettings {
         if default_started && default_ended {
             if let Some(value) = last_setting {
                 if let Some(default) = default.as_ref() {
-                    settings.push(value.merge(default).validate()?.build());
+                    settings.push(value.merge(default).validate()?.build()?);
                 } else {
-                    settings.push(value.validate()?.build());
+                    settings.push(value.validate()?.build()?);
                 }
             }
         }

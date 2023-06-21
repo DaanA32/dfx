@@ -16,3 +16,7 @@ readme = "README.md"
 keywords = ["fix", "protocol", "finance", "fintech"]
 categories = ["network-programming", "parser-implementations", "encoding"]
 license = "MPL-2.0"
+
+[patch.crates-io]
+openssl = { git = 'https://github.com/sfackler/rust-openssl' }
+openssl-sys = { git = 'https://github.com/sfackler/rust-openssl' }

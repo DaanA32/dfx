@@ -1,13 +1,14 @@
-use std::net::ToSocketAddrs;
+use std::{net::ToSocketAddrs, fs::File, io::Read};
 
 use chrono::NaiveTime;
 
 use dfx_core::session_id::SessionId;
 use dfx_core::fields::converters::datetime::DateTimeFormat;
+use native_tls::{Protocol, TlsConnector, Identity, Certificate, TlsAcceptor};
 use crate::session::SessionSchedule;
 
 use super::{
-    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions, SslOptions, SslInitiatorOptions, SslAcceptorOptions,
+    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions, SslOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -91,9 +92,12 @@ pub(crate) struct DynamicSessionSettingBuilder {
     // SSL options
     ssl_enable: Option<String>,
     ssl_server_name: Option<String>,
-    ssl_protocols: Option<String>,
-    ssl_validate_certificates: Option<String>,
-    ssl_check_certificate_revocation: Option<String>,
+    ssl_min_protocol: Option<String>,
+    ssl_max_protocol: Option<String>,
+    ssl_use_sni: Option<String>,
+    ssl_accept_invalid_certs: Option<String>,
+    ssl_accept_invalid_hostnames: Option<String>,
+    ssl_disable_built_in_roots: Option<String>,
     ssl_certificate: Option<String>,
     ssl_certificate_password: Option<String>,
     ssl_require_client_certificate: Option<String>,
@@ -102,7 +106,7 @@ pub(crate) struct DynamicSessionSettingBuilder {
 
 pub(crate) struct Validated(DynamicSessionSettingBuilder);
 impl Validated {
-    pub(crate) fn build(self) -> SessionSetting {
+    pub(crate) fn build(self) -> Result<SessionSetting, SessionSettingsError> {
         self.0.build()
     }
 }
@@ -203,13 +207,12 @@ impl DynamicSessionSettingBuilder {
             SettingOption::MaxLatency => self.max_latency = Some(value.into()),
             SettingOption::SSLEnable => self.ssl_enable = Some(value.into()),
             SettingOption::SSLServerName => self.ssl_server_name = Some(value.into()),
-            SettingOption::SSLProtocols => self.ssl_protocols = Some(value.into()),
-            SettingOption::SSLValidateCertificates => {
-                self.ssl_validate_certificates = Some(value.into())
-            }
-            SettingOption::SSLCheckCertificateRevocation => {
-                self.ssl_check_certificate_revocation = Some(value.into())
-            }
+            SettingOption::SSLMinProtocol => self.ssl_min_protocol = Some(value.into()),
+            SettingOption::SSLMaxProtocol => self.ssl_max_protocol = Some(value.into()),
+            SettingOption::SSLUseSNI => self.ssl_use_sni = Some(value.into()),
+            SettingOption::SSLAcceptInvalidCerts => self.ssl_accept_invalid_certs = Some(value.into()),
+            SettingOption::SSLAcceptInvalidHostnames => self.ssl_accept_invalid_hostnames = Some(value.into()),
+            SettingOption::SSLDisableBuiltInRoots => self.ssl_disable_built_in_roots = Some(value.into()),
             SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
             SettingOption::SSLCertificatePassword => {
                 self.ssl_certificate_password = Some(value.into())
@@ -385,13 +388,12 @@ impl DynamicSessionSettingBuilder {
         // SSL options
 
         self.ssl_server_name = self.ssl_server_name.or(other.ssl_server_name.clone());
-        self.ssl_protocols = self.ssl_protocols.or(other.ssl_protocols.clone());
-        self.ssl_validate_certificates = self
-            .ssl_validate_certificates
-            .or(other.ssl_validate_certificates.clone());
-        self.ssl_check_certificate_revocation = self
-            .ssl_check_certificate_revocation
-            .or(other.ssl_check_certificate_revocation.clone());
+        self.ssl_min_protocol = self.ssl_min_protocol.or(other.ssl_min_protocol.clone());
+        self.ssl_max_protocol = self.ssl_max_protocol.or(other.ssl_max_protocol.clone());
+        self.ssl_use_sni = self.ssl_use_sni.or(other.ssl_use_sni.clone());
+        self.ssl_accept_invalid_certs = self.ssl_accept_invalid_certs.or(other.ssl_accept_invalid_certs.clone());
+        self.ssl_accept_invalid_hostnames = self.ssl_accept_invalid_hostnames.or(other.ssl_accept_invalid_hostnames.clone());
+        self.ssl_disable_built_in_roots = self.ssl_disable_built_in_roots.or(other.ssl_disable_built_in_roots.clone());
         self.ssl_certificate = self.ssl_certificate.or(other.ssl_certificate.clone());
         self.ssl_certificate_password = self
             .ssl_certificate_password
@@ -436,7 +438,7 @@ impl DynamicSessionSettingBuilder {
     }
 
     // TODO check if these are the correct default values
-    fn build(self) -> SessionSetting {
+    fn build(self) -> Result<SessionSetting, SessionSettingsError> {
 
         let mut builder = SessionSetting::builder();
 
@@ -468,7 +470,7 @@ impl DynamicSessionSettingBuilder {
             "initiator" => SettingsConnection::Initiator {
                 connect_addr: format!(
                     "{}:{}",
-                    self.socket_connect_host.unwrap(),
+                    self.socket_connect_host.as_ref().unwrap(),
                     self.socket_connect_port.unwrap()
                 )
                 .to_socket_addrs()
@@ -568,21 +570,64 @@ impl DynamicSessionSettingBuilder {
             .build().unwrap();
         builder.validation_options(validation_options);
 
-        // TODO
+        let ssl_options = match (self.ssl_enable.as_ref().map(|s| s.as_str()), is_initiator) {
+            (Some(_x @ "Y"), true) => {
+                let mut builder = TlsConnector::builder();
+                if let Some(certificate_file) = self.ssl_certificate {
+                    let mut file = File::open(certificate_file).unwrap();
+                    let mut buf = vec![];
+                    file.read_to_end(&mut buf).unwrap();
+                    let certificate = Certificate::from_pem(&buf).unwrap();
+                    let identity = Identity::from_pkcs12(&certificate.to_der().unwrap(), self.ssl_certificate_password.as_ref().unwrap()).unwrap();
+                    builder.identity(identity);
+                }
+                builder.min_protocol_version(self.ssl_min_protocol.as_ref().map(|r| protocol(r)).flatten());
+                builder.max_protocol_version(self.ssl_max_protocol.as_ref().map(|r| protocol(r)).flatten());
+                builder.use_sni(self.ssl_use_sni.as_ref().map(|v| v == "Y").unwrap_or(true));
+                builder.danger_accept_invalid_certs(self.ssl_accept_invalid_certs.as_ref().map(|v| v == "Y").unwrap_or(false));
+                builder.danger_accept_invalid_hostnames(self.ssl_accept_invalid_hostnames.as_ref().map(|v| v == "Y").unwrap_or(false));
+                builder.disable_built_in_roots(self.ssl_disable_built_in_roots.as_ref().map(|v| v == "Y").unwrap_or(false));
 
-        if self.ssl_enable.map(|v| v == "Y").unwrap_or(false) {
-            if is_initiator {
-                let mut ssl_options = SslInitiatorOptions::builder();
-                let ssl_options = ssl_options.build().unwrap();
-                builder.ssl_options(Some(SslOptions::Initiator(ssl_options)));
-            } else {
-                let mut ssl_options = SslAcceptorOptions::builder();
-                let ssl_options = ssl_options.build().unwrap();
-                builder.ssl_options(Some(SslOptions::Acceptor(ssl_options)));
-            }
-        } else {
-            builder.ssl_options(None);
-        }
-        builder.build().unwrap()
+                // root_certificates: vec![],
+                // #[cfg(feature = "alpn")]
+                // alpn: vec![],
+
+                let host = self.socket_connect_host.as_ref().cloned();
+                let domain = self.ssl_server_name.as_ref().cloned()
+                    .or(host)
+                    .unwrap_or_else(|| String::from(""));
+                let initiator = builder
+                    .build()
+                    .unwrap();
+                Some(SslOptions::Initiator { initiator, domain })
+            },
+            (Some(_x @ "Y"), false) => {
+                let mut file = File::open(self.ssl_certificate.unwrap()).unwrap();
+                let mut buf = vec![];
+                file.read_to_end(&mut buf).unwrap();
+                let certificate = Certificate::from_pem(&buf).unwrap();
+                let identity = Identity::from_pkcs12(&certificate.to_der().unwrap(), self.ssl_certificate_password.as_ref().unwrap()).unwrap();
+                let mut builder = TlsAcceptor::builder(identity);
+                builder.min_protocol_version(self.ssl_min_protocol.as_ref().map(|r| protocol(r)).flatten());
+                builder.max_protocol_version(self.ssl_max_protocol.as_ref().map(|r| protocol(r)).flatten());
+                let acceptor = builder
+                    .build()
+                    .unwrap();
+                Some(SslOptions::Acceptor { acceptor })
+            },
+            _ => None,
+        };
+        builder.ssl_options(ssl_options);
+        Ok(builder.build().ok().unwrap())
+    }
+}
+
+fn protocol(protocol: &str) -> Option<Protocol> {
+    match protocol {
+        "TLSv1.0" => Some(Protocol::Tlsv10),
+        "TLSv1.1" => Some(Protocol::Tlsv11),
+        "TLSv1.2" => Some(Protocol::Tlsv12),
+        "SSLv3" => Some(Protocol::Sslv3),
+        _ => None
     }
 }
