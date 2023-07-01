@@ -191,26 +191,18 @@ impl Message {
         _app_dd: Option<&DataDictionary>,
         size_hint: Option<usize>,
     ) -> Result<FieldBase, MessageParseError> {
-        let tagend = msgstr[*pos..].iter().position(|c| *c == '=' as u8);
-        if tagend.is_none() {
-            return Err(MessageParseError::FailedToFindEqualsAt(*pos));
-        }
+        let tagend = msgstr[*pos..].iter().position(|c| *c == '=' as u8)
+            .ok_or_else(|| MessageParseError::FailedToFindEqualsAt(*pos))?;
 
-        let tagend = *pos + tagend.unwrap();
+        let tagend = *pos + tagend;
         if *pos > tagend {
             return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
         }
-        let result = std::str::from_utf8(&msgstr[*pos..tagend]);
-        if let Err(e) = result {
-            panic!("{:?} in {}", &msgstr[*pos..tagend], e);
-        }
-        let tag: Result<Tag, _> = result.unwrap().parse();
-        if tag.is_err() {
-            return Err(MessageParseError::InvalidTagNumber(
-                std::str::from_utf8(&msgstr[*pos..tagend]).unwrap().into(),
-            ));
-        }
-        let tag = tag.unwrap();
+        let result = std::str::from_utf8(&msgstr[*pos..tagend])
+            .map_err(|e| MessageParseError::InvalidTagNumber(e.to_string()))?;
+        let tag = result
+            .parse()
+            .map_err(|_e| MessageParseError::InvalidTagNumber(result.into()))?;
 
         *pos = tagend + 1;
 
@@ -219,10 +211,8 @@ impl Message {
         } else {
             msgstr[*pos..].iter().position(|c| *c == Message::SOH as u8)
         };
-        if fieldend.is_none() {
-            return Err(MessageParseError::FailedToFindSohAt(*pos));
-        }
-        let fieldend = *pos + fieldend.unwrap();
+        let fieldend = fieldend.ok_or_else(|| MessageParseError::FailedToFindSohAt(*pos))?;
+        let fieldend = *pos + fieldend;
         let value = &msgstr[*pos..fieldend];
         let field = FieldBase::from_bytes(tag, value.into());
 
@@ -318,18 +308,20 @@ impl Message {
                     self.header.repeated_tags_mut().push(f.clone());
                 }
 
-                if matches!(session_dd, Some(dd) if dd.header().is_group(f.tag())) {
-                    let dd = session_dd.unwrap();
-                    pos = Message::set_group(
-                        f.clone(),
-                        msgstr,
-                        pos,
-                        &mut self.header,
-                        dd.header().get_group(f.tag()),
-                        session_dd,
-                        app_dd,
-                        msg_factory,
-                    )?;
+                match session_dd {
+                    Some(dd) if dd.header().is_group(f.tag()) => {
+                        pos = Message::set_group(
+                            f.clone(),
+                            msgstr,
+                            pos,
+                            &mut self.header,
+                            dd.header().get_group(f.tag()),
+                            session_dd,
+                            app_dd,
+                            msg_factory,
+                        )?;
+                    },
+                    _ => {}
                 }
             } else if Message::is_trailer_field(f.tag(), session_dd) {
                 expecting_header = false;
@@ -338,20 +330,21 @@ impl Message {
                     self.trailer.repeated_tags_mut().push(f.clone());
                 }
 
-                if matches!(session_dd, Some(dd) if dd.trailer().is_group(f.tag())) {
-                    let dd = session_dd.unwrap();
-                    pos = Message::set_group(
-                        f.clone(),
-                        msgstr,
-                        pos,
-                        &mut self.trailer,
-                        dd.trailer().get_group(f.tag()),
-                        session_dd,
-                        app_dd,
-                        msg_factory,
-                    )?;
+                match session_dd {
+                    Some(dd) if dd.header().is_group(f.tag()) => {
+                        pos = Message::set_group(
+                            f.clone(),
+                            msgstr,
+                            pos,
+                            &mut self.trailer,
+                            dd.trailer().get_group(f.tag()),
+                            session_dd,
+                            app_dd,
+                            msg_factory,
+                        )?;
+                    },
+                    _ => {}
                 }
-
             } else if !ignore_body {
                 if !expecting_body {
                     if self.field_ == 0 {
@@ -365,18 +358,20 @@ impl Message {
                     self.repeated_tags_mut().push(f.clone());
                 }
 
-                if matches!(msg_map, Some(map) if map.is_group(f.tag())) {
-                    let map = msg_map.unwrap();
-                    pos = Message::set_group(
-                        f.clone(),
-                        msgstr,
-                        pos,
-                        self,
-                        map.get_group(f.tag()),
-                        session_dd,
-                        app_dd,
-                        msg_factory,
-                    )?;
+                match msg_map {
+                    Some(map) if map.is_group(f.tag()) => {
+                        pos = Message::set_group(
+                            f.clone(),
+                            msgstr,
+                            pos,
+                            self,
+                            map.get_group(f.tag()),
+                            session_dd,
+                            app_dd,
+                            msg_factory,
+                        )?;
+                    },
+                    _ => {},
                 }
             }
         }
@@ -397,102 +392,104 @@ impl Message {
         app_dd: Option<&DataDictionary>,
         msg_factory: Option<&dyn MessageFactory>,
     ) -> Result<usize, MessageParseError> {
-        // TODO fix
-        let group_dd = group_dd.unwrap();
+        match group_dd {
+            Some(group_dd) => {
+                let mut pos = pos;
+                let grp_entry_delimiter_tag = group_dd.delim();
+                let grp_pos = pos;
+                let mut group: Option<Group> = None;
+                let mut size_hint = None;
 
-        let mut pos = pos;
-        let grp_entry_delimiter_tag = group_dd.delim();
-        let grp_pos = pos;
-        let mut group: Option<Group> = None;
-        let mut size_hint = None;
+                while pos < msgstr.len() {
+                    let grp_pos = pos;
+                    let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
+                    match (session_dd, app_dd) {
+                        (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
+                            size_hint = f.to_usize()
+                        }
+                        (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                        _ => size_hint = None,
+                    };
+                    if f.tag() == grp_entry_delimiter_tag {
 
-        while pos < msgstr.len() {
-            let grp_pos = pos;
-            let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
-            match (session_dd, app_dd) {
-                (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
-                    size_hint = f.to_usize()
+                        if let Some(ingroup) = group {
+                            // We were already building an entry, so the delimiter means it's done.
+                            map.add_group(f.tag(), &ingroup, Some(false));
+                            group = None;
+                        }
+
+                        // Create a new group!
+                        if let Some(factory) = msg_factory.as_ref() {
+                            let begin_string = Message::extract_begin_string(msgstr)?;
+                            let msg_type = Message::get_msg_type(msgstr)?;
+                            group = factory.create_group(
+                                begin_string.as_str(),
+                                msg_type,
+                                grp_no_fld.tag(),
+                            );
+                        }
+
+                        //If above failed (shouldn't ever happen), just use a generic Group.
+                        if group.is_none() {
+                            group = Some(Group::new(grp_no_fld.tag(), grp_entry_delimiter_tag));
+                        }
+
+                    } else if !group_dd.is_field(f.tag()) {
+                        // This field is not in the group, thus the repeating group is done.
+
+                        if let Some(group) = group {
+                            map.add_group(f.tag(), &group, Some(false));
+                        }
+                        return Ok(grp_pos);
+                    } else if group_dd.is_field(f.tag())
+                        && matches!(&group, Some(group) if group.is_field_set(f.tag()))
+                    {
+                        // Tag is appearing for the second time within a group element.
+                        // Presumably the sender didn't set the delimiter (or their DD has a different delimiter).
+
+                        return Err(
+                            MessageParseError::RepeatedTagWithoutGroupDelimiterTagException(
+                                grp_no_fld.tag(),
+                                f.tag(),
+                            ),
+                        );
+                    }
+
+                    match group.as_mut() {
+                        Some(group) => {
+                            // f is just a field in our group entry.  Add it and iterate again.
+                            group.set_field_base(f.clone(), None);
+
+                            if group_dd.is_group(f.tag()) {
+                                // f is a counter for a nested group.  Recurse!
+
+                                pos = Message::set_group(
+                                    f.clone(),
+                                    msgstr,
+                                    pos,
+                                    group,
+                                    group_dd.get_group(f.tag()),
+                                    session_dd,
+                                    app_dd,
+                                    msg_factory,
+                                )?;
+                            }
+                        },
+                        None => {
+                            // This means we got into the group's fields without finding a delimiter tag.
+                            let b = &msgstr[pos..];
+                            return Err(MessageParseError::GroupDelimiterTagException(
+                                grp_no_fld.tag(),
+                                grp_entry_delimiter_tag,
+                            ));
+                        }
+                    }
                 }
-                (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
-                _ => size_hint = None,
-            };
-            if f.tag() == grp_entry_delimiter_tag {
 
-                if group.is_some() {
-                    // We were already building an entry, so the delimiter means it's done.
-                    map.add_group(f.tag(), group.as_ref().unwrap(), Some(false));
-                    group = None;
-                }
-
-                // Create a new group!
-                if let Some(factory) = msg_factory.as_ref() {
-                    let begin_string = Message::extract_begin_string(msgstr)?;
-                    let msg_type = Message::get_msg_type(msgstr)?;
-                    group = factory.create_group(
-                        begin_string.as_str(),
-                        msg_type,
-                        grp_no_fld.tag(),
-                    );
-                }
-
-                //If above failed (shouldn't ever happen), just use a generic Group.
-                if group.is_none() {
-                    group = Some(Group::new(grp_no_fld.tag(), grp_entry_delimiter_tag));
-                }
-
-            } else if !group_dd.is_field(f.tag()) {
-                // This field is not in the group, thus the repeating group is done.
-
-                if let Some(group) = group {
-                    map.add_group(f.tag(), &group, Some(false));
-                }
-                return Ok(grp_pos);
-            } else if group_dd.is_field(f.tag())
-                && group.is_some()
-                && group.as_ref().unwrap().is_field_set(f.tag())
-            {
-                // Tag is appearing for the second time within a group element.
-                // Presumably the sender didn't set the delimiter (or their DD has a different delimiter).
-
-                return Err(
-                    MessageParseError::RepeatedTagWithoutGroupDelimiterTagException(
-                        grp_no_fld.tag(),
-                        f.tag(),
-                    ),
-                );
-            }
-
-            if group.is_none() {
-                // This means we got into the group's fields without finding a delimiter tag.
-
-                let b = &msgstr[pos..];
-                return Err(MessageParseError::GroupDelimiterTagException(
-                    grp_no_fld.tag(),
-                    grp_entry_delimiter_tag,
-                ));
-            }
-            let group: &mut Group = group.as_mut().unwrap();
-
-            // f is just a field in our group entry.  Add it and iterate again.
-            group.set_field_base(f.clone(), None);
-
-            if group_dd.is_group(f.tag()) {
-                // f is a counter for a nested group.  Recurse!
-
-                pos = Message::set_group(
-                    f.clone(),
-                    msgstr,
-                    pos,
-                    group,
-                    group_dd.get_group(f.tag()),
-                    session_dd,
-                    app_dd,
-                    msg_factory,
-                )?;
-            }
+                Ok(grp_pos)
+            },
+            None => Ok(pos),
         }
-
-        Ok(grp_pos)
     }
 
     fn validate(&self) -> Result<(), MessageParseError> {
@@ -549,12 +546,11 @@ impl Message {
     }
 
     pub fn is_admin(&self) -> bool {
-        self.header.is_field_set(tags::MsgType)
-            && Message::is_admin_msg_type(&self.header.get_string(tags::MsgType).unwrap())
+        matches!(self.header.get_field(tags::MsgType), Some(field) if Message::is_admin_msg_type(&field.value()))
     }
 
-    pub fn is_admin_msg_type(msg_type: &str) -> bool {
-        msg_type.len() == 1 && "0A12345n".contains(msg_type)
+    pub fn is_admin_msg_type(msg_type: &[u8]) -> bool {
+        msg_type.len() == 1 && "0A12345n".contains(msg_type[0] as char)
     }
 
     pub fn extract_begin_string(msgstr: &[u8]) -> Result<String, MessageParseError> {
@@ -564,6 +560,7 @@ impl Message {
     }
 
     pub(crate) fn get_msg_type(msgstr: &[u8]) -> Result<&str, MessageParseError> {
+        //TODO Fix this
         lazy_static! {
             static ref RE: Regex = Regex::new(r"35=([^\x01]*)\x01").unwrap();
         }
@@ -610,77 +607,75 @@ impl Message {
         self.header.remove_field(tags::TargetSubID);
         self.header.remove_field(tags::TargetLocationID);
 
-        if header.is_field_set(tags::BeginString) {
-            let begin_string = header.get_string(tags::BeginString).unwrap();
-            if begin_string.len() > 0 {
-                self.header.set_tag_value(tags::BeginString, &begin_string);
+        if let Some(begin_string) = header.get_field(tags::BeginString) {
+            if begin_string.value().len() > 0 {
+                self.header.set_tag_value(tags::BeginString, begin_string.value());
             }
 
             self.header.remove_field(tags::OnBehalfOfLocationID);
             self.header.remove_field(tags::DeliverToLocationID);
 
-            if begin_string.as_str() >= "FIX.4.1" {
-                if header.is_field_set(tags::OnBehalfOfLocationID) {
-                    let on_behalf_of_location_id =
-                        header.get_string(tags::OnBehalfOfLocationID).unwrap();
+            let value: &[u8] = begin_string.value();
+            if value >= b"FIX.4.1" {
+                if let Some(field) = header.get_field(tags::OnBehalfOfLocationID) {
+                    let on_behalf_of_location_id = field.value();
                     if on_behalf_of_location_id.len() > 0 {
                         self.header
-                            .set_tag_value(tags::DeliverToLocationID, &on_behalf_of_location_id);
+                            .set_tag_value(tags::DeliverToLocationID, on_behalf_of_location_id);
                     }
                 }
 
-                if header.is_field_set(tags::DeliverToLocationID) {
-                    let deliver_to_location_id =
-                        header.get_string(tags::DeliverToLocationID).unwrap();
+                if let Some(field) = header.get_field(tags::DeliverToLocationID) {
+                    let deliver_to_location_id = field.value();
                     if deliver_to_location_id.len() > 0 {
                         self.header
-                            .set_tag_value(tags::OnBehalfOfLocationID, &deliver_to_location_id);
+                            .set_tag_value(tags::OnBehalfOfLocationID, deliver_to_location_id);
                     }
                 }
             }
         }
 
-        if header.is_field_set(tags::SenderCompID) {
-            let sender_comp_id = header.get_string(tags::SenderCompID).unwrap();
+        if let Some(field) = header.get_field(tags::SenderCompID) {
+            let sender_comp_id = field.value();
             if sender_comp_id.len() > 0 {
-                self.header.set_tag_value(tags::TargetCompID, &sender_comp_id);
+                self.header.set_tag_value(tags::TargetCompID, sender_comp_id);
             }
         }
 
-        if header.is_field_set(tags::SenderSubID) {
-            let sender_sub_id = header.get_string(tags::SenderSubID).unwrap();
+        if let Some(field) = header.get_field(tags::SenderSubID) {
+            let sender_sub_id = field.value();
             if sender_sub_id.len() > 0 {
-                self.header.set_tag_value(tags::TargetSubID, &sender_sub_id);
+                self.header.set_tag_value(tags::TargetSubID, sender_sub_id);
             }
         }
 
-        if header.is_field_set(tags::SenderLocationID) {
-            let sender_location_id = header.get_string(tags::SenderLocationID).unwrap();
+        if let Some(field) = header.get_field(tags::SenderLocationID) {
+            let sender_location_id = field.value();
             if sender_location_id.len() > 0 {
                 self.header
-                    .set_tag_value(tags::TargetLocationID, &sender_location_id);
+                    .set_tag_value(tags::TargetLocationID, sender_location_id);
             }
         }
 
-        if header.is_field_set(tags::TargetCompID) {
-            let target_comp_id = header.get_string(tags::TargetCompID).unwrap();
+        if let Some(field) = header.get_field(tags::TargetCompID) {
+            let target_comp_id = field.value();
             if target_comp_id.len() > 0 {
-                self.header.set_tag_value(tags::SenderCompID, &target_comp_id);
+                self.header.set_tag_value(tags::SenderCompID, target_comp_id);
             }
         }
 
-        if header.is_field_set(tags::TargetSubID) {
-            let target_sub_id = header.get_string(tags::TargetSubID).unwrap();
+        if let Some(field) = header.get_field(tags::TargetSubID) {
+            let target_sub_id = field.value();
             if target_sub_id.len() > 0 {
-                self.header.set_tag_value(tags::SenderSubID, &target_sub_id);
+                self.header.set_tag_value(tags::SenderSubID, target_sub_id);
             }
         }
 
-        if header.is_field_set(tags::TargetLocationID) {
-            let target_location_id = header.get_string(tags::TargetLocationID).unwrap();
+        if let Some(field) = header.get_field(tags::TargetLocationID) {
+            let target_location_id = field.value();
             if target_location_id.len() > 0 {
                 self.header
-                    .set_tag_value(tags::SenderLocationID, &target_location_id);
+                    .set_tag_value(tags::SenderLocationID, target_location_id);
             }
         }
 
@@ -690,35 +685,35 @@ impl Message {
         self.header.remove_field(tags::DeliverToCompID);
         self.header.remove_field(tags::DeliverToSubID);
 
-        if header.is_field_set(tags::OnBehalfOfCompID) {
-            let on_behalf_of_comp_id = header.get_string(tags::OnBehalfOfCompID).unwrap();
+        if let Some(field) = header.get_field(tags::OnBehalfOfCompID) {
+            let on_behalf_of_comp_id = field.value();
             if on_behalf_of_comp_id.len() > 0 {
                 self.header
-                    .set_tag_value(tags::DeliverToCompID, &on_behalf_of_comp_id);
+                    .set_tag_value(tags::DeliverToCompID, on_behalf_of_comp_id);
             }
         }
 
-        if header.is_field_set(tags::OnBehalfOfSubID) {
-            let on_behalf_of_sub_id = header.get_string(tags::OnBehalfOfSubID).unwrap();
+        if let Some(field) = header.get_field(tags::OnBehalfOfSubID) {
+            let on_behalf_of_sub_id = field.value();
             if on_behalf_of_sub_id.len() > 0 {
                 self.header
-                    .set_tag_value(tags::DeliverToSubID, &on_behalf_of_sub_id);
+                    .set_tag_value(tags::DeliverToSubID, on_behalf_of_sub_id);
             }
         }
 
-        if header.is_field_set(tags::DeliverToCompID) {
-            let deliver_to_comp_id = header.get_string(tags::DeliverToCompID).unwrap();
+        if let Some(field) = header.get_field(tags::DeliverToCompID) {
+            let deliver_to_comp_id = field.value();
             if deliver_to_comp_id.len() > 0 {
                 self.header
-                    .set_tag_value(tags::OnBehalfOfCompID, &deliver_to_comp_id);
+                    .set_tag_value(tags::OnBehalfOfCompID, deliver_to_comp_id);
             }
         }
 
-        if header.is_field_set(tags::DeliverToSubID) {
-            let deliver_to_sub_id = header.get_string(tags::DeliverToSubID).unwrap();
+        if let Some(field) = header.get_field(tags::DeliverToSubID) {
+            let deliver_to_sub_id = field.value();
             if deliver_to_sub_id.len() > 0 {
                 self.header
-                    .set_tag_value(tags::OnBehalfOfSubID, &deliver_to_sub_id);
+                    .set_tag_value(tags::OnBehalfOfSubID, deliver_to_sub_id);
             }
         }
     }
@@ -839,7 +834,7 @@ mod tests {
     use std::fs::File;
     #[test]
     fn test_parse() {
-        let dd = DataDictionary::from_file("../../spec/FIX44.xml").unwrap();
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml").expect("Able to read FIX44.xml file.");
         println!("{:#?}", dd);
 
         let mut message = Message::default();
@@ -862,7 +857,7 @@ mod tests {
 
     #[test]
     fn test_validate() {
-        let dd = DataDictionary::from_file("../../spec/FIX44.xml").unwrap();
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml").expect("Able to read FIX44.xml file.");
 
         let mut message = Message::default();
 
@@ -894,7 +889,7 @@ mod tests {
         let msgstr = msgstr.replace('|', "\x01");
         let msg_type = Message::get_msg_type(msgstr.as_bytes());
         assert!(msg_type.is_ok());
-        assert!(msg_type.unwrap() == "A");
+        assert!(matches!(msg_type, Ok(msg_type) if msg_type == "A"));
     }
 
     #[test]
@@ -904,14 +899,14 @@ mod tests {
         let msg_type = Message::get_msg_type(msgstr.as_bytes());
         assert!(msg_type.is_err());
         assert!(matches!(
-            msg_type.err().unwrap(),
-            MessageParseError::Malformed { .. }
+            msg_type,
+            Err(MessageParseError::Malformed { .. })
         ));
     }
 
     #[test]
     fn test_get_msg_type_raw_data() {
-        let dd = DataDictionary::from_file("../../spec/FIX44.xml").unwrap();
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml").expect("Able to read FIX44.xml file.");
 
         let mut message = Message::default();
 

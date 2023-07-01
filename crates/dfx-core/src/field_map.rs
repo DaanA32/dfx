@@ -519,7 +519,6 @@ mod tests {
             if value.type_id() == TypeId::of::<Test>() {
                 let result = value.as_any().downcast_ref::<Test>();
                 assert!(result.is_some());
-                println!("{:?}", result.unwrap());
             } else {
                 panic!()
             }

@@ -564,7 +564,7 @@ impl Session {
     fn send_raw(&mut self, mut message: Message, seq_num: u32) -> Result<bool, FieldMapError> {
         let msg_type = message.header().get_string(tags::MsgType)?;
         self.initialize_header(&mut message, Some(seq_num));
-        let message = if Message::is_admin_msg_type(msg_type.as_str()) {
+        let message = if Message::is_admin_msg_type(msg_type.as_bytes()) {
             let mut message = self.application.to_admin(message, &self.session_id)?;
             if MsgType::LOGON == msg_type && !self.state.received_reset() {
                 let reset = if message.is_field_set(tags::ResetSeqNumFlag) {
@@ -825,7 +825,7 @@ impl Session {
             }
         }
 
-        let validation_result = if self.session_id.is_fixt() && !Message::is_admin_msg_type(msg_type) {
+        let validation_result = if self.session_id.is_fixt() && !Message::is_admin_msg_type(msg_type.as_bytes()) {
             DataDictionary::validate(
                 &message,
                 Some(&self.session_data_dictionary),
@@ -1211,7 +1211,7 @@ impl Session {
         self.state.set_last_received_time_dt(Instant::now());
         self.state.set_test_request_counter(0);
 
-        if Message::is_admin_msg_type(&msg_type) {
+        if Message::is_admin_msg_type(msg_type.as_bytes()) {
             self.application.from_admin(&message, &self.session_id)?
         } else {
             self.application.from_app(&message, &self.session_id)?

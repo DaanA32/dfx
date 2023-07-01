@@ -1,3 +1,4 @@
+use crate::data_dictionary_provider;
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMap;
 use crate::field_map::FieldMapError;
@@ -12,10 +13,12 @@ use crate::tags;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
+use xmltree::ParseError;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::fs::File;
+use std::num::ParseIntError;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::path::Path;
@@ -113,11 +116,31 @@ impl From<ConversionError> for MessageValidationError {
 /// TODO
 pub enum DataDictionaryError {
     DeserializeError(serde_xml_rs::Error),
+    IoError(std::io::Error),
+    ParseError(ParseError),
+    Missing { entry_type: String, name: String },
+    InvalidVersionType { version_type: String },
+    ParseIntError(ParseIntError),
 }
 
 impl From<serde_xml_rs::Error> for DataDictionaryError {
     fn from(error: serde_xml_rs::Error) -> Self {
         Self::DeserializeError(error)
+    }
+}
+impl From<std::io::Error> for DataDictionaryError {
+    fn from(error: std::io::Error) -> Self {
+        Self::IoError(error)
+    }
+}
+impl From<ParseError> for DataDictionaryError {
+    fn from(error: ParseError) -> Self {
+        Self::ParseError(error)
+    }
+}
+impl From<ParseIntError> for DataDictionaryError {
+    fn from(error: ParseIntError) -> Self {
+        Self::ParseIntError(error)
     }
 }
 
@@ -145,8 +168,8 @@ impl DataDictionary {
         };
 
         let mut contents = String::new();
-        reader.read_to_string(&mut contents).unwrap();
-        let dd = DataDictionary::load_from_string(&contents).unwrap();
+        reader.read_to_string(&mut contents)?;
+        let dd = DataDictionary::load_from_string(&contents)?;
         Ok(dd)
     }
 
@@ -178,11 +201,13 @@ impl DataDictionary {
     ) -> Result<(), MessageValidationError> {
 
         if let Some(dictionary) = session_data_dictionary {
-            if matches!(dictionary.version(), Some(version) if version != begin_string) {
-                return Err(MessageValidationError::UnsupportedVersion {
-                    expected: dictionary.version().unwrap().into(),
-                    actual: begin_string.into(),
-                });
+            if let Some(version) = dictionary.version() {
+                if version != begin_string {
+                    return Err(MessageValidationError::UnsupportedVersion {
+                        expected: version.into(),
+                        actual: begin_string.into(),
+                    });
+                }
             }
         }
 
@@ -241,9 +266,9 @@ impl DataDictionary {
         Ok(())
     }
     fn check_has_no_repeated_tags(map: &FieldMap) -> Result<(), MessageValidationError> {
-        if !map.repeated_tags().is_empty() {
+        if let Some(field) = map.repeated_tags().get(0) {
             Err(MessageValidationError::TagException(
-                TagException::repeated_tag(map.repeated_tags().get(0).unwrap().tag()),
+                TagException::repeated_tag(field.tag()),
             ))
         } else {
             Ok(())
@@ -438,45 +463,46 @@ impl DataDictionary {
         group_definition: Option<&DDGroup>,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-        if group_definition.is_none() {
-            return Ok(());
-        }
-        let group_definition = group_definition.unwrap();
-        DataDictionary::check_has_no_repeated_tags(group)?;
+        match group_definition {
+            Some(group_definition) => {
+                DataDictionary::check_has_no_repeated_tags(group)?;
 
-        let mut last_field = 0;
-        for (_, v) in group.entries() {
-            let field = v;
+                let mut last_field = 0;
+                for (_, v) in group.entries() {
+                    let field = v;
 
-            if last_field != 0 && field.tag() == last_field {
-                return Err(MessageValidationError::TagException(TagException::repeated_tag(last_field)));
-            }
-            self.check_has_value(field)?;
+                    if last_field != 0 && field.tag() == last_field {
+                        return Err(MessageValidationError::TagException(TagException::repeated_tag(last_field)));
+                    }
+                    self.check_has_value(field)?;
 
-            if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
-                self.check_valid_format(field)?;
+                    if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
+                        self.check_valid_format(field)?;
 
-                if self.should_check_tag(field) {
-                    self.check_valid_tag_number(field.tag())?;
+                        if self.should_check_tag(field) {
+                            self.check_valid_tag_number(field.tag())?;
 
-                    self.check_value(field)?;
-                    self.check_is_in_group(field, group_definition, msg_type)?;
-                    self.check_group_count(field, group, msg_type)?;
+                            self.check_value(field)?;
+                            self.check_is_in_group(field, group_definition, msg_type)?;
+                            self.check_group_count(field, group, msg_type)?;
+                        }
+                    }
+                    last_field = field.tag();
                 }
-            }
-            last_field = field.tag();
-        }
 
-        // check contents of each nested group
-        for tag in group.group_tags() {
-            for i in 1..=group.group_count(*tag)? {
-                let g = group.get_group(i as u32, *tag)?;
-                let ddg = group_definition.get_group(*tag);
-                self.iterate_group(g, ddg, msg_type)?;
-            }
-        }
+                // check contents of each nested group
+                for tag in group.group_tags() {
+                    for i in 1..=group.group_count(*tag)? {
+                        let g = group.get_group(i as u32, *tag)?;
+                        let ddg = group_definition.get_group(*tag);
+                        self.iterate_group(g, ddg, msg_type)?;
+                    }
+                }
 
-        Ok(())
+                Ok(())
+            }
+            None => Ok(()),
+        }
     }
 
     pub fn get_map_for_message(&self, msg_type: &str) -> Option<&DDMap> {
@@ -762,6 +788,7 @@ impl<'a> DerefMut for GoM<'a> {
 
 use std::io::Read;
 use std::println;
+use std::str::FromStr;
 use xmltree::Element;
 
 impl DataDictionary {
@@ -780,7 +807,7 @@ impl DataDictionary {
         }
     }
 
-    pub fn load(&mut self, path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load(&mut self, path: &str) -> Result<Self, DataDictionaryError> {
         let mut file = File::open(path)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
@@ -788,15 +815,15 @@ impl DataDictionary {
         Self::load_from_string(&contents)
     }
 
-    pub fn load_from_string(contents: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load_from_string(contents: &str) -> Result<Self, DataDictionaryError> {
         let root_doc = Element::parse(contents.as_bytes())?;
 
-        let (major_version, minor_version, version) = get_version_info(&root_doc);
-        let (fields_by_tag, fields_by_name) = parse_fields(&root_doc);
-        let components_by_name = cache_components(&root_doc);
-        let messages = parse_messages(&root_doc, &fields_by_name, &components_by_name);
-        let header = parse_header(&root_doc, &fields_by_name, &components_by_name);
-        let trailer = parse_trailer(&root_doc, &fields_by_name, &components_by_name);
+        let (_major_version, _minor_version, version) = get_version_info(&root_doc)?;
+        let (fields_by_tag, fields_by_name) = parse_fields(&root_doc)?;
+        let components_by_name = cache_components(&root_doc)?;
+        let messages = parse_messages(&root_doc, &fields_by_name, &components_by_name)?;
+        let header = parse_header(&root_doc, &fields_by_name, &components_by_name)?;
+        let trailer = parse_trailer(&root_doc, &fields_by_name, &components_by_name)?;
 
         Ok(DataDictionary {
             version: Some(version),
@@ -814,19 +841,21 @@ impl DataDictionary {
 
 }
 
-fn get_version_info(doc: &Element) -> (String, String, String) {
-    let major_version = doc.attributes.get("major").unwrap().to_string();
-    let minor_version = doc.attributes.get("minor").unwrap().to_string();
+fn get_version_info(doc: &Element) -> Result<(String, String, String), DataDictionaryError> {
+    let major_version = doc.attributes.get("major")
+        .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "major".into() })?.to_string();
+    let minor_version = doc.attributes.get("minor")
+        .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "minor".into() })?.to_string();
     let version = "FIX".to_string();
     let version_type = doc.attributes.get("type").unwrap_or(&version);
     if version_type != "FIX" && version_type != "FIXT" {
-        panic!("Type must be FIX or FIXT in config");
+        return Err(DataDictionaryError::InvalidVersionType { version_type: version_type.clone() });
     }
     let version = format!("{}.{}.{}", version_type, major_version, minor_version);
-    return (major_version, minor_version, version);
+    Ok((major_version, minor_version, version))
 }
 
-fn parse_fields(doc: &Element) -> (BTreeMap<i32, DDField>, BTreeMap<String, DDField>) {
+fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, DDField>, BTreeMap<String, DDField>), DataDictionaryError> {
     let mut fields_by_tag: BTreeMap<i32, DDField> = BTreeMap::new();
     let mut fields_by_name: BTreeMap<String, DDField> = BTreeMap::new();
     let field_nodes = doc
@@ -838,17 +867,21 @@ fn parse_fields(doc: &Element) -> (BTreeMap<i32, DDField>, BTreeMap<String, DDFi
         .filter(|node| node.name == "field");
 
     for field_node in field_nodes {
-        let tag_str = field_node.attributes.get("number").unwrap();
-        let name = field_node.attributes.get("name").unwrap();
-        let field_type = field_node.attributes.get("type").unwrap();
+        let tag_str = field_node.attributes.get("number")
+            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "major".into() })?;
+        let name = field_node.attributes.get("name")
+            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?;
+        let field_type = field_node.attributes.get("type")
+            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "type".into() })?;
 
-        let tag = tag_str.parse::<i32>().unwrap();
+        let tag = tag_str.parse::<i32>()?;
         let mut enums = BTreeMap::new();
         for enum_node in field_node.children.iter()
             .filter_map(|c| c.as_element())
             .filter(|c| c.name == "value")
         {
-            let enum_value = enum_node.attributes.get("enum").unwrap().clone();
+            let enum_value = enum_node.attributes.get("enum")
+                .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "enum".into() })?.clone();
             let description = enum_node.attributes.get("description").map(|s| s.clone()).unwrap_or_default();
             enums.insert(enum_value, description);
         }
@@ -869,10 +902,10 @@ fn parse_fields(doc: &Element) -> (BTreeMap<i32, DDField>, BTreeMap<String, DDFi
         fields_by_tag.insert(tag, dd_field.clone());
         fields_by_name.insert(name.clone(), dd_field);
     }
-    return (fields_by_tag, fields_by_name);
+    return Ok((fields_by_tag, fields_by_name));
 }
 
-fn cache_components(doc: &Element) -> BTreeMap<String, Element> {
+fn cache_components(doc: &Element) -> Result<BTreeMap<String, Element>, DataDictionaryError> {
     let mut components_by_name: BTreeMap<String, Element> = BTreeMap::new();
     let component_nodes = doc
         .children.iter()
@@ -883,13 +916,14 @@ fn cache_components(doc: &Element) -> BTreeMap<String, Element> {
         .filter(|node| node.name == "component");
 
     for component_node in component_nodes {
-        let name = component_node.attributes.get("name").unwrap().clone();
+        let name = component_node.attributes.get("name")
+            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone();
         components_by_name.insert(name, component_node.clone());
     }
-    components_by_name
+    Ok(components_by_name)
 }
 
-fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> BTreeMap<String, DDMap> {
+fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> Result<BTreeMap<String, DDMap>, DataDictionaryError> {
     let mut messages: BTreeMap<String, DDMap> = BTreeMap::new();
     let message_nodes = doc
         .children.iter()
@@ -901,27 +935,28 @@ fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, com
 
     for message_node in message_nodes {
         let mut dd_map = DDMap::default();
-        parse_msg_element(&message_node, &mut dd_map, fields_by_name, components_by_name);
-        let msg_type = message_node.attributes.get("msgtype").unwrap().clone();
+        parse_msg_element(&message_node, &mut dd_map, fields_by_name, components_by_name)?;
+        let msg_type = message_node.attributes.get("msgtype")
+            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "msgtype".into() })?.clone();
         messages.insert(msg_type, dd_map);
     }
-    messages
+    Ok(messages)
 }
 
-fn parse_header(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> DDMap {
+fn parse_header(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> Result<DDMap, DataDictionaryError> {
     let mut dd_map = DDMap::default();
     if let Some(header_node) = doc.get_child("header") {
-        parse_msg_element(&header_node, &mut dd_map, fields_by_name, components_by_name);
+        parse_msg_element(&header_node, &mut dd_map, fields_by_name, components_by_name)?;
     }
-    dd_map
+    Ok(dd_map)
 }
 
-fn parse_trailer(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> DDMap {
+fn parse_trailer(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> Result<DDMap, DataDictionaryError> {
     let mut dd_map = DDMap::default();
     if let Some(trailer_node) = doc.get_child("trailer") {
-        parse_msg_element(&trailer_node, &mut dd_map, fields_by_name, components_by_name);
+        parse_msg_element(&trailer_node, &mut dd_map, fields_by_name, components_by_name)?;
     }
-    dd_map
+    Ok(dd_map)
 }
 
 fn verify_child_node(child_node: &Element, parent_node: &Element) {
@@ -949,8 +984,8 @@ fn parse_msg_element(
     dd_map: &mut DDMap,
     fields_by_name: &BTreeMap<String, DDField>,
     components_by_name: &BTreeMap<String, Element>,
-) {
-    parse_msg_element_inner(node, &mut GoM::Map(dd_map), fields_by_name, components_by_name, None);
+) -> Result<(), DataDictionaryError> {
+    parse_msg_element_inner(node, &mut GoM::Map(dd_map), fields_by_name, components_by_name, None)
 }
 
 fn parse_msg_element_inner(
@@ -959,7 +994,7 @@ fn parse_msg_element_inner(
     fields_by_name: &BTreeMap<String, DDField>,
     components_by_name: &BTreeMap<String, Element>,
     component_required: Option<bool>,
-) {
+) -> Result<(), DataDictionaryError> {
     let message_type_name = node
         .attributes
         .get("name")
@@ -967,75 +1002,79 @@ fn parse_msg_element_inner(
         .unwrap_or_else(|| node.name.clone());
 
     if node.children.is_empty() {
-        return;
+        return Ok(());
     }
 
     for child_node in node.children.iter() {
-        let child_node = child_node.as_element().unwrap();
-        verify_child_node(child_node, node);
+        if let Some(child_node) = child_node.as_element() {
+            verify_child_node(child_node, node);
 
-        let name_attribute = child_node.attributes.get("name").unwrap().clone();
+            let name_attribute = child_node.attributes.get("name")
+                .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone();
 
-        match child_node.name.as_str() {
-            "field" | "group" => {
-                if !fields_by_name.contains_key(&name_attribute) {
-                    panic!(
-                        "Field '{}' is not defined in <fields> section.",
-                        name_attribute
-                    );
-                }
-                let dd_field = fields_by_name.get(&name_attribute).unwrap().clone();
-                let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false)
-                    && component_required.unwrap_or(true);
-
-                if required {
-                    dd_map.required_fields.insert(dd_field.tag);
-                }
-
-                if !dd_map.is_field(dd_field.tag) {
-                    dd_map.fields.insert(dd_field.tag, dd_field.clone());
-                }
-
-                //TODO check if ddmap is a ddgroup and set delim!
-                if let GoM::Group(grp) = dd_map {
-                    if grp.delim == 0 {
-                        grp.delim = dd_field.tag;
+            match child_node.name.as_str() {
+                "field" | "group" => {
+                    if !fields_by_name.contains_key(&name_attribute) {
+                        panic!(
+                            "Field '{}' is not defined in <fields> section.",
+                            name_attribute
+                        );
                     }
-                }
-
-                if child_node.name == "group" {
-                    let mut dd_grp = DDGroup::default();
-                    dd_grp.num_fld = dd_field.tag;
+                    let dd_field = fields_by_name.get(&name_attribute)
+                        .ok_or(DataDictionaryError::Missing { entry_type: "field".into(), name: name_attribute.clone() })?.clone();
+                    let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false)
+                        && component_required.unwrap_or(true);
 
                     if required {
-                        dd_grp.required = true;
+                        dd_map.required_fields.insert(dd_field.tag);
                     }
 
-                    {
-                        let mut dd_map = GoM::Group(&mut dd_grp);
-                        parse_msg_element_inner(child_node, &mut dd_map, fields_by_name, components_by_name, None);
+                    if !dd_map.is_field(dd_field.tag) {
+                        dd_map.fields.insert(dd_field.tag, dd_field.clone());
                     }
 
-                    dd_map.groups.insert(dd_field.tag, dd_grp);
+                    //TODO check if ddmap is a ddgroup and set delim!
+                    if let GoM::Group(grp) = dd_map {
+                        if grp.delim == 0 {
+                            grp.delim = dd_field.tag;
+                        }
+                    }
+
+                    if child_node.name == "group" {
+                        let mut dd_grp = DDGroup::default();
+                        dd_grp.num_fld = dd_field.tag;
+
+                        if required {
+                            dd_grp.required = true;
+                        }
+
+                        {
+                            let mut dd_map = GoM::Group(&mut dd_grp);
+                            parse_msg_element_inner(child_node, &mut dd_map, fields_by_name, components_by_name, None)?;
+                        }
+
+                        dd_map.groups.insert(dd_field.tag, dd_grp);
+                    }
                 }
-            }
-            "component" => {
-                let component_node = components_by_name
-                    .get(&name_attribute)
-                    .unwrap()
-                    .clone();
+                "component" => {
+                    let component_node = components_by_name
+                        .get(&name_attribute)
+                        .ok_or(DataDictionaryError::Missing { entry_type: "component".into(), name: name_attribute.clone() })?
+                        .clone();
 
-                let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false);
-                parse_msg_element_inner(&component_node, dd_map, fields_by_name, components_by_name, Some(required));
+                    let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false);
+                    parse_msg_element_inner(&component_node, dd_map, fields_by_name, components_by_name, Some(required))?;
+                }
+                _ => panic!(
+                    "Malformed data dictionary: child node type should be one of {{field,group,component}} but is '{}' within parent '{}/{}'",
+                    child_node.name,
+                    node.name,
+                    message_type_name
+                ),
             }
-            _ => panic!(
-                "Malformed data dictionary: child node type should be one of {{field,group,component}} but is '{}' within parent '{}/{}'",
-                child_node.name,
-                node.name,
-                message_type_name
-            ),
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1070,14 +1109,20 @@ mod tests {
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX43.xml"));
         println!("{:?}", result);
         assert!(result.is_ok());
-        let dd = result.unwrap();
-        let newordersingle = dd.messages().get("D");
-        assert!(newordersingle.is_some());
-        let handlinst = dd.fields_by_name.get("HandlInst");
-        assert!(handlinst.is_some());
-        let handlinst_in_message = newordersingle.unwrap().fields.contains_key(&handlinst.unwrap().tag);
-        println!("{:?}", handlinst_in_message);
-        assert!(handlinst_in_message)
+        if let Ok(dd) = result {
+            let newordersingle = dd.messages().get("D");
+            let handlinst = dd.fields_by_name.get("HandlInst");
+            assert!(newordersingle.is_some());
+            assert!(handlinst.is_some());
+            match (newordersingle, handlinst) {
+                (Some(newordersingle), Some(handlinst)) => {
+                    let handlinst_in_message = newordersingle.fields.contains_key(&handlinst.tag);
+                    println!("{:?}", handlinst_in_message);
+                    assert!(handlinst_in_message)
+                }
+                _ => (),
+            }
+        }
     }
 
     #[test]

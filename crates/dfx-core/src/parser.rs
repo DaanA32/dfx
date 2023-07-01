@@ -118,16 +118,12 @@ pub fn extract_length(buffer: &[u8]) -> Option<(usize, usize)> {
 
 pub fn read_version(buffer: &[u8]) -> Option<&str> {
     let pos: Option<usize> = buffer.find("8=".as_bytes());
-    if pos == None || pos == Some(usize::MAX) {
-        None
-    } else {
-        let pos = pos.unwrap();
-        let found = buffer[pos..].find('\x01');
-        let end = found.unwrap();
-        match std::str::from_utf8(&buffer[pos + 2..end]) {
-            Ok(s) => Some(s),
-            Err(_) => None,
-        }
+    let pos = pos?;
+    let found = buffer[pos..].find('\x01');
+    let end = found?;
+    match std::str::from_utf8(&buffer[pos + 2..end]) {
+        Ok(s) => Some(s),
+        Err(_) => None,
     }
 }
 
@@ -146,14 +142,18 @@ mod tests {
         parser.add_to_stream(buffer);
         let msg = parser.read_fix_message();
         assert!(msg.is_ok());
-        assert!(msg.unwrap().is_some());
-        assert!(!parser.buffer.is_empty());
-        println!(
-            "{}",
-            parser.buffer.iter().map(|b| *b as char).collect::<String>()
-        );
+        if let Ok(msg) = msg {
+            assert!(msg.is_some());
+            assert!(!parser.buffer.is_empty());
+            println!(
+                "{}",
+                parser.buffer.iter().map(|b| *b as char).collect::<String>()
+            );
+        }
         let msg = parser.read_fix_message();
         assert!(msg.is_ok());
-        assert!(msg.unwrap().is_some());
+        if let Ok(msg) = msg {
+            assert!(msg.is_some());
+        }
     }
 }
