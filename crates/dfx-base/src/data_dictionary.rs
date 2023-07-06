@@ -515,7 +515,7 @@ impl DataDictionary {
 
     pub(crate) fn is_length_field(&self, tag: Tag) -> bool {
         match self.fields_by_tag.get(&tag) {
-            Some(field) => field.field_type() == "LENGTH" && field.name() != "BodyLength",
+            Some(field) => field.field_type() == "LENGTH" && field.name().as_ref() != "BodyLength",
             None => false,
         }
     }
@@ -678,7 +678,7 @@ pub enum DictionaryError {
 #[derive(Debug, Clone)]
 pub struct DDField {
     tag: Tag,
-    name: String,
+    name: Arc<str>,
     enum_dictionary: BTreeMap<String, String>,
     field_type: String,
     is_multiple_value_field_with_enums: bool,
@@ -691,7 +691,7 @@ impl DDField {
 
     pub fn new(
         tag: Tag,
-        name: String,
+        name: Arc<str>,
         enum_dictionary: BTreeMap<String, String>,
         field_type: String,
         // TODO type?
@@ -712,7 +712,7 @@ impl DDField {
     pub fn tag(&self) -> Tag {
         self.tag
     }
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &Arc<str> {
         &self.name
     }
     pub fn has_enums(&self) -> bool {
@@ -787,8 +787,9 @@ impl<'a> DerefMut for GoM<'a> {
 }
 
 use std::io::Read;
-
-
+use std::println;
+use std::str::FromStr;
+use std::sync::Arc;
 use xmltree::Element;
 
 impl DataDictionary {
@@ -893,7 +894,7 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, DDField>, BTreeMap<Strin
 
         let dd_field = DDField {
             tag,
-            name: name.clone(),
+            name: name.into_arc(),
             enum_dictionary: enums,
             field_type: field_type.clone(),
             is_multiple_value_field_with_enums
@@ -1075,6 +1076,21 @@ fn parse_msg_element_inner(
         }
     }
     Ok(())
+}
+
+trait IntoArcStr {
+    fn into_arc(self) -> Arc<str>;
+}
+impl IntoArcStr for &String {
+    fn into_arc(self) -> Arc<str> {
+        self.clone().into_arc()
+    }
+}
+
+impl IntoArcStr for String {
+    fn into_arc(self) -> Arc<str> {
+        Arc::from(self.as_str())
+    }
 }
 
 #[cfg(test)]
