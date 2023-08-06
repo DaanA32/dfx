@@ -517,6 +517,13 @@ impl SessionSetting {
         SocketSettings::new(self.connection.socket_addr().clone(), self.socket_options.clone(), self.ssl_options.clone())
     }
 
+    pub(crate) fn reconnect_interval(&self) -> Option<u32> {
+        match self.connection {
+            SettingsConnection::Acceptor { .. } => None,
+            SettingsConnection::Initiator { reconnect_interval, .. } => Some(reconnect_interval),
+        }
+    }
+
     pub(crate) fn accepts(&self, session_id: &SessionId) -> bool {
         if self.is_dynamic() {
             let sender_comp_ok = match self.session_id.sender_comp_id() {

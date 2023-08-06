@@ -1,8 +1,9 @@
 use std::{
     sync::{atomic::AtomicBool, Arc},
-    thread::{self, JoinHandle}, eprintln,
+    thread::{self, JoinHandle}, eprintln, time::Duration,
 };
 
+use chrono::Utc;
 use dfx_core::data_dictionary_provider::DataDictionaryProvider;
 use dfx_core::message_factory::MessageFactory;
 use crate::{
@@ -118,14 +119,23 @@ where App: Application + Clone + 'static,
         }
     }
 
-    pub(crate) fn start(mut self, _running: &Arc<AtomicBool>) -> JoinHandle<()> {
+    pub(crate) fn start(mut self, running: &Arc<AtomicBool>) -> JoinHandle<()> {
+        let running = running.clone();
         thread::Builder::new()
             .name("socket-initiator-thread".into())
             .spawn(move || {
-                if let Err(e) = self.event_loop() {
-                    match e {
-                        e => println!("SocketInitiator Connect error to {:?}: {:?}", self.session_settings.socket_settings(), e),
+                let timeout = self.session_settings.reconnect_interval()
+                    .unwrap_or(30) as u64;
+                // loop here for session reconnect!
+                while running.load(std::sync::atomic::Ordering::Relaxed) {
+                    if self.session_settings.schedule().is_session_time(&Utc::now()) {
+                        if let Err(e) = self.event_loop() {
+                            match e {
+                                e => println!("SocketInitiator Connect error to {:?}: {:?}", self.session_settings.socket_settings(), e),
+                            }
+                        }
                     }
+                    thread::sleep(Duration::from_millis(timeout))
                 }
             })
             .expect("socket-acceptor-thread started")

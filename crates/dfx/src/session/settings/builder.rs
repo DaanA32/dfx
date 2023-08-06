@@ -518,6 +518,9 @@ impl DynamicSessionSettingBuilder {
         let any_set = self.start_day.as_ref().or(self.end_day.as_ref()).or(self.end_time.as_ref()).or(self.start_time.as_ref()).is_some();
         let schedule = if self.non_stop_session.map(|v| v == "Y").unwrap_or(true) && !any_set {
             SessionSchedule::NonStop
+        // } else if self.even_minutes_session.map(|v| v == "Y").unwrap_or(true) && !any_set {
+        //     #[cfg(test)]
+        //     SessionSchedule::EvenMinutes
         } else {
             match (self.start_day, self.end_day, self.start_time, self.end_time, self.time_zone) {
                 (Some(start_day), Some(end_day), Some(start_time), Some(end_time), timezone) => {
