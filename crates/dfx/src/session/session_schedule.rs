@@ -1,11 +1,15 @@
 use chrono::naive::Days;
-use chrono::{DateTime, Datelike, NaiveDateTime, NaiveTime, Utc, Weekday, Timelike, Duration};
+use chrono::{DateTime, Datelike, NaiveDateTime, NaiveTime, Utc, Weekday};
 use chrono_tz::Tz;
+
+#[cfg(test)]
+use chrono::{Timelike, Duration};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum SessionSchedule {
     NonStop,
-    // #[cfg(test)]
+    #[allow(dead_code)]
+    #[cfg(test)]
     EvenMinutes,
     Weekly {
         start_day: Weekday,
@@ -38,12 +42,11 @@ impl SessionSchedule {
         }
     }
 
-    //TODO convert to chrono::DateTime
     fn next_end(&self, old_time: DateTime<Utc>) -> DateTime<Utc> {
         assert!(self != &Self::NonStop);
         match self {
             SessionSchedule::NonStop => unreachable!(),
-            // #[cfg(test)]
+            #[cfg(test)]
             SessionSchedule::EvenMinutes => {
                 let mut end = old_time.clone();
                 if end.minute() % 2 == 1 {
@@ -80,7 +83,7 @@ impl SessionSchedule {
         let now = self.adjust_utc_datetime(*time);
         match self {
             SessionSchedule::NonStop => true,
-            // #[cfg(test)]
+            #[cfg(test)]
             SessionSchedule::EvenMinutes => now.minute() % 2 == 0,
             SessionSchedule::Weekly { .. } => self.check_day(now),
             SessionSchedule::Daily { .. } => self.check_time(&now.time()),
@@ -91,7 +94,7 @@ impl SessionSchedule {
         assert!(matches!(self, SessionSchedule::Weekly { .. }));
         match self {
             SessionSchedule::NonStop => unreachable!(),
-            // #[cfg(test)]
+            #[cfg(test)]
             SessionSchedule::EvenMinutes => unreachable!(),
             SessionSchedule::Weekly {
                 start_day,
@@ -147,7 +150,7 @@ impl SessionSchedule {
         );
         let (start_time, end_time) = match self {
             SessionSchedule::NonStop => unreachable!(),
-            // #[cfg(test)]
+            #[cfg(test)]
             SessionSchedule::EvenMinutes => unreachable!(),
             SessionSchedule::Weekly {
                 start_time,
@@ -183,7 +186,7 @@ impl SessionSchedule {
     fn use_local_time(&self) -> bool {
         match self {
             SessionSchedule::NonStop => false,
-            // #[cfg(test)]
+            #[cfg(test)]
             SessionSchedule::EvenMinutes => false,
             SessionSchedule::Weekly { use_localtime, .. } => *use_localtime,
             SessionSchedule::Daily { use_localtime, .. } => *use_localtime,
@@ -193,7 +196,7 @@ impl SessionSchedule {
     fn timezone(&self) -> Option<&Tz> {
         match self {
             SessionSchedule::NonStop => None,
-            // #[cfg(test)]
+            #[cfg(test)]
             SessionSchedule::EvenMinutes => None,
             SessionSchedule::Weekly { timezone, .. } => timezone.as_ref(),
             SessionSchedule::Daily { timezone, .. } => timezone.as_ref(),

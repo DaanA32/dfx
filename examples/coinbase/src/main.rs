@@ -44,7 +44,7 @@ impl Application for CoinbaseApp {
         let msg_type = message.header().get_string(tags::MsgType)?;
         match msg_type.as_str() {
             "A" => {
-                message.set_tag_value(tags::ResetSeqNumFlag, "Y");
+                // message.set_tag_value(tags::ResetSeqNumFlag, "Y");
                 message.set_tag_value(tags::Password, &self.password);
                 let sending_time = message.header().get_string(tags::SendingTime)?;
                 let msg_seq_num = message.header().get_string(tags::MsgSeqNum)?;
