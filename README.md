@@ -22,30 +22,29 @@ A FIX protocol engine.
     > IGNORED!
     > Currently not supported by Quickfix or Quickfix/N
   - [x] MISC
-
-## WIP
-
+- [x] SSL / TLS
 - [x] FileStore for messages
 - [x] FileLogger
   - [x] Similar to quickfix
   - [x] [`log`](https://docs.rs/log/latest/log/) Logger
-- [ ] Add inline and doc comments
- - [ ] Doc External
- - [ ] Doc Internal
- - [ ] Inline
 
+## WIP
+
+- Add inline and doc comments
+ - Doc External
+ - Doc Internal
+ - Inline
+ 
 ## TODO
-
-- [ ] Add message factory from data dictionary.
-- [ ] Codegen static data dictionary from xml.
-- [ ] Replace with Traits where possible
-- [ ] Allow compile time message definitions
-- [ ] MessageCracker
-- [ ] Cleanup session.rs
-  - [ ] Simplify message handling
-  - [ ] Simplify next / next_msg()
-- [ ] Generate report from test suite (For easier tracking)
-- [ ] SSL / TLS
+- Add message factory from data dictionary.
+- Codegen static data dictionary from xml.
+- Replace with Traits where possible
+- Allow compile time message definitions
+- MessageCracker
+- Cleanup session.rs
+  - Simplify message handling
+  - Simplify next / next_msg()
+- Generate report from test suite (For easier tracking)
 
 ## Credits
 Heavily derived / inspired from [QuickfixN](https://github.com/connamara/quickfixn/)
