@@ -16,6 +16,7 @@ use crate::fields::ApplVerID;
 use crate::fields::ConversionError;
 use crate::fix_values;
 pub use crate::message_factory::*;
+use crate::parser::read_msg_type;
 use crate::session_id::SessionId;
 use crate::tags;
 use std::fmt::Display;
@@ -559,23 +560,14 @@ impl Message {
         Ok(f.string_value().clone()?)
     }
 
-    pub(crate) fn get_msg_type(msgstr: &[u8]) -> Result<&str, MessageParseError> {
-        //TODO Fix this
-        lazy_static! {
-            static ref RE: Regex = Regex::new(r"35=([^\x01]*)\x01").unwrap();
+    pub(crate) fn get_msg_type(bytes: &[u8]) -> Result<&str, MessageParseError> {
+        match read_msg_type(bytes) {
+            Some(s) => Ok(s),
+            None => Err(MessageParseError::Malformed { tag: 35, message: format!(
+                    "missing or malformed tag 35 in msg: {:?}",
+                    String::from_utf8_lossy(bytes)
+            )})
         }
-        let msgstr = unsafe {
-            std::str::from_utf8_unchecked(msgstr)
-        };
-        let captures = RE.captures(msgstr);
-        captures
-            .and_then(|cap| cap.get(1).map(|login| login.as_str()))
-            .ok_or_else(|| {
-                MessageParseError::Malformed { tag: 35, message: format!(
-                    "missing or malformed tag 35 in msg: {}",
-                    msgstr
-                )}
-            })
     }
 
     pub fn identify_type(msg_str: &[u8]) -> Result<&str, MessageParseError> {

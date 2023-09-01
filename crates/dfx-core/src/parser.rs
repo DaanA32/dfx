@@ -11,9 +11,13 @@ impl Parser {
     pub fn add_to_stream(&mut self, read: &[u8]) {
         self.buffer.extend_from_slice(read)
     }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear()
+    }
 }
 
-trait Find<T> {
+pub(crate) trait Find<T> {
     fn find(&self, item: T) -> Option<usize>;
 }
 
@@ -127,12 +131,25 @@ pub fn read_version(buffer: &[u8]) -> Option<&str> {
     }
 }
 
+pub fn read_msg_type(buffer: &[u8]) -> Option<&str> {
+    let pos: Option<usize> = buffer.find("\x0135=".as_bytes());
+    let pos = pos? + 4;
+    let found = buffer[pos..].find('\x01');
+    let end = found? + pos;
+    match std::str::from_utf8(&buffer[pos..end]) {
+        Ok(s) => Some(s),
+        Err(_) => None,
+    }
+}
+
 #[derive(Debug)]
 pub enum ParserError {}
 
 #[cfg(test)]
 mod tests {
     use crate::parser::Parser;
+
+    use super::read_msg_type;
 
     #[test]
     pub fn two_in_one() {
@@ -155,5 +172,21 @@ mod tests {
         if let Ok(msg) = msg {
             assert!(msg.is_some());
         }
+    }
+
+    #[test]
+    pub fn test_read_msg_type() {
+        let buffer = b"8=FIX.4.4\x019=57\x0135=A\x0134=1\x0149=ISLD\x0152=00000000-00:00:00\x0156=TW\x0198=0\x01108=30\x0110=0\x018=FIX.4.4\x019=45\x0135=5\x0134=2\x0149=ISLD\x0152=00000000-00:00:00\x0156=TW\x0110=0\x01";
+        let msg_type = read_msg_type(buffer);
+        assert!(msg_type.is_some());
+        assert_eq!(msg_type.unwrap(), "A");
+    }
+
+    #[test]
+    pub fn test_read_msg_type_longer() {
+        let buffer = b"8=FIX.4.4\x019=57\x0135=AASDFA\x0134=1\x0149=ISLD\x0152=00000000-00:00:00\x0156=TW\x0198=0\x01108=30\x0110=0\x018=FIX.4.4\x019=45\x0135=5\x0134=2\x0149=ISLD\x0152=00000000-00:00:00\x0156=TW\x0110=0\x01";
+        let msg_type = read_msg_type(buffer);
+        assert!(msg_type.is_some());
+        assert_eq!(msg_type.unwrap(), "AASDFA");
     }
 }
