@@ -1,8 +1,8 @@
 use std::cmp;
 use std::cmp::min;
-use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::sync_channel;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -54,6 +54,7 @@ lazy_static! {
 }
 
 pub mod Session {
+
     use dfx_core::{message::Message, session_id::SessionId};
     use super::{SESSION_MAP, SessionError};
 
@@ -64,11 +65,23 @@ pub mod Session {
         }
         Ok(())
     }
+
+}
+fn connect(session_id: &SessionId) -> Result<Receiver<Message>, InternalSessionError> {
+    if SESSION_MAP.contains_key(session_id) {
+        return Err(InternalSessionError::AlreadyConnected);
+    }
+    let (tx, rx) = sync_channel(512);
+    SESSION_MAP.insert_new(session_id.clone(), tx);
+    Ok(rx)
+}
+fn disconnect_session(session_id: &SessionId) {
+    SESSION_MAP.remove(&session_id);
 }
 
 //TODO: dyn to generic?
-pub(crate) struct ISession {
-    application: Box<dyn Application>,
+pub(crate) struct ISession<App: Application> {
+    application: App,
     session_id: SessionId,
     _data_dictionary_provider: Box<dyn DataDictionaryProvider>, // TODO: REMOVE candidate
     schedule: SessionSchedule,
@@ -148,10 +161,10 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
     }
 }
 
-impl ISession {
+impl<App: Application> ISession<App> {
     pub(crate) fn from_settings(
         session_id: SessionId,
-        app: Box<dyn Application>,
+        app: App,
         store_factory: Box<dyn MessageStoreFactory>,
         mut data_dictionary_provider: Box<dyn DataDictionaryProvider>,
         log_factory: Option<Box<dyn LogFactory>>,
@@ -245,26 +258,14 @@ impl ISession {
         &mut self,
         session_id: &SessionId,
     ) -> Result<(), InternalSessionError> {
-        let receiver = ISession::connect(&session_id);
+        let receiver = connect(&session_id);
         self.outbound = Some(receiver?);
         Ok(())
     }
 
     pub(crate) fn set_disconnected(&mut self, session_id: &SessionId) {
-        ISession::disconnect_session(session_id);
+        disconnect_session(session_id);
         self.outbound = None;
-    }
-
-    fn connect(session_id: &SessionId) -> Result<Receiver<Message>, InternalSessionError> {
-        if SESSION_MAP.contains_key(session_id) {
-            return Err(InternalSessionError::AlreadyConnected);
-        }
-        let (tx, rx) = sync_channel(512);
-        SESSION_MAP.insert_new(session_id.clone(), tx);
-        Ok(rx)
-    }
-    fn disconnect_session(session_id: &SessionId) {
-        SESSION_MAP.remove(&session_id);
     }
 
     fn process_outbound(&mut self) {

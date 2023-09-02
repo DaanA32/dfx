@@ -21,8 +21,8 @@ use crate::{
 use super::{ConnectionError, Stream, StreamError};
 
 pub(crate) const BUF_SIZE: usize = 512;
-pub(crate) struct SocketReactor<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
-    session: Option<ISession>,
+pub(crate) struct SocketReactor<App: Application, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
+    session: Option<ISession<App>>,
     parser: Parser,
     stream: Option<Stream>,
     buffer: [u8; BUF_SIZE],
@@ -125,11 +125,11 @@ where App: Application + Clone + 'static,
         }
     }
 
-    pub(crate) fn get_session_mut(&mut self) -> Option<&mut ISession> {
+    pub(crate) fn get_session_mut(&mut self) -> Option<&mut ISession<App>> {
         self.session.as_mut()
     }
 
-    pub(crate) fn start(mut self) -> Option<Session> {
+    pub(crate) fn start(mut self) -> Option<ISession<App>> {
         // TODO while within session time
         if let Err(e) = self.event_loop() {
             match e {
@@ -179,7 +179,7 @@ where App: Application + Clone + 'static,
             .as_mut()
             .unwrap()
             .shutdown(std::net::Shutdown::Both)?;
-        println!("Disconnected: {remote}");
+        println!("Disconnected: {remote:?}");
         Ok(())
     }
 
@@ -263,10 +263,10 @@ where App: Application + Clone + 'static,
         Ok(())
     }
 
-    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> ISession {
+    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> ISession<App> {
         ISession::from_settings(
             session_id,
-            Box::new(self.app.clone()),
+            self.app.clone(),
             Box::new(self.store_factory.clone()),
             Box::new(self.data_dictionary_provider.clone()),
             Some(Box::new(self.log_factory.clone())),
