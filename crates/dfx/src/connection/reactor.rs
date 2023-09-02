@@ -15,14 +15,14 @@ use crate::{
     session::{
         Application, ChannelResponder, ResponderEvent, ResponderResponse, ISession,
         SessionSetting,
-    }, message_store::MessageStoreFactory, logging::LogFactory,
+    }, message_store::MessageStoreFactory, logging::{LogFactory, Logger},
 };
 
 use super::{ConnectionError, Stream, StreamError};
 
 pub(crate) const BUF_SIZE: usize = 512;
-pub(crate) struct SocketReactor<App: Application, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
-    session: Option<ISession<App>>,
+pub(crate) struct SocketReactor<App: Application, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory, Log> {
+    session: Option<ISession<App, DataDictionaryProvider, Log, MessageFactory>>,
     parser: Parser,
     stream: Option<Stream>,
     buffer: [u8; BUF_SIZE],
@@ -72,12 +72,13 @@ impl From<StreamError> for ReactorError {
     }
 }
 
-impl<App, SF, DDP, LF, MF> SocketReactor<App, SF, DDP, LF, MF>
+impl<App, SF, DDP, LF, MF, Log> SocketReactor<App, SF, DDP, LF, MF, Log>
 where App: Application + Clone + 'static,
       SF: MessageStoreFactory + Send + Clone + 'static,
       DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory + Send + Clone + 'static,
+      LF: LogFactory<Log = Log> + Send + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
+      Log: Logger + Clone + 'static
 {
     pub(crate) fn new(
         connection: Stream,
@@ -125,11 +126,11 @@ where App: Application + Clone + 'static,
         }
     }
 
-    pub(crate) fn get_session_mut(&mut self) -> Option<&mut ISession<App>> {
+    pub(crate) fn get_session_mut(&mut self) -> Option<&mut ISession<App, DDP, Log, MF>> {
         self.session.as_mut()
     }
 
-    pub(crate) fn start(mut self) -> Option<ISession<App>> {
+    pub(crate) fn start(mut self) -> Option<ISession<App, DDP, Log, MF>> {
         // TODO while within session time
         if let Err(e) = self.event_loop() {
             match e {
@@ -263,14 +264,15 @@ where App: Application + Clone + 'static,
         Ok(())
     }
 
-    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> ISession<App> {
+    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> ISession<App, DDP, Log, MF> {
+        let log = self.log_factory.create(&session_id);
         ISession::from_settings(
             session_id,
             self.app.clone(),
             Box::new(self.store_factory.clone()),
-            Box::new(self.data_dictionary_provider.clone()),
-            Some(Box::new(self.log_factory.clone())),
-            Box::new(self.message_factory.clone()),
+            self.data_dictionary_provider.clone(),
+            log,
+            self.message_factory.clone(),
             settings.clone()
         )
     }

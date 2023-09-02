@@ -19,7 +19,7 @@ impl Logger for NoLogger {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct PrintLnLogger {
+pub struct PrintLnLogger {
     session_id: SessionId,
 }
 impl Logger for PrintLnLogger {
@@ -43,29 +43,28 @@ impl Logger for PrintLnLogger {
 }
 
 pub trait LogFactory {
-    fn create(&self, session_id: &SessionId) -> Box<dyn Logger>;
+    type Log: Logger;
+    fn create(&self, session_id: &SessionId) -> Self::Log;
 }
 
 #[derive(Debug, Clone)]
 pub struct PrintlnLogFactory;
 impl PrintLnLogger {
-    pub fn new(session_id: &SessionId) -> Box<dyn Logger> {
-        Box::new(PrintLnLogger {
+    pub fn new(session_id: &SessionId) -> Self {
+        PrintLnLogger {
             session_id: session_id.clone(),
-        })
+        }
     }
 }
 impl PrintlnLogFactory {
     pub fn new() -> Self {
         PrintlnLogFactory
     }
-    pub fn boxed() -> Box<dyn LogFactory> {
-        Box::new(PrintlnLogFactory)
-    }
 }
 
 impl LogFactory for PrintlnLogFactory {
-    fn create(&self, session_id: &SessionId) -> Box<dyn Logger> {
+    type Log = PrintLnLogger;
+    fn create(&self, session_id: &SessionId) -> Self::Log {
         PrintLnLogger::new(session_id)
     }
 }
@@ -121,18 +120,18 @@ impl FileLogFactory {
             settings: settings.clone()
         }
     }
-    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory> {
+    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = FileLogger>> {
         Box::new(FileLogFactory::new(settings))
     }
 }
 
 impl LogFactory for FileLogFactory {
-    fn create(&self, session_id: &SessionId) -> Box<dyn Logger> {
+    type Log = FileLogger;
+    fn create(&self, session_id: &SessionId) -> Self::Log {
         let path = self.settings.for_session_id(session_id)
             .unwrap().logging();
         let logger = FileLogger::new(session_id, path);
-        Box::new(logger.unwrap())
-
+        logger.unwrap()
     }
 }
 #[derive(Debug)]
@@ -181,18 +180,18 @@ impl MacroLogFactory {
             settings: settings.clone()
         }
     }
-    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory> {
+    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = MacroLogger>> {
         Box::new(MacroLogFactory::new(settings))
     }
 }
 
 #[cfg(feature = "log")]
 impl LogFactory for MacroLogFactory {
-    fn create(&self, session_id: &SessionId) -> Box<dyn Logger> {
+    type Log = MacroLogger;
+    fn create(&self, session_id: &SessionId) -> Self::Log {
         let path = self.settings.for_session_id(session_id)
             .unwrap().logging();
         let logger = MacroLogger::new(session_id, path);
-        Box::new(logger)
-
+        logger
     }
 }

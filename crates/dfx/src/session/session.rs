@@ -53,6 +53,7 @@ lazy_static! {
     static ref SESSION_MAP: CHashMap<SessionId, SyncSender<Message>> = CHashMap::new();
 }
 
+#[allow(non_snake_case)]
 pub mod Session {
 
     use dfx_core::{message::Message, session_id::SessionId};
@@ -80,19 +81,20 @@ fn disconnect_session(session_id: &SessionId) {
 }
 
 //TODO: dyn to generic?
-pub(crate) struct ISession<App: Application> {
+pub(crate) struct ISession<App, DDP, Log, MF>
+{
     application: App,
     session_id: SessionId,
-    _data_dictionary_provider: Box<dyn DataDictionaryProvider>, // TODO: REMOVE candidate
+    _data_dictionary_provider: DDP, // TODO: REMOVE candidate
     schedule: SessionSchedule,
-    msg_factory: Box<dyn MessageFactory>,
+    msg_factory: MF,
     app_does_early_intercept: bool,
     sender_default_appl_ver_id: Option<String>,
     target_default_appl_ver_id: Option<u32>,
     session_data_dictionary: DataDictionary,     //Option?
     application_data_dictionary: DataDictionary, //Option?
-    log: Box<dyn Logger>,
-    state: SessionState,
+    log: Log,
+    state: SessionState<Log>,
     persist_messages: bool,
     reset_on_disconnect: bool,
     send_redundant_resend_requests: bool,
@@ -114,7 +116,7 @@ pub(crate) struct ISession<App: Application> {
     outbound: Option<Receiver<Message>>,
 }
 
-fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, settings: &SessionSetting) {
+fn add_data_dictionaries<D: DataDictionaryProvider>(provider: &mut D, settings: &SessionSetting) {
     let options = settings.validation_options();
     if options.use_data_dictionary() {
         if settings.session_id().is_fixt() {
@@ -161,14 +163,19 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
     }
 }
 
-impl<App: Application> ISession<App> {
+impl<App, DDP, Log, MF> ISession<App, DDP, Log, MF>
+where App: Application + Clone + 'static,
+      DDP: DataDictionaryProvider + Send + Clone + 'static,
+      Log: Logger + Clone,
+      MF: MessageFactory + Send + Clone + 'static,
+{
     pub(crate) fn from_settings(
         session_id: SessionId,
         app: App,
         store_factory: Box<dyn MessageStoreFactory>,
-        mut data_dictionary_provider: Box<dyn DataDictionaryProvider>,
-        log_factory: Option<Box<dyn LogFactory>>,
-        msg_factory: Box<dyn MessageFactory>,
+        mut data_dictionary_provider: DDP,
+        log: Log,
+        msg_factory: MF,
         settings: SessionSetting,
     ) -> Self {
         // REVIEW is this dumb?
@@ -180,17 +187,10 @@ impl<App: Application> ISession<App> {
             session_data_dictionary.clone()
         };
 
-        let log = log_factory
-            .as_ref()
-            .map(|l| l.create(&session_id))
-            .unwrap_or_else(|| Box::new(NoLogger));
         let msg_store = store_factory.create(&session_id);
-        let mut state = SessionState::new(settings.connection().is_initiator(), log, settings.connection().heart_bt_int().unwrap_or(30), msg_store);
+        let mut state = SessionState::new(settings.connection().is_initiator(), log.clone(), settings.connection().heart_bt_int().unwrap_or(30), msg_store);
         state.set_logon_timeout(settings.connection().logon_timeout());
         state.set_logout_timeout(settings.connection().logout_timeout());
-        let log = log_factory
-            .map(|l| l.create(&session_id))
-            .unwrap_or_else(|| Box::new(NoLogger)); //TODO clone?
 
         if !is_session_time(&settings.schedule().clone()) {
             // Reset("Out of SessionTime (Session construction)")
@@ -707,7 +707,7 @@ impl<App: Application> ISession<App> {
         &self.session_id
     }
 
-    pub(crate) fn log(&mut self) -> &mut Box<dyn Logger> {
+    pub(crate) fn log(&mut self) -> &mut Log {
         &mut self.log
     }
 
@@ -801,7 +801,7 @@ impl<App: Application> ISession<App> {
             self.validate_length_and_checksum,
             Some(&self.session_data_dictionary),
             Some(&self.application_data_dictionary),
-            Some(&*self.msg_factory),
+            Some(&self.msg_factory),
             false,
         ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
         self.handle_msg(message, &begin_string, msg_type)
@@ -1075,7 +1075,7 @@ impl<App: Application> ISession<App> {
                         true,
                         Some(&self.session_data_dictionary),
                         Some(&self.application_data_dictionary),
-                        Some(self.msg_factory.as_ref()),
+                        Some(&self.msg_factory),
                         false
                     ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg_str.into_bytes(), parse_error: mp })?;
                     msg_seq_num = msg.header().get_int(tags::MsgSeqNum)?;

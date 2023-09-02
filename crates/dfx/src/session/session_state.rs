@@ -11,7 +11,7 @@ use std::time::Instant;
 use crate::session::ResetRange;
 
 #[derive(Debug)]
-pub(crate) struct SessionState {
+pub(crate) struct SessionState<Log> {
     is_enabled: bool,
     is_initiator: bool,
     received_logon: bool,
@@ -32,13 +32,13 @@ pub(crate) struct SessionState {
     resend_range: Option<ResetRange>,
     message_queue: BTreeMap<u32, Message>,
     msg_store: Box<dyn MessageStore>,
-    logger: Box<dyn Logger>,
+    logger: Log,
 }
 
-impl SessionState {
+impl<Log: Logger> SessionState<Log> {
     pub fn new(
         is_initiator: bool,
-        logger: Box<dyn Logger>,
+        logger: Log,
         heartbeat_int: u32,
         msg_store: Box<dyn MessageStore>,
     ) -> Self {
@@ -448,17 +448,17 @@ impl SessionState {
     }
 
     /// Get a reference to the session state's logger.
-    pub(crate) fn logger(&self) -> &dyn Logger {
-        self.logger.as_ref()
+    pub(crate) fn logger(&self) -> &Log {
+        &self.logger
     }
 
     /// Get a mutable reference to the session state's logger.
-    pub(crate) fn logger_mut(&mut self) -> &mut Box<dyn Logger> {
+    pub(crate) fn logger_mut(&mut self) -> &mut Log {
         &mut self.logger
     }
 
     /// Set the session state's logger.
-    pub(crate) fn set_logger(&mut self, logger: Box<dyn Logger>) {
+    pub(crate) fn set_logger(&mut self, logger: Log) {
         self.logger = logger;
     }
 

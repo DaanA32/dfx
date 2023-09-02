@@ -10,7 +10,7 @@ use dfx_core::message_factory::MessageFactory;
 use crate::{
     session::{Application, SessionSetting, SessionSettings},
     message_store::MessageStoreFactory,
-    logging::LogFactory, connection::Stream,
+    logging::{LogFactory, Logger}, connection::Stream,
 };
 
 use super::{ConnectionError, SocketReactor, StreamFactory};
@@ -64,12 +64,13 @@ pub struct SocketAcceptor<App, StoreFactory, DataDictionaryProvider, LogFactory,
     running: Arc<AtomicBool>,
 }
 
-impl<App, SF, DDP, LF, MF> SocketAcceptor<App, SF, DDP, LF, MF>
+impl<App, SF, DDP, LF, MF, Log> SocketAcceptor<App, SF, DDP, LF, MF>
 where App: Application + Sync + Clone + 'static,
       SF: MessageStoreFactory + Send + Clone + 'static,
       DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory + Send + Clone + 'static,
+      LF: LogFactory<Log = Log> + Send + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
+      Log: Logger + Clone + 'static,
 {
     pub fn new(session_settings: &SessionSettings, app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF) -> Self {
         SocketAcceptor {
@@ -147,12 +148,13 @@ impl ThreadState {
     }
 }
 
-impl<App, SF, DDP, LF, MF> SocketAcceptorThread<App, SF, DDP, LF, MF>
+impl<App, SF, DDP, LF, MF, Log> SocketAcceptorThread<App, SF, DDP, LF, MF>
 where App: Application + Sync + Clone + 'static,
       SF: MessageStoreFactory + Send + Clone + 'static,
       DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory + Send + Clone + 'static,
+      LF: LogFactory<Log = Log> + Send + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
+      Log: Logger + Clone + 'static,
 {
     pub(crate) fn new(app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF, addr: SocketAddr, session_settings: Vec<SessionSetting>) -> Self {
         SocketAcceptorThread {

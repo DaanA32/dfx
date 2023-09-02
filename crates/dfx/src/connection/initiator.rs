@@ -9,7 +9,7 @@ use dfx_core::message_factory::MessageFactory;
 use crate::{
     connection::StreamFactory,
     parser::ParserError,
-    session::{Application, SessionSetting, SessionSettings}, message_store::MessageStoreFactory, logging::LogFactory,
+    session::{Application, SessionSetting, SessionSettings}, message_store::MessageStoreFactory, logging::{LogFactory, Logger},
 };
 
 use super::{ConnectionError, SocketReactor};
@@ -29,12 +29,13 @@ pub struct SocketInitiator<App, StoreFactory, DataDictionaryProvider, LogFactory
     running: Arc<AtomicBool>,
 }
 
-impl<App, SF, DDP, LF, MF> SocketInitiator<App, SF, DDP, LF, MF>
+impl<App, SF, DDP, LF, MF, Log> SocketInitiator<App, SF, DDP, LF, MF>
 where App: Application + Clone + 'static,
       SF: MessageStoreFactory + Send + Clone + 'static,
       DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory + Send + Clone + 'static,
+      LF: LogFactory<Log = Log> + Send + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
+      Log: Logger + Clone + 'static,
 {
     pub fn new(session_settings: SessionSettings, app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF) -> Self {
         // TODO move this to a concurrent map > SessionState > Sender<Message>
@@ -101,12 +102,13 @@ impl From<std::io::Error> for InitiatorError {
     }
 }
 
-impl<App, SF, DDP, LF, MF> SocketInitiatorThread<App, SF, DDP, LF, MF>
+impl<App, SF, DDP, LF, MF, Log> SocketInitiatorThread<App, SF, DDP, LF, MF>
 where App: Application + Clone + 'static,
       SF: MessageStoreFactory + Send + Clone + 'static,
       DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory + Send + Clone + 'static,
+      LF: LogFactory<Log = Log> + Send + Clone + 'static,
       MF: MessageFactory + Send + Clone + 'static,
+      Log: Logger + Clone + 'static,
 {
     pub fn new(app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF, session_settings: SessionSetting) -> Self {
         SocketInitiatorThread {

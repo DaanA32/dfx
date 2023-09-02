@@ -113,7 +113,7 @@ impl Message {
 
     pub fn new(msgstr: &[u8]) -> Result<Self, MessageParseError> {
         let mut message = Message::default();
-        message.from_string(msgstr, true, None, None, None, false)?;
+        message.from_string::<DefaultMessageFactory>(msgstr, true, None, None, None, false)?;
         Ok(message)
     }
 
@@ -253,13 +253,13 @@ impl Message {
     /// > (default false) if true, ignores all non-header and non-trailer fields.
     /// >
     /// > Intended for callers that only need rejection-related information from the header.
-    pub fn from_string(
+    pub fn from_string<MsgFactory: MessageFactory>(
         &mut self,
         msgstr: &[u8],
         validate: bool,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
-        msg_factory: Option<&dyn MessageFactory>,
+        msg_factory: Option<&MsgFactory>,
         ignore_body: bool,
     ) -> Result<(), MessageParseError> {
         self.application_data_dictionary = app_dd.cloned();
@@ -383,7 +383,7 @@ impl Message {
         Ok(())
     }
 
-    fn set_group(
+    fn set_group<MsgFactory: MessageFactory>(
         grp_no_fld: FieldBase,
         msgstr: &[u8],
         pos: usize,
@@ -391,7 +391,7 @@ impl Message {
         group_dd: Option<&DDGroup>,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
-        msg_factory: Option<&dyn MessageFactory>,
+        msg_factory: Option<&MsgFactory>,
     ) -> Result<usize, MessageParseError> {
         match group_dd {
             Some(group_dd) => {
