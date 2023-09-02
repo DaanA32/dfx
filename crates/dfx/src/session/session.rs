@@ -53,9 +53,21 @@ lazy_static! {
     static ref SESSION_MAP: CHashMap<SessionId, SyncSender<Message>> = CHashMap::new();
 }
 
+pub mod Session {
+    use dfx_core::{message::Message, session_id::SessionId};
+    use super::{SESSION_MAP, SessionError};
+
+    pub fn send_to_session(session_id: &SessionId, message: Message) -> Result<(), SessionError> {
+        match SESSION_MAP.get(session_id) {
+            Some(session) => session.send(message).unwrap(),
+            None => return Err(SessionError::SessionNotFound),
+        }
+        Ok(())
+    }
+}
 
 //TODO: dyn to generic?
-pub struct Session {
+pub(crate) struct ISession {
     application: Box<dyn Application>,
     session_id: SessionId,
     _data_dictionary_provider: Box<dyn DataDictionaryProvider>, // TODO: REMOVE candidate
@@ -136,7 +148,7 @@ fn add_data_dictionaries(provider: &mut Box<dyn DataDictionaryProvider>, setting
     }
 }
 
-impl Session {
+impl ISession {
     pub(crate) fn from_settings(
         session_id: SessionId,
         app: Box<dyn Application>,
@@ -189,7 +201,7 @@ impl Session {
         application.on_create(settings.session_id()).unwrap(); //TODO handle err
         log.on_event("Created session");
 
-        Session {
+        ISession {
             application,
             session_id,
             _data_dictionary_provider: data_dictionary_provider,
@@ -225,14 +237,6 @@ impl Session {
         }
     }
 
-    pub fn send_to_session(session_id: &SessionId, message: Message) -> Result<(), SessionError> {
-        match SESSION_MAP.get(session_id) {
-            Some(session) => session.send(message).unwrap(),
-            None => return Err(SessionError::SessionNotFound),
-        }
-        Ok(())
-    }
-
     pub(crate) fn set_responder(&mut self, responder: Box<dyn Responder>) {
         self.responder = Some(responder);
     }
@@ -241,13 +245,13 @@ impl Session {
         &mut self,
         session_id: &SessionId,
     ) -> Result<(), InternalSessionError> {
-        let receiver = Session::connect(&session_id);
+        let receiver = ISession::connect(&session_id);
         self.outbound = Some(receiver?);
         Ok(())
     }
 
     pub(crate) fn set_disconnected(&mut self, session_id: &SessionId) {
-        Session::disconnect_session(session_id);
+        ISession::disconnect_session(session_id);
         self.outbound = None;
     }
 

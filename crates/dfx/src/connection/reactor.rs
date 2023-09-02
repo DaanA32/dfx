@@ -13,7 +13,7 @@ use dfx_core::message_factory::MessageFactory;
 use crate::{
     parser::{Parser, ParserError},
     session::{
-        Application, ChannelResponder, ResponderEvent, ResponderResponse, Session,
+        Application, ChannelResponder, ResponderEvent, ResponderResponse, ISession,
         SessionSetting,
     }, message_store::MessageStoreFactory, logging::LogFactory,
 };
@@ -22,7 +22,7 @@ use super::{ConnectionError, Stream, StreamError};
 
 pub(crate) const BUF_SIZE: usize = 512;
 pub(crate) struct SocketReactor<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
-    session: Option<Session>,
+    session: Option<ISession>,
     parser: Parser,
     stream: Option<Stream>,
     buffer: [u8; BUF_SIZE],
@@ -125,7 +125,7 @@ where App: Application + Clone + 'static,
         }
     }
 
-    pub(crate) fn get_session_mut(&mut self) -> Option<&mut Session> {
+    pub(crate) fn get_session_mut(&mut self) -> Option<&mut ISession> {
         self.session.as_mut()
     }
 
@@ -263,8 +263,8 @@ where App: Application + Clone + 'static,
         Ok(())
     }
 
-    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> Session {
-        Session::from_settings(
+    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> ISession {
+        ISession::from_settings(
             session_id,
             Box::new(self.app.clone()),
             Box::new(self.store_factory.clone()),
