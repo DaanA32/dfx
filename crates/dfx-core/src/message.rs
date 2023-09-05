@@ -823,6 +823,7 @@ mod tests {
     use super::Message;
     use crate::data_dictionary::DataDictionary;
     use crate::message::MessageParseError;
+    use crate::message_factory::DefaultMessageFactory;
     use std::fs::File;
     #[test]
     fn test_parse() {
@@ -836,7 +837,7 @@ mod tests {
 
         let msgstr = expected.replace('|', "\x01");
         let result =
-            message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
+            message.from_string::<DefaultMessageFactory>(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         assert!(result.is_ok());
 
@@ -858,7 +859,7 @@ mod tests {
 
         let msgstr = expected.replace('|', "\x01");
         let result =
-            message.from_string(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
+            message.from_string::<DefaultMessageFactory>(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         assert!(result.is_ok());
         assert!(message.is_admin());
@@ -909,7 +910,7 @@ mod tests {
             .map(|b| if *b == '|' as u8 { 1_u8 } else { *b })
             .collect();
 
-        let result = message.from_string(&msgstr, false, Some(&dd), Some(&dd), None, false);
+        let result = message.from_string::<DefaultMessageFactory>(&msgstr, false, Some(&dd), Some(&dd), None, false);
         println!("{:?}", result);
         let actual = message.to_string().replace(Message::SOH, "|");
         println!("{}", actual);
