@@ -388,8 +388,8 @@ fn checksum(body: &str) -> u32 {
     sum % 256
 }
 
-// type Fields = std::collections::BTreeMap<String, String>;
-type Fields = Vec<(String, String)>;
+type Fields = std::collections::BTreeMap<String, String>;
+// type Fields = Vec<(String, String)>;
 
 fn to_fields(message: String, delim: char, skip_time: bool) -> Fields {
     // println!("Runner: {}", message.replace("\x01", "|"));
