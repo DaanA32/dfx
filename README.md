@@ -12,8 +12,8 @@ A FIX protocol engine.
   - [x] FIX42
   - [x] FIX43
   - [x] FIX44
-    - [ ] FIX: fix44::test_resend_repeating_group
-      > Requires ordered fields to fix (so technically working, but can discuss)
+    - [x] FIX: fix44::test_resend_repeating_group
+      > Now the tests compares ordered fields, so the response match the expectation but are not exactly the same.
   - [x] FIXT11
     - [x] FIX50
     - [x] FIX50SP1
