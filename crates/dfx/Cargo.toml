@@ -1,6 +1,6 @@
 [package]
 name = "dfx"
-version = "0.0.1-alpha"
+version = "1.0.0-alpha"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -9,7 +9,7 @@ default = [ "log" ]
 log = [ "dep:log" ]
 
 [dependencies]
-dfx-base = { version = "0.1.0", path = "../dfx-base" }
+dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
 quick-xml = "0.26.0"
@@ -33,4 +33,4 @@ env_logger = "0.10.0"
 [build-dependencies]
 indoc = "1"
 heck = "0.4.0"
-dfx-base = { version = "0.1.0", path = "../dfx-base" }
+dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }

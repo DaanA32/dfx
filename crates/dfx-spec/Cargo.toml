@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 # dfx = { version = "0.1.0", path = "../dfx" }
-dfx-base = { version = "0.1.0", path = "../dfx-base" }
+dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
 quick-xml = "0.26.0"
@@ -21,5 +21,5 @@ derive_builder = "0.11.2"
 [build-dependencies]
 indoc = "1"
 heck = "0.4.0"
-# dfx = { version = "0.1.0", path = "../dfx" }
-dfx-base = { version = "0.1.0", path = "../dfx-base" }
+# dfx = { version = "1.0.0-alpha", path = "../dfx" }
+dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
