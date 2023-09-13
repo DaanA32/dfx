@@ -197,7 +197,7 @@ fn generate_message_factory(version: &str, data_dictionary: &DataDictionary) -> 
     )
 }
 
-fn generate_message_factory_create_group(data_dictionary: &DataDictionary) -> String {
+fn generate_message_factory_create_group(_data_dictionary: &DataDictionary) -> String {
     let mut function = String::from("");
     function.push_str(format!(r#"// TODO function
         todo!("{{begin_string}} {{msg_type}} {{group_counter_tag}}")"#).as_str());
@@ -242,7 +242,7 @@ fn codegen(filename: &str) {
     let data_dictionary = DataDictionary::from_file(filename).expect("Unable to read filename {filename}");
 
     let version = data_dictionary.version().unwrap();
-    let version_mod_name = version.to_ascii_lowercase().replace(".", "");
+    let _version_mod_name = version.to_ascii_lowercase().replace(".", "");
 
     let out_dir = Path::new(&out_dir).join(version.to_ascii_lowercase().replace(".", ""));
     if std::fs::read_dir(&out_dir).is_err() {

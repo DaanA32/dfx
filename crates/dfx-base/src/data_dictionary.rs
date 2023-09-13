@@ -1,4 +1,4 @@
-use crate::data_dictionary_provider;
+
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMap;
 use crate::field_map::FieldMapError;
@@ -16,7 +16,7 @@ use chrono::NaiveTime;
 use xmltree::ParseError;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashSet;
+
 use std::fs::File;
 use std::num::ParseIntError;
 use std::ops::Deref;
@@ -787,8 +787,8 @@ impl<'a> DerefMut for GoM<'a> {
 }
 
 use std::io::Read;
-use std::println;
-use std::str::FromStr;
+
+
 use xmltree::Element;
 
 impl DataDictionary {
