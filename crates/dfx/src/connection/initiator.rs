@@ -6,9 +6,9 @@ use std::{
 use chrono::Utc;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
 use dfx_base::message_factory::MessageFactory;
+use dfx_base::parser::ParserError;
 use crate::{
     connection::StreamFactory,
-    parser::ParserError,
     session::{Application, SessionSetting, SessionSettings}, message_store::MessageStoreFactory, logging::{LogFactory, Logger},
 };
 
