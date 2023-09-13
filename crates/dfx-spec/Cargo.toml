@@ -2,6 +2,15 @@
 name = "dfx-spec"
 version = "1.0.0-alpha"
 edition = "2021"
+authors = ["Daan Adams @DaanA32"]
+homepage = "https://github.com/DaanA32/dfx"
+repository = "https://github.com/DaanA32/dfx"
+description = "A FIX protocol implementation"
+publish = false
+readme = "README.md"
+keywords = ["fix", "protocol", "finance", "fintech"]
+categories = ["parser-implementations", "encoding"]
+license = "MPL-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
