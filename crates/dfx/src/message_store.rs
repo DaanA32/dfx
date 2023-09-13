@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 
-use dfx_core::session_id::SessionId;
+use dfx_base::session_id::SessionId;
 
 pub trait MessageStore: Send + std::fmt::Debug {
     fn reset(&mut self);

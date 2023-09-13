@@ -4,8 +4,8 @@ use std::{
 };
 
 use chrono::Utc;
-use dfx_core::data_dictionary_provider::DataDictionaryProvider;
-use dfx_core::message_factory::MessageFactory;
+use dfx_base::data_dictionary_provider::DataDictionaryProvider;
+use dfx_base::message_factory::MessageFactory;
 use crate::{
     connection::StreamFactory,
     parser::ParserError,

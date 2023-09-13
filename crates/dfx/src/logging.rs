@@ -1,6 +1,6 @@
 use std::{fs::{OpenOptions, File}, io::Write, writeln};
 
-use dfx_core::session_id::SessionId;
+use dfx_base::session_id::SessionId;
 
 use crate::session::{SessionSettings, LoggingOptions};
 

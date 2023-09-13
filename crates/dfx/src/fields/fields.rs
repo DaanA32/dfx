@@ -1,6 +1,6 @@
-use dfx_core::field_map::Field;
-use dfx_core::field_map::Tag;
-use dfx_core::tags;
+use dfx_base::field_map::Field;
+use dfx_base::field_map::Tag;
+use dfx_base::tags;
 
 use std::ops::Deref;
 

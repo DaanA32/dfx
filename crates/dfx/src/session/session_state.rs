@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::logging::Logger;
-use dfx_core::message::Message;
+use dfx_base::message::Message;
 use crate::message_store::MessageStore;
 use std::collections::BTreeMap;
 use std::time::Instant;

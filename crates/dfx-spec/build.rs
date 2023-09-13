@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use dfx_core::data_dictionary::{DataDictionary, DDField, DDMap, DDGroup};
+use dfx_base::data_dictionary::{DataDictionary, DDField, DDMap, DDGroup};
 use heck::{ToPascalCase, ToSnakeCase};
 use indoc::indoc;
 
@@ -30,11 +30,11 @@ fn generate_field(field: &DDField) -> String {
             r#"
             use std::borrow::Cow;
 
-            use dfx_core::field_map::Tag;
-            use dfx_core::field_map::Field;
-            use dfx_core::fields::ConversionError;
+            use dfx_base::field_map::Tag;
+            use dfx_base::field_map::Field;
+            use dfx_base::fields::ConversionError;
             #[allow(unused)]
-            use dfx_core::fields::converters::*;
+            use dfx_base::fields::converters::*;
 
             /// {field_name}
             #[derive(Clone, Debug, PartialEq, Eq)]
@@ -149,7 +149,7 @@ fn generate_message_fields_groups(message: &DDMap) -> String {
     let mut s = String::new();
     if message.fields().len() == 0 && message.groups().len() == 0  {
         s.push_str(format!(r#"
-pub fn value(&self) -> &dfx_core::field_map::FieldMap {{
+pub fn value(&self) -> &dfx_base::field_map::FieldMap {{
     &self.inner
 }}
 "#,
@@ -169,7 +169,7 @@ fn generate_message_factory(version: &str, data_dictionary: &DataDictionary) -> 
     format!(
         indoc!(
             r#"
-            use dfx_core::message_factory::MessageFactory;
+            use dfx_base::message_factory::MessageFactory;
 
             #[derive(Debug, Clone, Copy)]
             pub struct {version}MessageFactory;
@@ -179,12 +179,12 @@ fn generate_message_factory(version: &str, data_dictionary: &DataDictionary) -> 
                     vec![String::from("{version_upper}")]
                 }}
 
-                fn create(&self, begin_string: &str, msg_type: &str) -> Result<dfx_core::message::Message, dfx_core::message_factory::MessageFactoryError> {{
+                fn create(&self, begin_string: &str, msg_type: &str) -> Result<dfx_base::message::Message, dfx_base::message_factory::MessageFactoryError> {{
                     // check if begin string == {version_upper}
                     todo!("{{begin_string}} {{msg_type}}")
                 }}
 
-                fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: dfx_core::field_map::Tag) -> Option<dfx_core::field_map::Group> {{
+                fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: dfx_base::field_map::Tag) -> Option<dfx_base::field_map::Group> {{
                     {create_group}
                 }}
             }}
@@ -211,7 +211,7 @@ fn generate_message(message: &DDMap, version: &str) -> String {
             r#"
             use std::borrow::Cow;
 
-            use dfx_core::message::Message;
+            use dfx_base::message::Message;
             {import_fields}
 
             /// {message_name}

@@ -11,4 +11,4 @@ pub mod logging;
 pub mod message_store;
 pub mod session;
 
-pub use dfx_core::*;
+pub use dfx_base::*;

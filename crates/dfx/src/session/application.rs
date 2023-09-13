@@ -1,6 +1,6 @@
-use dfx_core::field_map::FieldMapError;
-use dfx_core::message::Message;
-use dfx_core::session_id::SessionId;
+use dfx_base::field_map::FieldMapError;
+use dfx_base::message::Message;
+use dfx_base::session_id::SessionId;
 
 #[derive(Debug, Clone)]
 pub enum ApplicationError {

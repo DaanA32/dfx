@@ -627,11 +627,10 @@ mod fix50sp2 {
     acceptor!(fix50sp2 -> "SessionReset");
 }
 
+#[cfg(feature="future")]
 mod future {
     imports!();
-    #[ignore]
     acceptor!(future -> "14j_OutOfRepeatingGroupMembers");
-    #[ignore]
     acceptor!(future -> "14k_EmbeddedSOH");
 }
 

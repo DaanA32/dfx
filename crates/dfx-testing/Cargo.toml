@@ -1,13 +1,13 @@
 [package]
 name = "dfx-testing"
-version = "0.1.0"
+version = "1.0.0-alpha"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # dfx = { version = "0.1.0", path = "../dfx" }
-dfx-core = { path = "../dfx-core" }
+dfx-base = { path = "../dfx-base" }
 paste = "1.0"
 chrono = "0.4.23"
 lazy_static = "1.4.0"

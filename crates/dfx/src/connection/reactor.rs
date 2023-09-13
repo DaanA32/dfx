@@ -5,10 +5,10 @@ use std::{
     time::Duration,
 };
 
-use dfx_core::message::{Message, MessageParseError};
-use dfx_core::session_id::SessionId;
-use dfx_core::data_dictionary_provider::DataDictionaryProvider;
-use dfx_core::message_factory::MessageFactory;
+use dfx_base::message::{Message, MessageParseError};
+use dfx_base::session_id::SessionId;
+use dfx_base::data_dictionary_provider::DataDictionaryProvider;
+use dfx_base::message_factory::MessageFactory;
 
 use crate::{
     parser::{Parser, ParserError},

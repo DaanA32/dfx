@@ -2,8 +2,8 @@ use std::{net::ToSocketAddrs, fs::File, io::Read};
 
 use chrono::NaiveTime;
 
-use dfx_core::session_id::SessionId;
-use dfx_core::fields::converters::datetime::DateTimeFormat;
+use dfx_base::session_id::SessionId;
+use dfx_base::fields::converters::datetime::DateTimeFormat;
 use native_tls::{Protocol, TlsConnector, Identity, Certificate, TlsAcceptor};
 use crate::session::SessionSchedule;
 

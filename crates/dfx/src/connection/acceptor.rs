@@ -5,8 +5,8 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use dfx_core::data_dictionary_provider::DataDictionaryProvider;
-use dfx_core::message_factory::MessageFactory;
+use dfx_base::data_dictionary_provider::DataDictionaryProvider;
+use dfx_base::message_factory::MessageFactory;
 use crate::{
     session::{Application, SessionSetting, SessionSettings},
     message_store::MessageStoreFactory,

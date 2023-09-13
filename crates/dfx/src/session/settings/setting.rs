@@ -6,14 +6,14 @@ use std::{
 
 use derive_builder::Builder;
 
-use dfx_core::fields::converters::datetime::DateTimeFormat;
+use dfx_base::fields::converters::datetime::DateTimeFormat;
 use native_tls::{Protocol, TlsAcceptor, TlsConnector};
 use crate::{
     connection::SocketSettings,
     session::SessionSchedule,
 };
 
-use dfx_core::session_id::SessionId;
+use dfx_base::session_id::SessionId;
 
 use super::{SessionSettingsError, SettingOption};
 

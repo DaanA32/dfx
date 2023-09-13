@@ -1,6 +1,6 @@
 [package]
-name = "dfx-core"
-version = "0.1.0"
+name = "dfx-base"
+version = "1.0.0-alpha"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
