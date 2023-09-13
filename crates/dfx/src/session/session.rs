@@ -28,7 +28,7 @@ use dfx_base::fields::converters::datetime::DateTimeFormat;
 use dfx_base::fix_values::BeginString;
 use crate::logging::LogFactory;
 use crate::logging::Logger;
-use crate::logging::NoLogger;
+
 use dfx_base::message::Message;
 use dfx_base::message::MessageParseError;
 use dfx_base::message_factory::MessageFactory;

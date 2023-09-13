@@ -95,7 +95,7 @@ impl StreamFactory {
     pub(crate) fn configure_stream(
         mut stream: TcpStream,
         settings: SocketSettings,
-        acceptor: bool,
+        _acceptor: bool,
     ) -> Result<Stream, ConnectionError> {
         match settings.ssl_options() {
             Some(SslOptions::Acceptor { acceptor }) => {

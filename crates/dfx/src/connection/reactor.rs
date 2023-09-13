@@ -1,6 +1,5 @@
 use std::{
     io::{Read, Write},
-    net::TcpStream,
     sync::mpsc::{Receiver, Sender},
     time::Duration,
 };

@@ -1,7 +1,7 @@
 use std::println;
 
 use base64::{engine::{general_purpose, self}, Engine, DecodeError, alphabet};
-use dfx::{session::{Application, SessionSettings}, connection::SocketInitiator, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message_factory::DefaultMessageFactory, tags::{self, MsgType}};
+use dfx::{session::{Application, SessionSettings}, connection::SocketInitiator, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message_factory::DefaultMessageFactory, tags::{self}};
 use hmac_sha256::HMAC;
 
 #[derive(Default, Clone, Debug)]
@@ -64,24 +64,24 @@ impl Application for CoinbaseApp {
 
     fn from_admin(
         &mut self,
-        message: &dfx::message::Message,
-        session_id: &dfx::session_id::SessionId,
+        _message: &dfx::message::Message,
+        _session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::field_map::FieldMapError> {
         Ok(())
     }
 
     fn to_app(
         &mut self,
-        message: &mut dfx::message::Message,
-        session_id: &dfx::session_id::SessionId,
+        _message: &mut dfx::message::Message,
+        _session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::session::ApplicationError> {
         Ok(())
     }
 
     fn from_app(
         &mut self,
-        message: &dfx::message::Message,
-        session_id: &dfx::session_id::SessionId,
+        _message: &dfx::message::Message,
+        _session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::session::FromAppError> {
         Ok(())
     }

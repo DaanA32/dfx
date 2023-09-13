@@ -10,7 +10,7 @@ use dfx_base::message_factory::MessageFactory;
 use crate::{
     session::{Application, SessionSetting, SessionSettings},
     message_store::MessageStoreFactory,
-    logging::{LogFactory, Logger}, connection::Stream,
+    logging::{LogFactory, Logger},
 };
 
 use super::{ConnectionError, SocketReactor, StreamFactory};

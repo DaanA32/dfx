@@ -1,6 +1,6 @@
 use std::{
     sync::{atomic::AtomicBool, Arc},
-    thread::{self, JoinHandle}, eprintln, time::Duration,
+    thread::{self, JoinHandle}, time::Duration,
 };
 
 use chrono::Utc;
