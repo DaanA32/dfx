@@ -29,7 +29,7 @@ pub enum MessageValidationError {
     TagException(TagException),
     FieldMapError(FieldMapError),
     // MissingGroupDefinition(),
-    //DictionaryParseException(String),
+    //DictionaryParseException(Arc<str>),
     ConversionError(ConversionError),
     //InvalidStructure(u32),
 }
@@ -118,8 +118,8 @@ pub enum DataDictionaryError {
     DeserializeError(serde_xml_rs::Error),
     IoError(std::io::Error),
     ParseError(ParseError),
-    Missing { entry_type: String, name: String },
-    InvalidVersionType { version_type: String },
+    Missing { entry_type: Arc<str>, name: Arc<str> },
+    InvalidVersionType { version_type: Arc<str> },
     ParseIntError(ParseIntError),
 }
 
@@ -144,18 +144,35 @@ impl From<ParseIntError> for DataDictionaryError {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct DataDictionary {
     check_fields_have_values: bool,
     check_fields_out_of_order: bool,
     check_user_defined_fields: bool,
     allow_unknown_message_fields: bool,
-    version: Option<String>,
+    version: Option<Arc<str>>,
     fields_by_tag: BTreeMap<Tag, DDField>,
-    fields_by_name: BTreeMap<String, DDField>,
-    messages: BTreeMap<String, DDMap>,
+    fields_by_name: BTreeMap<Arc<str>, DDField>,
+    messages: BTreeMap<Arc<str>, DDMap>,
     header: DDMap,
     trailer: DDMap,
+}
+
+impl Default for DataDictionary {
+    fn default() -> Self {
+        Self {
+            check_fields_have_values: Default::default(),
+            check_fields_out_of_order: Default::default(),
+            check_user_defined_fields: Default::default(),
+            allow_unknown_message_fields: Default::default(),
+            version: Default::default(),
+            fields_by_tag: Default::default(),
+            fields_by_name: Default::default(),
+            messages: Default::default(),
+            header: DDMap::new("header".into()),
+            trailer: DDMap::new("trailer".into())
+        }
+    }
 }
 
 
@@ -173,7 +190,7 @@ impl DataDictionary {
         Ok(dd)
     }
 
-    pub fn version(&self) -> Option<&String> {
+    pub fn version(&self) -> Option<&Arc<str>> {
         self.version.as_ref()
     }
 
@@ -202,9 +219,9 @@ impl DataDictionary {
 
         if let Some(dictionary) = session_data_dictionary {
             if let Some(version) = dictionary.version() {
-                if version != begin_string {
+                if version.as_ref() != begin_string {
                     return Err(MessageValidationError::UnsupportedVersion {
-                        expected: version.into(),
+                        expected: version.to_string(),
                         actual: begin_string.into(),
                     });
                 }
@@ -287,7 +304,7 @@ impl DataDictionary {
     fn check_valid_format(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
         // TODO check format based on type received.
         if let Some(field_definition) = self.fields_by_tag.get(&field.tag()) {
-            let field_type = FieldType::get(field_definition.field_type().as_str());
+            let field_type = FieldType::get(field_definition.field_type().as_ref());
             if matches!(field_type, Ok(ftype) if ftype == fields::types::FieldType::String) {
                 return Ok(());
             }
@@ -341,7 +358,7 @@ impl DataDictionary {
                             }
                         }
                         Ok(())
-                    } else if !fld.enums().contains_key(&field.string_value()?) {
+                    } else if !fld.enums().contains_key(field.string_value()?.as_str()) {
                         Err(MessageValidationError::TagException(
                             TagException::incorrect_tag_value(field.tag())
                         ))
@@ -515,16 +532,16 @@ impl DataDictionary {
 
     pub(crate) fn is_length_field(&self, tag: Tag) -> bool {
         match self.fields_by_tag.get(&tag) {
-            Some(field) => field.field_type() == "LENGTH" && field.name().as_ref() != "BodyLength",
+            Some(field) => field.field_type().as_ref() == "LENGTH" && field.name().as_ref() != "BodyLength",
             None => false,
         }
     }
 
-    pub fn fields_by_name(&self) -> &BTreeMap<String, DDField> {
+    pub fn fields_by_name(&self) -> &BTreeMap<Arc<str>, DDField> {
         &self.fields_by_name
     }
 
-    pub fn messages(&self) -> &BTreeMap<String, DDMap> {
+    pub fn messages(&self) -> &BTreeMap<Arc<str>, DDMap> {
         &self.messages
     }
 
@@ -574,17 +591,17 @@ impl DataDictionary {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct DDMap {
     fields: BTreeMap<Tag, DDField>,
     groups: BTreeMap<Tag, DDGroup>,
     required_fields: BTreeSet<Tag>,
-    name: String,
-    msg_type: String,
+    name: Arc<str>,
+    msg_type: Arc<str>,
     admin: bool,
 }
 impl DDMap {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: Arc<str>) -> Self {
         DDMap {
             fields: BTreeMap::default(),
             groups: BTreeMap::default(),
@@ -594,7 +611,7 @@ impl DDMap {
             admin: false,
         }
     }
-    pub fn new_with_values(name: String, msg_type: String, admin: bool) -> Self {
+    pub fn new_with_values(name: Arc<str>, msg_type: Arc<str>, admin: bool) -> Self {
         DDMap {
             fields: BTreeMap::default(),
             groups: BTreeMap::default(),
@@ -631,7 +648,7 @@ impl DDMap {
     pub fn add_required_field(&mut self, tag: Tag) {
         self.required_fields.insert(tag);
     }
-    pub fn name(&self) -> &String {
+    pub fn name(&self) -> &Arc<str> {
         &self.name
     }
     pub fn fields(&self) -> &BTreeMap<Tag, DDField> {
@@ -672,15 +689,15 @@ impl<D: DerefMut<Target = DDMap>> AsDDMap for D {
 
 #[derive(Clone, Debug)]
 pub enum DictionaryError {
-    ParseError(String),
+    ParseError(Arc<str>),
 }
 
 #[derive(Debug, Clone)]
 pub struct DDField {
     tag: Tag,
     name: Arc<str>,
-    enum_dictionary: BTreeMap<String, String>,
-    field_type: String,
+    enum_dictionary: BTreeMap<Arc<str>, Arc<str>>,
+    field_type: Arc<str>,
     is_multiple_value_field_with_enums: bool,
 }
 impl DDField {
@@ -692,13 +709,13 @@ impl DDField {
     pub fn new(
         tag: Tag,
         name: Arc<str>,
-        enum_dictionary: BTreeMap<String, String>,
-        field_type: String,
+        enum_dictionary: BTreeMap<Arc<str>, Arc<str>>,
+        field_type: Arc<str>,
         // TODO type?
         // is_multiple_value_field_with_enums: bool
     ) -> Self {
         let is_multiple_value_field_with_enums = matches!(
-            field_type.as_str(),
+            field_type.as_ref(),
             "MULTIPLEVALUESTRING" | "MULTIPLESTRINGVALUE" | "MULTIPLECHARVALUE"
         );
         DDField {
@@ -718,10 +735,10 @@ impl DDField {
     pub fn has_enums(&self) -> bool {
         !self.enum_dictionary.is_empty()
     }
-    pub fn enums(&self) -> &BTreeMap<String, String> {
+    pub fn enums(&self) -> &BTreeMap<Arc<str>, Arc<str>> {
         &self.enum_dictionary
     }
-    pub fn field_type(&self) -> &String {
+    pub fn field_type(&self) -> &Arc<str> {
         &self.field_type
     }
     pub fn is_multiple_value_field_with_enums(&self) -> bool {
@@ -729,16 +746,19 @@ impl DDField {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct DDGroup {
     num_fld: Tag,
     delim: Tag,
     required: bool,
-    name: String,
+    name: Arc<str>,
     map: DDMap,
 }
 impl DDGroup {
-    pub fn name(&self) -> &String {
+    pub fn new() -> Self {
+       DDGroup { num_fld: Tag::default(), delim: Tag::default(), required: bool::default(), name: "".into(), map: DDMap::new("group".into()) }
+    }
+    pub fn name(&self) -> &Arc<str> {
         &self.name
     }
     pub fn num_fld(&self) -> Tag {
@@ -803,8 +823,8 @@ impl DataDictionary {
             check_fields_have_values: true,
             check_user_defined_fields: true,
             allow_unknown_message_fields: false,
-            header: DDMap::default(),
-            trailer: DDMap::default(),
+            header: DDMap::new("header".into()),
+            trailer: DDMap::new("trailer".into()),
         }
     }
 
@@ -842,7 +862,7 @@ impl DataDictionary {
 
 }
 
-fn get_version_info(doc: &Element) -> Result<(String, String, String), DataDictionaryError> {
+fn get_version_info(doc: &Element) -> Result<(Arc<str>, Arc<str>, Arc<str>), DataDictionaryError> {
     let major_version = doc.attributes.get("major")
         .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "major".into() })?.to_string();
     let minor_version = doc.attributes.get("minor")
@@ -850,15 +870,15 @@ fn get_version_info(doc: &Element) -> Result<(String, String, String), DataDicti
     let version = "FIX".to_string();
     let version_type = doc.attributes.get("type").unwrap_or(&version);
     if version_type != "FIX" && version_type != "FIXT" {
-        return Err(DataDictionaryError::InvalidVersionType { version_type: version_type.clone() });
+        return Err(DataDictionaryError::InvalidVersionType { version_type: version_type.clone().into() });
     }
     let version = format!("{}.{}.{}", version_type, major_version, minor_version);
-    Ok((major_version, minor_version, version))
+    Ok((major_version.into(), minor_version.into(), version.into()))
 }
 
-fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, DDField>, BTreeMap<String, DDField>), DataDictionaryError> {
+fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, DDField>, BTreeMap<Arc<str>, DDField>), DataDictionaryError> {
     let mut fields_by_tag: BTreeMap<i32, DDField> = BTreeMap::new();
-    let mut fields_by_name: BTreeMap<String, DDField> = BTreeMap::new();
+    let mut fields_by_name: BTreeMap<Arc<str>, DDField> = BTreeMap::new();
     let field_nodes = doc
         .children.iter()
         .filter_map(|c| c.as_element())
@@ -884,7 +904,7 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, DDField>, BTreeMap<Strin
             let enum_value = enum_node.attributes.get("enum")
                 .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "enum".into() })?.clone();
             let description = enum_node.attributes.get("description").map(|s| s.clone()).unwrap_or_default();
-            enums.insert(enum_value, description);
+            enums.insert(enum_value.into(), description.into());
         }
 
         let is_multiple_value_field_with_enums = matches!(
@@ -894,20 +914,20 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, DDField>, BTreeMap<Strin
 
         let dd_field = DDField {
             tag,
-            name: name.into_arc(),
+            name: name.clone().into(),
             enum_dictionary: enums,
-            field_type: field_type.clone(),
+            field_type: field_type.clone().into(),
             is_multiple_value_field_with_enums
         };
 
         fields_by_tag.insert(tag, dd_field.clone());
-        fields_by_name.insert(name.clone(), dd_field);
+        fields_by_name.insert(name.clone().into(), dd_field);
     }
     return Ok((fields_by_tag, fields_by_name));
 }
 
-fn cache_components(doc: &Element) -> Result<BTreeMap<String, Element>, DataDictionaryError> {
-    let mut components_by_name: BTreeMap<String, Element> = BTreeMap::new();
+fn cache_components(doc: &Element) -> Result<BTreeMap<Arc<str>, Element>, DataDictionaryError> {
+    let mut components_by_name: BTreeMap<Arc<str>, Element> = BTreeMap::new();
     let component_nodes = doc
         .children.iter()
         .filter_map(|c| c.as_element())
@@ -919,13 +939,13 @@ fn cache_components(doc: &Element) -> Result<BTreeMap<String, Element>, DataDict
     for component_node in component_nodes {
         let name = component_node.attributes.get("name")
             .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone();
-        components_by_name.insert(name, component_node.clone());
+        components_by_name.insert(name.into(), component_node.clone());
     }
     Ok(components_by_name)
 }
 
-fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> Result<BTreeMap<String, DDMap>, DataDictionaryError> {
-    let mut messages: BTreeMap<String, DDMap> = BTreeMap::new();
+fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, DDField>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<BTreeMap<Arc<str>, DDMap>, DataDictionaryError> {
+    let mut messages: BTreeMap<Arc<str>, DDMap> = BTreeMap::new();
     let message_nodes = doc
         .children.iter()
         .filter_map(|c| c.as_element())
@@ -935,25 +955,27 @@ fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, com
         .filter(|node| node.name == "message");
 
     for message_node in message_nodes {
-        let mut dd_map = DDMap::default();
+        let name: Arc<str> = message_node.attributes.get("name")
+            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone().into();
+        let mut dd_map = DDMap::new(name);
         parse_msg_element(&message_node, &mut dd_map, fields_by_name, components_by_name)?;
-        let msg_type = message_node.attributes.get("msgtype")
-            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "msgtype".into() })?.clone();
+        let msg_type: Arc<str> = message_node.attributes.get("msgtype")
+            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "msgtype".into() })?.clone().into();
         messages.insert(msg_type, dd_map);
     }
     Ok(messages)
 }
 
-fn parse_header(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> Result<DDMap, DataDictionaryError> {
-    let mut dd_map = DDMap::default();
+fn parse_header(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, DDField>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<DDMap, DataDictionaryError> {
+    let mut dd_map = DDMap::new("header".into());
     if let Some(header_node) = doc.get_child("header") {
         parse_msg_element(&header_node, &mut dd_map, fields_by_name, components_by_name)?;
     }
     Ok(dd_map)
 }
 
-fn parse_trailer(doc: &Element, fields_by_name: &BTreeMap<String, DDField>, components_by_name: &BTreeMap<String, Element>) -> Result<DDMap, DataDictionaryError> {
-    let mut dd_map = DDMap::default();
+fn parse_trailer(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, DDField>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<DDMap, DataDictionaryError> {
+    let mut dd_map = DDMap::new("trailer".into());
     if let Some(trailer_node) = doc.get_child("trailer") {
         parse_msg_element(&trailer_node, &mut dd_map, fields_by_name, components_by_name)?;
     }
@@ -983,8 +1005,8 @@ fn verify_child_node(child_node: &Element, parent_node: &Element) {
 fn parse_msg_element(
     node: &Element,
     dd_map: &mut DDMap,
-    fields_by_name: &BTreeMap<String, DDField>,
-    components_by_name: &BTreeMap<String, Element>,
+    fields_by_name: &BTreeMap<Arc<str>, DDField>,
+    components_by_name: &BTreeMap<Arc<str>, Element>,
 ) -> Result<(), DataDictionaryError> {
     parse_msg_element_inner(node, &mut GoM::Map(dd_map), fields_by_name, components_by_name, None)
 }
@@ -992,8 +1014,8 @@ fn parse_msg_element(
 fn parse_msg_element_inner(
     node: &Element,
     dd_map: &mut GoM<'_>,
-    fields_by_name: &BTreeMap<String, DDField>,
-    components_by_name: &BTreeMap<String, Element>,
+    fields_by_name: &BTreeMap<Arc<str>, DDField>,
+    components_by_name: &BTreeMap<Arc<str>, Element>,
     component_required: Option<bool>,
 ) -> Result<(), DataDictionaryError> {
     let message_type_name = node
@@ -1010,8 +1032,8 @@ fn parse_msg_element_inner(
         if let Some(child_node) = child_node.as_element() {
             verify_child_node(child_node, node);
 
-            let name_attribute = child_node.attributes.get("name")
-                .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone();
+            let name_attribute: Arc<str> = child_node.attributes.get("name")
+                .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone().into();
 
             match child_node.name.as_str() {
                 "field" | "group" => {
@@ -1042,7 +1064,7 @@ fn parse_msg_element_inner(
                     }
 
                     if child_node.name == "group" {
-                        let mut dd_grp = DDGroup::default();
+                        let mut dd_grp = DDGroup::new();
                         dd_grp.num_fld = dd_field.tag;
 
                         if required {
@@ -1060,7 +1082,7 @@ fn parse_msg_element_inner(
                 "component" => {
                     let component_node = components_by_name
                         .get(&name_attribute)
-                        .ok_or(DataDictionaryError::Missing { entry_type: "component".into(), name: name_attribute.clone() })?
+                        .ok_or(DataDictionaryError::Missing { entry_type: "component".into(), name: name_attribute.clone().into() })?
                         .clone();
 
                     let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false);
@@ -1076,21 +1098,6 @@ fn parse_msg_element_inner(
         }
     }
     Ok(())
-}
-
-trait IntoArcStr {
-    fn into_arc(self) -> Arc<str>;
-}
-impl IntoArcStr for &String {
-    fn into_arc(self) -> Arc<str> {
-        self.clone().into_arc()
-    }
-}
-
-impl IntoArcStr for String {
-    fn into_arc(self) -> Arc<str> {
-        Arc::from(self.as_str())
-    }
 }
 
 #[cfg(test)]
