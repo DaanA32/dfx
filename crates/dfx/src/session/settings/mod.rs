@@ -413,7 +413,7 @@ impl SessionSettings {
 
 #[cfg(test)]
 mod tests {
-    use dfx_core::session_id::SessionId;
+    use dfx_base::session_id::SessionId;
     use crate::session::SessionSettingsError;
 
     use super::SessionSettings;

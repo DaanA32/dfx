@@ -71,10 +71,10 @@ pub trait ApplicationExt: Application {
 
 #[cfg(test)]
 pub mod tests {
-    use dfx_core::session_id::SessionId;
+    use dfx_base::session_id::SessionId;
 
     use super::{Application, ApplicationExt, DoNotAccept, LogonReject};
-    use dfx_core::message::Message;
+    use dfx_base::message::Message;
     use crate::session;
 
     pub struct TestApplication;
@@ -105,7 +105,7 @@ pub mod tests {
             &mut self,
             message: Message,
             _session_id: &SessionId,
-        ) -> Result<Message, dfx_core::field_map::FieldMapError> {
+        ) -> Result<Message, dfx_base::field_map::FieldMapError> {
             Ok(message)
         }
 
@@ -113,7 +113,7 @@ pub mod tests {
             &mut self,
             _message: &Message,
             _session_id: &SessionId,
-        ) -> Result<(), dfx_core::field_map::FieldMapError> {
+        ) -> Result<(), dfx_base::field_map::FieldMapError> {
             Ok(())
         }
 

@@ -441,7 +441,7 @@ impl MessageStoreFactory for DefaultStoreFactory {
 mod tests {
     use std::{path::Path, assert_eq, fs::File};
 
-    use dfx_core::session_id::SessionId;
+    use dfx_base::session_id::SessionId;
 
     use crate::message_store::MessageStore;
 

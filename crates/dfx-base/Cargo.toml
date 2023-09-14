@@ -25,3 +25,10 @@ xmltree = "0.10.3"
 # chashmap = "2.2.2"
 # derive_builder = "0.11.2"
 # openssl = "0.10.42"
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+
+[[bench]]
+name = "data_dictionary"
+harness = false
