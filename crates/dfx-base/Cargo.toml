@@ -1,5 +1,5 @@
 [package]
-name = "dfx"
+name = "dfx-base"
 version = "1.0.0-alpha"
 edition = "2021"
 authors = ["Daan Adams @DaanA32"]
@@ -13,33 +13,22 @@ categories = ["parser-implementations", "encoding"]
 license = "MPL-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[features]
-default = [ "log" ]
-log = [ "dep:log" ]
 
 [dependencies]
-dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
-quick-xml = "0.26.0"
 regex = "1.6.0"
 lazy_static = "1.4.0"
 chrono = "0.4.23"
-chrono-tz = "0.8.0"
-chashmap = "2.2.2"
-derive_builder = "0.11.2"
+xmltree = "0.10.3"
+# chrono-tz = "0.8.0"
+# chashmap = "2.2.2"
+# derive_builder = "0.11.2"
 # openssl = "0.10.42"
-native-tls = { version = "0.2.11" }
-log = { version = "0.4.18", optional = true }
 
 [dev-dependencies]
-walkdir = "2.3.2"
-rusty-fork = "0.3.0"
-paste = "1.0"
-dfx-testing = { path = "../dfx-testing" }
-env_logger = "0.10.0"
+criterion = { version = "0.4", features = ["html_reports"] }
 
-[build-dependencies]
-indoc = "1"
-heck = "0.4.0"
-dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
+[[bench]]
+name = "data_dictionary"
+harness = false

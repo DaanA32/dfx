@@ -1,14 +1,14 @@
 use std::{
     sync::{atomic::AtomicBool, Arc},
-    thread::{self, JoinHandle}, eprintln, time::Duration,
+    thread::{self, JoinHandle}, time::Duration,
 };
 
 use chrono::Utc;
-use dfx_core::data_dictionary_provider::DataDictionaryProvider;
-use dfx_core::message_factory::MessageFactory;
+use dfx_base::data_dictionary_provider::DataDictionaryProvider;
+use dfx_base::message_factory::MessageFactory;
+use dfx_base::parser::ParserError;
 use crate::{
     connection::StreamFactory,
-    parser::ParserError,
     session::{Application, SessionSetting, SessionSettings}, message_store::MessageStoreFactory, logging::{LogFactory, Logger},
 };
 

@@ -1,5 +1,5 @@
 use chrono::Utc;
-use dfx_core::parser::Parser;
+use dfx_base::parser::Parser;
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{

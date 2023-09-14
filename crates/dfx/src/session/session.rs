@@ -9,38 +9,38 @@ use std::time::Instant;
 use chashmap::CHashMap;
 use chrono::NaiveDateTime;
 use chrono::Utc;
-use dfx_core::data_dictionary::TagException;
-use dfx_core::field_map::FieldValue;
-use dfx_core::fix_values::ApplVerID;
-use dfx_core::fix_values::BusinessRejectReason;
-use dfx_core::fix_values::SessionRejectReason;
+use dfx_base::data_dictionary::TagException;
+use dfx_base::field_map::FieldValue;
+use dfx_base::fix_values::ApplVerID;
+use dfx_base::fix_values::BusinessRejectReason;
+use dfx_base::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
 
-use dfx_core::data_dictionary::DataDictionary;
-use dfx_core::data_dictionary::MessageValidationError;
-use dfx_core::data_dictionary_provider::DataDictionaryProvider;
-use dfx_core::field_map::Field;
-use dfx_core::field_map::FieldMapError;
-use dfx_core::field_map::Tag;
+use dfx_base::data_dictionary::DataDictionary;
+use dfx_base::data_dictionary::MessageValidationError;
+use dfx_base::data_dictionary_provider::DataDictionaryProvider;
+use dfx_base::field_map::Field;
+use dfx_base::field_map::FieldMapError;
+use dfx_base::field_map::Tag;
 use crate::fields::*;
-use dfx_core::fields::ConversionError;
-use dfx_core::fields::converters::datetime::DateTimeFormat;
-use dfx_core::fix_values::BeginString;
+use dfx_base::fields::ConversionError;
+use dfx_base::fields::converters::datetime::DateTimeFormat;
+use dfx_base::fix_values::BeginString;
 use crate::logging::LogFactory;
 use crate::logging::Logger;
-use crate::logging::NoLogger;
-use dfx_core::message::Message;
-use dfx_core::message::MessageParseError;
-use dfx_core::message_factory::MessageFactory;
-use dfx_core::message_factory::MessageFactoryError;
+
+use dfx_base::message::Message;
+use dfx_base::message::MessageParseError;
+use dfx_base::message_factory::MessageFactory;
+use dfx_base::message_factory::MessageFactoryError;
 use crate::message_store::MessageStoreFactory;
 use crate::session::Application;
 use crate::session::ApplicationError;
 use crate::session::Responder;
-use dfx_core::session_id::SessionId;
+use dfx_base::session_id::SessionId;
 use crate::session::SessionSchedule;
 use crate::session::SessionState;
-use dfx_core::tags;
+use dfx_base::tags;
 
 use super::FromAppError;
 use super::LogonReject;
@@ -56,7 +56,7 @@ lazy_static! {
 #[allow(non_snake_case)]
 pub mod Session {
 
-    use dfx_core::{message::Message, session_id::SessionId};
+    use dfx_base::{message::Message, session_id::SessionId};
     use super::{SESSION_MAP, SessionError};
 
     pub fn send_to_session(session_id: &SessionId, message: Message) -> Result<(), SessionError> {
@@ -1667,8 +1667,8 @@ impl From<FieldMapError> for SessionHandleMessageError {
         SessionHandleMessageError::FieldMapError(e)
     }
 }
-impl From<dfx_core::fields::ConversionError> for SessionHandleMessageError {
-    fn from(e: dfx_core::fields::ConversionError) -> Self {
+impl From<dfx_base::fields::ConversionError> for SessionHandleMessageError {
+    fn from(e: dfx_base::fields::ConversionError) -> Self {
         SessionHandleMessageError::ConversionError(e)
     }
 }

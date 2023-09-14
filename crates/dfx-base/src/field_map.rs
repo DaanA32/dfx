@@ -269,7 +269,7 @@ impl FieldMap {
         }
 
         //TODO (index - 1) try into usize => field not found
-        Ok(&mut self.groups.get_mut(&field).ok_or_else(|| FieldMapError::FieldNotFound(field))?[(index as usize - 1)])
+        Ok(&mut self.groups.get_mut(&field).ok_or_else(|| FieldMapError::FieldNotFound(field))?[index as usize - 1])
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)

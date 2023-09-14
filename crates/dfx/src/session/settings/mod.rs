@@ -8,7 +8,7 @@ use builder::*;
 mod setting;
 pub(crate) use setting::*;
 
-use dfx_core::session_id::SessionId;
+use dfx_base::session_id::SessionId;
 
 #[derive(Debug)]
 pub(crate) enum SettingOption {
@@ -413,7 +413,7 @@ impl SessionSettings {
 
 #[cfg(test)]
 mod tests {
-    use dfx_core::session_id::SessionId;
+    use dfx_base::session_id::SessionId;
     use crate::session::SessionSettingsError;
 
     use super::SessionSettings;

@@ -1,5 +1,5 @@
-use lazy_static::lazy_static;
-use regex::Regex;
+
+
 
 use crate::data_dictionary::DDGroup;
 use crate::data_dictionary::DDMap;
@@ -478,7 +478,7 @@ impl Message {
                         },
                         None => {
                             // This means we got into the group's fields without finding a delimiter tag.
-                            let b = &msgstr[pos..];
+                            let _b = &msgstr[pos..];
                             return Err(MessageParseError::GroupDelimiterTagException(
                                 grp_no_fld.tag(),
                                 grp_entry_delimiter_tag,
@@ -795,8 +795,8 @@ impl MessageParseError {
             Self::FailedToFindEqualsAt(_) => todo!(),
             Self::FailedToFindSohAt(_) => todo!(),
             Self::PosGreaterThanLen(_, _) => todo!(),
-            Self::RepeatedTagWithoutGroupDelimiterTagException(num, delim) => todo!(),
-            Self::GroupDelimiterTagException(num, delim) => Some(*num),
+            Self::RepeatedTagWithoutGroupDelimiterTagException(_num, _delim) => todo!(),
+            Self::GroupDelimiterTagException(num, _delim) => Some(*num),
             Self::FieldMapError(_) => todo!(),
             Self::Malformed { tag, .. } => Some(*tag),
             Self::ConversionError(_) => todo!(),
@@ -809,7 +809,7 @@ impl MessageParseError {
             Self::FailedToFindEqualsAt(_) => todo!(),
             Self::FailedToFindSohAt(_) => todo!(),
             Self::PosGreaterThanLen(_, _) => todo!(),
-            Self::RepeatedTagWithoutGroupDelimiterTagException(num, delim) => todo!(),
+            Self::RepeatedTagWithoutGroupDelimiterTagException(_num, _delim) => todo!(),
             Self::GroupDelimiterTagException(num, delim) => TagException::group_delimiter_tag_exception(num, delim).session_reject_reason().clone(),
             Self::FieldMapError(_) => todo!(),
             Self::Malformed { tag: _, .. } => SessionRejectReason::INVALID_MSGTYPE(),

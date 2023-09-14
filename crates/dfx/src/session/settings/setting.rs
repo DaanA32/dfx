@@ -6,14 +6,14 @@ use std::{
 
 use derive_builder::Builder;
 
-use dfx_core::fields::converters::datetime::DateTimeFormat;
-use native_tls::{Protocol, TlsAcceptor, TlsConnector};
+use dfx_base::fields::converters::datetime::DateTimeFormat;
+use native_tls::{TlsAcceptor, TlsConnector};
 use crate::{
     connection::SocketSettings,
     session::SessionSchedule,
 };
 
-use dfx_core::session_id::SessionId;
+use dfx_base::session_id::SessionId;
 
 use super::{SessionSettingsError, SettingOption};
 
@@ -149,7 +149,7 @@ pub(crate) enum SslOptions {
 impl std::fmt::Debug for SslOptions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Acceptor { acceptor } => f.debug_struct("Acceptor").finish(),
+            Self::Acceptor { acceptor: _ } => f.debug_struct("Acceptor").finish(),
             Self::Initiator { initiator, domain } => f.debug_struct("Initiator").field("initiator", initiator).field("domain", domain).finish(),
         }
     }

@@ -1,13 +1,22 @@
 [package]
 name = "dfx-spec"
-version = "0.1.0"
+version = "1.0.0-alpha"
 edition = "2021"
+authors = ["Daan Adams @DaanA32"]
+homepage = "https://github.com/DaanA32/dfx"
+repository = "https://github.com/DaanA32/dfx"
+description = "A FIX protocol implementation"
+publish = false
+readme = "README.md"
+keywords = ["fix", "protocol", "finance", "fintech"]
+categories = ["parser-implementations", "encoding"]
+license = "MPL-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # dfx = { version = "0.1.0", path = "../dfx" }
-dfx-core = { version = "0.1.0", path = "../dfx-core" }
+dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
 quick-xml = "0.26.0"
@@ -21,5 +30,5 @@ derive_builder = "0.11.2"
 [build-dependencies]
 indoc = "1"
 heck = "0.4.0"
-# dfx = { version = "0.1.0", path = "../dfx" }
-dfx-core = { version = "0.1.0", path = "../dfx-core" }
+# dfx = { version = "1.0.0-alpha", path = "../dfx" }
+dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
