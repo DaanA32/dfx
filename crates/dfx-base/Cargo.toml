@@ -27,7 +27,8 @@ xmltree = "0.10.3"
 # openssl = "0.10.42"
 
 [dev-dependencies]
-criterion = { version = "0.4", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+pprof = { version = "0.12", features = ["flamegraph", "criterion"] }
 
 [[bench]]
 name = "data_dictionary"
