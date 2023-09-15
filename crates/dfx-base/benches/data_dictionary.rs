@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use dfx_base::{data_dictionary::DataDictionary, message::Message, message_factory::DefaultMessageFactory};
 
@@ -91,7 +93,7 @@ fn criterion_benchmark_message(c: &mut Criterion) {
     group.bench_function("FIX44.xml", |b| {
         let data = include_str!("../../../spec/FIX44.xml");
         let dd = DataDictionary::load_from_string(data).unwrap();
-        let message = b"8=FIX.4.4\x019=124\x0135=A\x0134=1\x0149=sender-comp-id\x0152=20221025-10:49:30.969\x0156=target-comp-id\x0198=0\x01108=30\x01141=Y\x01553=username\x01554=password\x0110=159\x01";
+        let message = b"8=FIX.4.4\x019=115\x0135=A\x0134=1\x0149=sender-comp-id\x0152=20221025-10:49:30.969\x0156=target-comp-id\x0198=0\x01108=30\x01141=Y\x01553=username\x01554=password\x0110=159\x01";
         b.iter(|| {
             let mut msg = Message::default();
             msg.from_string::<DefaultMessageFactory>(message, true, Some(&dd), Some(&dd), None, false)
