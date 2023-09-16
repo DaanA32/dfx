@@ -3,6 +3,7 @@
 
 use crate::data_dictionary::DDGroup;
 use crate::data_dictionary::DDMap;
+use crate::data_dictionary::DGroup;
 use crate::data_dictionary::DataDictionary;
 use crate::data_dictionary::MessageValidationError;
 use crate::data_dictionary::TagException;
@@ -78,7 +79,7 @@ pub struct Message {
     header: Header,
     body: FieldMap,
     trailer: Trailer,
-    application_data_dictionary: Option<DataDictionary>,
+    // application_data_dictionary: Option<DataDictionary>,
     field_: Tag,
     valid_structure_: bool,
 }
@@ -89,7 +90,7 @@ impl Default for Message {
             header: Header::default(),
             body: FieldMap::default(),
             trailer: Trailer::default(),
-            application_data_dictionary: None,
+            // application_data_dictionary: None,
             field_: 0,
             valid_structure_: true,
         }
@@ -196,14 +197,23 @@ impl Message {
             .ok_or_else(|| MessageParseError::FailedToFindEqualsAt(*pos))?;
 
         let tagend = *pos + tagend;
-        if *pos > tagend {
-            return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
+        // if *pos > tagend {
+        //     return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
+        // }
+
+        let mut tag = 0;
+        for byte in &msgstr[*pos..tagend] {
+            let byte = *byte;
+            if byte >= b'0' && byte <= b'9' {
+                tag = 10 * tag;
+                tag += byte as i32 - b'0' as i32;
+            } else {
+                return Err(MessageParseError::InvalidTagNumber(String::from_utf8_lossy(&msgstr[*pos..tagend]).to_string()));
+            }
         }
-        let result = std::str::from_utf8(&msgstr[*pos..tagend])
-            .map_err(|e| MessageParseError::InvalidTagNumber(e.to_string()))?;
-        let tag = result
-            .parse()
-            .map_err(|_e| MessageParseError::InvalidTagNumber(result.into()))?;
+        if tag == 0 {
+            return Err(MessageParseError::InvalidTagNumber(String::from_utf8_lossy(&msgstr[*pos..tagend]).to_string()));
+        }
 
         *pos = tagend + 1;
 
@@ -262,7 +272,7 @@ impl Message {
         msg_factory: Option<&MsgFactory>,
         ignore_body: bool,
     ) -> Result<(), MessageParseError> {
-        self.application_data_dictionary = app_dd.cloned();
+        // self.application_data_dictionary = app_dd.cloned();
         self.clear();
 
         let mut msg_type;
@@ -388,7 +398,7 @@ impl Message {
         msgstr: &[u8],
         pos: usize,
         map: &mut FieldMap,
-        group_dd: Option<&DDGroup>,
+        group_dd: Option<&DGroup>,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
         msg_factory: Option<&MsgFactory>,

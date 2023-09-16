@@ -26,8 +26,8 @@ where
     fn as_bytes(&self) -> T;
 }
 
-impl IntoBytes<FieldValue> for &Vec<u8> {
+impl IntoBytes<FieldValue> for &std::sync::Arc<[u8]> {
     fn as_bytes(&self) -> FieldValue {
-        self.to_vec()
+        self.to_vec().into()
     }
 }

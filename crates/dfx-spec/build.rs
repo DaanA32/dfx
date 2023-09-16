@@ -4,8 +4,8 @@ use dfx_base::data_dictionary::{DataDictionary, DDField, DDMap, DDGroup};
 use heck::{ToPascalCase, ToSnakeCase};
 use indoc::indoc;
 
-fn field_type(field_type: &String) -> &'static str {
-    match field_type.as_str() {
+fn field_type(field_type: &std::sync::Arc<str>) -> &'static str {
+    match field_type.as_ref() {
         "CHAR" => "char",
         "INT" => "i64",
         "LENGTH" | "NUMINGROUP" | "SEQNUM" => "usize",

@@ -137,7 +137,8 @@ pub fn read_msg_type(buffer: &[u8]) -> Option<&str> {
     let found = buffer[pos..].find('\x01');
     let end = found? + pos;
     match std::str::from_utf8(&buffer[pos..end]) {
-        Ok(s) => Some(s),
+        Ok(s) if s.len() > 0 => Some(s),
+        Ok(_) => None,
         Err(_) => None,
     }
 }

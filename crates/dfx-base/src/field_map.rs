@@ -13,6 +13,7 @@ use std::ops::{Deref, DerefMut};
 
 #[derive(Default, Clone, Debug)]
 pub struct FieldMap {
+    // fields: BTreeMap<Tag, Field>,
     fields: BTreeMap<Tag, Field>,
     groups: HashMap<Tag, Vec<Group>>,
     // fields: HashMap<Tag, Field>,
@@ -26,7 +27,8 @@ pub type Total = u32;
 pub type Length = u32;
 pub type FieldOrder = Vec<Tag>;
 pub(crate) type FieldBase = Field;
-pub type FieldValue = Vec<u8>;
+// pub type FieldValue = Vec<u8>;
+pub type FieldValue = std::sync::Arc<[u8]>;
 
 #[derive(Clone, Debug)]
 pub enum FieldMapError {
@@ -83,14 +85,19 @@ impl DerefMut for Group {
         &mut self.map
     }
 }
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field(Tag, FieldValue);
+impl Default for Field {
+    fn default() -> Self {
+        Self(Default::default(), vec![].into())
+    }
+}
 
 impl Field {
     pub fn new<'a, T: IntoBytes<FieldValue> + TryFrom<&'a FieldValue, Error = ConversionError>>(tag: Tag, value: T) -> Self {
         Field(tag, value.as_bytes())
     }
-    pub fn from_bytes(tag: Tag, value: Vec<u8>) -> Self {
+    pub fn from_bytes(tag: Tag, value: std::sync::Arc<[u8]>) -> Self {
         Field(tag, value)
     }
     pub fn tag(&self) -> Tag {
@@ -113,18 +120,34 @@ impl Field {
     }
 
     pub fn get_total(&self) -> u32 {
-        format!("{}=", self.tag()).as_bytes()
-            .iter()
-            .map(|b| *b as u32)
-            .sum::<u32>()
-            +
+        // format!("{}=", self.tag()).as_bytes()
+        //     .iter()
+        //     .map(|b| *b as u32)
+        //     .sum::<u32>()
+        //     +
+        let mut total = 0;
+        let mut tag = self.tag() as u32;
+        while tag > 0 {
+            total += tag % 10 + '0' as u32;
+            tag = tag / 10;
+        }
+        total +
+        b'=' as u32 +
         self.value().iter()
             .map(|b| *b as u32)
             .sum::<u32>()
             + 1 //incl SOH
     }
     pub fn bytes_len(&self) -> u32 {
-        format!("{}=", self.tag()).as_bytes().len() as u32 +
+        // format!("{}=", self.tag()).as_bytes().len() as u32 +
+        let mut total = 0;
+        let mut tag = self.tag() as u32;
+        while tag > 0 {
+            total += 1;
+            tag = tag / 10;
+        }
+        total +
+        1 +
         self.value().len() as u32 + 1 //incl SOH
     }
 
@@ -510,7 +533,7 @@ mod tests {
     fn box_test() {
         let boxed = Test {
             tag: 0,
-            value: "Hello".into(),
+            value: "Hello".as_bytes().into(),
         }
         .into();
         let boxed_vec: Vec<Box<dyn TagValue>> = vec![boxed];

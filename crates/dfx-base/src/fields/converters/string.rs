@@ -14,7 +14,7 @@ impl<'a> TryFrom<&'a FieldValue> for String {
 
 impl IntoBytes<FieldValue> for String {
     fn as_bytes(&self) -> FieldValue {
-        self.clone().into_bytes()
+        self.clone().into_bytes().into()
     }
 }
 
@@ -30,28 +30,28 @@ impl<'a> TryFrom<&'a FieldValue> for &'a str {
 impl IntoBytes<FieldValue> for &&str {
     fn as_bytes(&self) -> FieldValue {
         let s: String = (**self).into();
-        s.into_bytes()
+        s.into_bytes().into()
     }
 }
 
 impl IntoBytes<FieldValue> for &str {
     fn as_bytes(&self) -> FieldValue {
         let s: String = (*self).into();
-        s.into_bytes()
+        s.into_bytes().into()
     }
 }
 
 impl IntoBytes<FieldValue> for &&String {
     fn as_bytes(&self) -> FieldValue {
         let s: String = (**self).into();
-        s.into_bytes()
+        s.into_bytes().into()
     }
 }
 
 impl IntoBytes<FieldValue> for &String {
     fn as_bytes(&self) -> FieldValue {
         let s: String = (*self).into();
-        s.into_bytes()
+        s.into_bytes().into()
     }
 }
 
@@ -71,6 +71,6 @@ impl<'a> TryFrom<&'a FieldValue> for char {
 
 impl IntoBytes<FieldValue> for char {
     fn as_bytes(&self) -> FieldValue {
-        vec!(*self as u8)
+        vec!(*self as u8).into()
     }
 }

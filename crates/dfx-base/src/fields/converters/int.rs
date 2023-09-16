@@ -38,9 +38,20 @@ impl<'a> TryFrom<&'a FieldValue> for u32 {
     type Error = ConversionError;
 
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
-        let ref_str: &str = TryFrom::try_from(value)?;
+        let mut sum = 0;
+        for byte in value.iter() {
+            let byte = *byte;
+            if byte >= b'0' && byte <= b'9' {
+                sum = 10 * sum;
+                sum += byte as u32 - b'0' as u32;
+            } else {
+                return Err(ConversionError::IntParseErr);
+            }
+        }
+        Ok(sum)
+        // let ref_str: &str = TryFrom::try_from(value)?;
 
-        ref_str.parse().map_err(|_e| ConversionError::IntParseErr)
+        // ref_str.parse().map_err(|_e| ConversionError::IntParseErr)
     }
 }
 
@@ -148,18 +159,18 @@ impl<'a> TryFrom<&'a FieldValue> for f32 {
 
 impl IntoBytes<FieldValue> for usize {
     fn as_bytes(&self) -> FieldValue {
-        format!("{}", self).as_bytes().to_vec()
+        format!("{}", self).as_bytes().to_vec().into()
     }
 }
 
 impl IntoBytes<FieldValue> for f64 {
     fn as_bytes(&self) -> FieldValue {
-        format!("{}", self).as_bytes().to_vec()
+        format!("{}", self).as_bytes().to_vec().into()
     }
 }
 
 impl IntoBytes<FieldValue> for i64 {
     fn as_bytes(&self) -> FieldValue {
-        format!("{}", self).as_bytes().to_vec()
+        format!("{}", self).as_bytes().to_vec().into()
     }
 }
