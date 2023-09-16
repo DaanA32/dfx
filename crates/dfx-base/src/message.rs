@@ -3,7 +3,7 @@
 
 use crate::data_dictionary::DDGroup;
 use crate::data_dictionary::DDMap;
-use crate::data_dictionary::DGroup;
+use crate::data_dictionary::ArcGroup;
 use crate::data_dictionary::DataDictionary;
 use crate::data_dictionary::MessageValidationError;
 use crate::data_dictionary::TagException;
@@ -398,7 +398,7 @@ impl Message {
         msgstr: &[u8],
         pos: usize,
         map: &mut FieldMap,
-        group_dd: Option<&DGroup>,
+        group_dd: Option<&ArcGroup>,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
         msg_factory: Option<&MsgFactory>,
