@@ -158,19 +158,19 @@ impl<'a> TryFrom<&'a FieldValue<'a>> for f32 {
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for usize {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         format!("{}", self).as_bytes().to_vec().into()
     }
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for f64 {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         format!("{}", self).as_bytes().to_vec().into()
     }
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for i64 {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         format!("{}", self).as_bytes().to_vec().into()
     }
 }

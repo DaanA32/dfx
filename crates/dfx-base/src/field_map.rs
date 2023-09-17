@@ -95,8 +95,9 @@ impl<'a> Default for Field<'a> {
 }
 
 impl<'a> Field<'a> {
-    pub fn new<T: IntoFieldValue<'a, FieldValue<'a>> + TryFrom<&'a FieldValue<'a>, Error = ConversionError> + 'a>(tag: Tag, value: T) -> Self {
-        Field(tag, value.into_field_value())
+    pub fn new<T: IntoFieldValue<'a, FieldValue<'a>> + 'a>(tag: Tag, value: T) -> Self {
+        let value: Cow<'a, [u8]> = value.into_field_value();
+        Field(tag, value)
     }
     pub fn from_bytes(tag: Tag, value: FieldValue<'a>) -> Self {
         Field(tag, value)
@@ -108,6 +109,9 @@ impl<'a> Field<'a> {
         &self.1
     }
     pub(crate) fn string_value(&self) -> Result<String, ConversionError> {
+        self.as_value()
+    }
+    pub(crate) fn str_value(&self) -> Result<&str, ConversionError> {
         self.as_value()
     }
     pub(crate) fn to_string_field(&self) -> String {
@@ -173,11 +177,11 @@ impl<'a> FieldMap<'a> {
         }
     }
 
-    pub fn from_field_map(src: &FieldMap) -> Self {
+    pub fn from_field_map(src: &FieldMap<'a>) -> Self {
         src.clone()
     }
 
-    pub fn set_field_base(&mut self, field: Field, overwrite: Option<bool>) -> bool {
+    pub fn set_field_base(&mut self, field: Field<'a>, overwrite: Option<bool>) -> bool {
         if matches!(overwrite, Some(b) if !b) && self.fields.contains_key(&field.tag()) {
             return false;
         }
@@ -198,8 +202,8 @@ impl<'a> FieldMap<'a> {
         true
     }
 
-    pub fn set_tag_value<T: IntoFieldValue<'a, FieldValue<'a>>>(&mut self, tag: Tag, value: T) {
-        let field_base = Field(tag, value.into_field_value());
+    pub fn set_tag_value<T: IntoFieldValue<'a, FieldValue<'a>> + 'a>(&mut self, tag: Tag, value: T) {
+        let field_base = Field::new(tag, value);
         self.set_field_base(field_base, None);
     }
 
@@ -235,7 +239,7 @@ impl<'a> FieldMap<'a> {
     }
     // VALUES
 
-    pub fn get_field_mut(&mut self, tag: Tag) -> Option<&mut Field> {
+    pub fn get_field_mut(&mut self, tag: Tag) -> Option<&mut Field<'a>> {
         self.fields.get_mut(&tag)
     }
     pub fn is_field_set(&self, tag: Tag) -> bool {
@@ -246,7 +250,7 @@ impl<'a> FieldMap<'a> {
     }
 
     // Groups
-    pub fn add_group(&mut self, _tag: Tag, group: &Group, set_count: Option<bool>) {
+    pub fn add_group(&mut self, _tag: Tag, group: &Group<'a>, set_count: Option<bool>) {
         self.groups.entry(group.field()).or_insert_with(Vec::new);
         self.groups
             .get_mut(&group.field())
@@ -281,7 +285,7 @@ impl<'a> FieldMap<'a> {
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
-    pub fn get_group_mut(&mut self, index: u32, field: Tag) -> Result<&mut Group, FieldMapError> {
+    pub fn get_group_mut(&mut self, index: u32, field: Tag) -> Result<&mut Group<'a>, FieldMapError> {
         if !self.groups.contains_key(&field) {
             return Err(FieldMapError::FieldNotFound(field));
         }
@@ -323,8 +327,8 @@ impl<'a> FieldMap<'a> {
         &mut self,
         index: Tag,
         field: Tag,
-        group: Group,
-    ) -> Result<Group, FieldMapError> {
+        group: Group<'a>,
+    ) -> Result<Group<'a>, FieldMapError> {
         if !self.groups.contains_key(&field) {
             return Err(FieldMapError::FieldNotFound(field));
         }
@@ -413,15 +417,15 @@ impl<'a> FieldMap<'a> {
         total
     }
 
-    pub fn repeated_tags(&self) -> &Vec<Field> {
+    pub fn repeated_tags(&self) -> &Vec<Field<'a>> {
         &self.repeated_tags
     }
 
-    pub fn repeated_tags_mut(&mut self) -> &mut Vec<Field> {
+    pub fn repeated_tags_mut(&mut self) -> &mut Vec<Field<'a>> {
         &mut self.repeated_tags
     }
 
-    pub fn entries(&'a self) -> impl Iterator<Item = (&'a Tag, &Field)> {
+    pub fn entries(&'a self) -> impl Iterator<Item = (&'a Tag, &Field<'a>)> {
         self.fields.iter()
     }
 

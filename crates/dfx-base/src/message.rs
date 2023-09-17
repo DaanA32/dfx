@@ -112,22 +112,22 @@ impl<'a> std::fmt::Debug for Message<'a> {
 impl<'a> Message<'a> {
     pub const SOH: char = 1 as char;
 
-    pub fn new(msgstr: &[u8]) -> Result<Self, MessageParseError> {
+    pub fn new(msgstr: &'a [u8]) -> Result<Self, MessageParseError> {
         let mut message = Message::default();
         message.from_string::<DefaultMessageFactory>(msgstr, true, None, None, None, false)?;
         Ok(message)
     }
 
-    pub fn header(&self) -> &Header {
+    pub fn header(&self) -> &Header<'a> {
         &self.header
     }
-    pub fn header_mut(&'a mut self) -> &mut Header {
+    pub fn header_mut(&mut self) -> &mut Header<'a> {
         &mut self.header
     }
-    pub fn trailer(&self) -> &Trailer {
+    pub fn trailer(&self) -> &Trailer<'a> {
         &self.trailer
     }
-    pub fn trailer_mut(&'a mut self) -> &mut Trailer {
+    pub fn trailer_mut(&'a mut self) -> &mut Trailer<'a> {
         &mut self.trailer
     }
 
@@ -265,7 +265,7 @@ impl<'a> Message<'a> {
     /// > Intended for callers that only need rejection-related information from the header.
     pub fn from_string<MsgFactory: MessageFactory>(
         &mut self,
-        msgstr: &[u8],
+        msgstr: &'a [u8],
         validate: bool,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
@@ -309,9 +309,9 @@ impl<'a> Message<'a> {
                 }
 
                 if tags::MsgType == f.tag() {
-                    msg_type = f.string_value();
+                    msg_type = f.str_value();
                     if let Some(app_dd) = app_dd {
-                        msg_map = app_dd.get_map_for_message(msg_type?.as_str());
+                        msg_map = app_dd.get_map_for_message(msg_type?);
                     }
                 }
 
@@ -395,9 +395,9 @@ impl<'a> Message<'a> {
 
     fn set_group<MsgFactory: MessageFactory>(
         grp_no_fld: FieldBase,
-        msgstr: &[u8],
+        msgstr: &'a [u8],
         pos: usize,
-        map: &mut FieldMap,
+        map: &mut FieldMap<'a>,
         group_dd: Option<&ArcGroup>,
         session_dd: Option<&DataDictionary>,
         app_dd: Option<&DataDictionary>,
@@ -599,7 +599,7 @@ impl<'a> Message<'a> {
         }
     }
 
-    pub fn reverse_route(&mut self, header: &Header) {
+    pub fn reverse_route<'b: 'a>(&mut self, header: &'b Header<'b>) {
         // required routing tags
         self.header.remove_field(tags::BeginString);
         self.header.remove_field(tags::SenderCompID);

@@ -124,19 +124,19 @@ impl<'a> TryFrom<&'a FieldValue<'a>> for Date {
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for DateTime {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         todo!()
     }
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for Date {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         todo!()
     }
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for Time {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         todo!()
     }
 }

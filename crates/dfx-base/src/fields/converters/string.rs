@@ -13,7 +13,7 @@ impl<'a> TryFrom<&'a FieldValue<'a>> for String {
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for String {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         self.clone().into_bytes().into()
     }
 }
@@ -28,28 +28,28 @@ impl<'a> TryFrom<&'a FieldValue<'a>> for &'a str {
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &&str {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         let s: String = (**self).into();
         s.into_bytes().into()
     }
 }
 
-impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &str {
-    fn into_field_value(&'a self) -> FieldValue<'a> {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &'a str {
+    fn into_field_value(self) -> FieldValue<'a> {
         self.as_bytes().into()
     }
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &&String {
-    fn into_field_value(&self) -> FieldValue<'a> {
-        let s: String = (**self).into();
+    fn into_field_value(self) -> FieldValue<'a> {
+        let s: String = (*self).into();
         s.into_bytes().into()
     }
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &String {
-    fn into_field_value(&self) -> FieldValue<'a> {
-        let s: String = (*self).into();
+    fn into_field_value(self) -> FieldValue<'a> {
+        let s: String = (self).into();
         s.into_bytes().into()
     }
 }
@@ -69,7 +69,7 @@ impl<'a> TryFrom<&'a FieldValue<'a>> for char {
 
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for char {
-    fn into_field_value(&self) -> FieldValue<'a> {
-        vec!(*self as u8).into()
+    fn into_field_value(self) -> FieldValue<'a> {
+        vec!(self as u8).into()
     }
 }

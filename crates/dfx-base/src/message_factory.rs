@@ -9,8 +9,8 @@ use std::sync::Mutex;
 
 pub trait MessageFactory: Debug + Send {
     fn get_supported_begin_strings(&self) -> Vec<String>;
-    fn create(&self, begin_string: &str, msg_type: &str) -> Result<Message<'_>, MessageFactoryError>;
-    fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Option<Group>;
+    fn create<'a>(&self, begin_string: &str, msg_type: &str) -> Result<Message<'a>, MessageFactoryError>;
+    fn create_group<'a>(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Option<Group<'a>>;
 }
 
 #[derive(Clone, Debug)]
@@ -49,14 +49,14 @@ impl MessageFactory for DefaultMessageFactory {
         todo!()
     }
 
-    fn create(&self, begin_string: &str, msg_type: &str) -> Result<Message<'_>, MessageFactoryError> {
+    fn create<'a>(&self, begin_string: &str, msg_type: &str) -> Result<Message<'a>, MessageFactoryError> {
         let mut msg = Message::default();
         msg.header_mut().set_tag_value(tags::BeginString, String::from(begin_string));
         msg.header_mut().set_tag_value(tags::MsgType, String::from(msg_type));
         Ok(msg)
     }
 
-    fn create_group(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Option<Group> {
+    fn create_group<'a>(&self, begin_string: &str, msg_type: &str, group_counter_tag: Tag) -> Option<Group<'a>> {
         if let Some(factory) = self.factory_map.get(begin_string) {
             todo!("# TODO create_group({begin_string}, {msg_type}, {group_counter_tag}, {factory:?})");
             //let _ = Group::new(0, group_counter_tag);

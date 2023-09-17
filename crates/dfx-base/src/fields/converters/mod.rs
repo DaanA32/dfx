@@ -23,17 +23,17 @@ pub trait IntoFieldValue<'a, T>
 where
     Self: Sized,
 {
-    fn into_field_value(&'a self) -> T;
+    fn into_field_value(self) -> T;
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &std::sync::Arc<[u8]> {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         self.to_vec().into()
     }
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &std::borrow::Cow<'_, [u8]> {
-    fn into_field_value(&self) -> FieldValue<'a> {
+    fn into_field_value(self) -> FieldValue<'a> {
         self.to_vec().into()
     }
 }

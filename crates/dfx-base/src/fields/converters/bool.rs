@@ -19,8 +19,8 @@ impl<'a> TryFrom<&'a FieldValue<'a>> for bool {
 }
 
 impl<'a> IntoFieldValue<'a, FieldValue<'a>> for bool {
-    fn into_field_value(&self) -> FieldValue<'a> {
-        if *self {
+    fn into_field_value(self) -> FieldValue<'a> {
+        if self {
             vec!['Y' as u8].into()
         } else {
             vec!['N' as u8].into()
