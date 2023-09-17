@@ -25,9 +25,9 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 
 #[derive(Default, Clone, Debug)]
-pub struct Header(FieldMap);
+pub struct Header<'a>(FieldMap<'a>);
 
-impl Header {
+impl<'a> Header<'a> {
     pub fn calculate_string(&self) -> String {
         self.0.calculate_string(Some(HEADER_FIELD_ORDER.to_vec()))
     }
@@ -36,23 +36,23 @@ impl Header {
 const HEADER_FIELD_ORDER: [Tag; 3] = [tags::BeginString, tags::BodyLength, tags::MsgType];
 // const HEADER_FIELD_ORDER: Vec<Tag> = vec![ tags::BeginString, tags::BodyLength, tags::MsgType ];
 
-impl Deref for Header {
-    type Target = FieldMap;
+impl<'a> Deref for Header<'a> {
+    type Target = FieldMap<'a>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for Header {
+impl<'a> DerefMut for Header<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct Trailer(FieldMap);
+pub struct Trailer<'a>(FieldMap<'a>);
 
-impl Trailer {
+impl<'a> Trailer<'a> {
     pub fn calculate_string(&self) -> String {
         self.0.calculate_string(Some(TRAILER_FIELD_ORDER.to_vec()))
     }
@@ -61,30 +61,30 @@ impl Trailer {
 const TRAILER_FIELD_ORDER: [Tag; 3] = [tags::SignatureLength, tags::Signature, tags::CheckSum];
 // const TRAILER_FIELD_ORDER: Vec<Tag> = vec![ tags::SignatureLength, tags::Signature, tags::CheckSum ];
 
-impl Deref for Trailer {
-    type Target = FieldMap;
+impl<'a> Deref for Trailer<'a> {
+    type Target = FieldMap<'a>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for Trailer {
+impl<'a> DerefMut for Trailer<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
 #[derive(Clone)]
-pub struct Message {
-    header: Header,
-    body: FieldMap,
-    trailer: Trailer,
+pub struct Message<'a> {
+    header: Header<'a>,
+    body: FieldMap<'a>,
+    trailer: Trailer<'a>,
     // application_data_dictionary: Option<DataDictionary>,
     field_: Tag,
     valid_structure_: bool,
 }
 
-impl Default for Message {
+impl<'a> Default for Message<'a> {
     fn default() -> Self {
         Message {
             header: Header::default(),
@@ -97,7 +97,7 @@ impl Default for Message {
     }
 }
 
-impl std::fmt::Debug for Message {
+impl<'a> std::fmt::Debug for Message<'a> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         fmt.write_str(
             format!(
@@ -109,7 +109,7 @@ impl std::fmt::Debug for Message {
     }
 }
 
-impl Message {
+impl<'a> Message<'a> {
     pub const SOH: char = 1 as char;
 
     pub fn new(msgstr: &[u8]) -> Result<Self, MessageParseError> {
@@ -121,13 +121,13 @@ impl Message {
     pub fn header(&self) -> &Header {
         &self.header
     }
-    pub fn header_mut(&mut self) -> &mut Header {
+    pub fn header_mut(&'a mut self) -> &mut Header {
         &mut self.header
     }
     pub fn trailer(&self) -> &Trailer {
         &self.trailer
     }
-    pub fn trailer_mut(&mut self) -> &mut Trailer {
+    pub fn trailer_mut(&'a mut self) -> &mut Trailer {
         &mut self.trailer
     }
 
@@ -187,12 +187,12 @@ impl Message {
     }
 
     fn extract_field(
-        msgstr: &[u8],
+        msgstr: &'a [u8],
         pos: &mut usize,
         _session_dd: Option<&DataDictionary>,
         _app_dd: Option<&DataDictionary>,
         size_hint: Option<usize>,
-    ) -> Result<FieldBase, MessageParseError> {
+    ) -> Result<FieldBase<'a>, MessageParseError> {
         let tagend = msgstr[*pos..].iter().position(|c| *c == '=' as u8)
             .ok_or_else(|| MessageParseError::FailedToFindEqualsAt(*pos))?;
 
@@ -747,20 +747,20 @@ impl Message {
     }
 }
 
-impl Deref for Message {
-    type Target = FieldMap;
+impl<'a> Deref for Message<'a> {
+    type Target = FieldMap<'a>;
     fn deref(&self) -> &Self::Target {
         &self.body
     }
 }
 
-impl DerefMut for Message {
+impl<'a> DerefMut for Message<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.body
     }
 }
 
-impl Display for Message {
+impl<'a> Display for Message<'a> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fmt.write_fmt(format_args!(
             "{}{}{}",

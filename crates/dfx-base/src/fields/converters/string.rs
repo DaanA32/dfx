@@ -2,64 +2,63 @@ use crate::field_map::FieldValue;
 use crate::fields::converters::TryFrom;
 use crate::fields::ConversionError;
 
-use super::IntoBytes;
+use super::IntoFieldValue;
 
-impl<'a> TryFrom<&'a FieldValue> for String {
+impl<'a> TryFrom<&'a FieldValue<'a>> for String {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a FieldValue<'a>) -> Result<Self, Self::Error> {
         Ok(value.iter().map(|b| *b as char).collect())
     }
 }
 
-impl IntoBytes<FieldValue> for String {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for String {
+    fn into_field_value(&self) -> FieldValue<'a> {
         self.clone().into_bytes().into()
     }
 }
 
-impl<'a> TryFrom<&'a FieldValue> for &'a str {
+impl<'a> TryFrom<&'a FieldValue<'a>> for &'a str {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a FieldValue<'a>) -> Result<Self, Self::Error> {
         // TODO encoding latin1
         std::str::from_utf8(value).map_err(|_| ConversionError::EncodingError)
     }
 }
 
-impl IntoBytes<FieldValue> for &&str {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &&str {
+    fn into_field_value(&self) -> FieldValue<'a> {
         let s: String = (**self).into();
         s.into_bytes().into()
     }
 }
 
-impl IntoBytes<FieldValue> for &str {
-    fn as_bytes(&self) -> FieldValue {
-        let s: String = (*self).into();
-        s.into_bytes().into()
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &str {
+    fn into_field_value(&'a self) -> FieldValue<'a> {
+        self.as_bytes().into()
     }
 }
 
-impl IntoBytes<FieldValue> for &&String {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &&String {
+    fn into_field_value(&self) -> FieldValue<'a> {
         let s: String = (**self).into();
         s.into_bytes().into()
     }
 }
 
-impl IntoBytes<FieldValue> for &String {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &String {
+    fn into_field_value(&self) -> FieldValue<'a> {
         let s: String = (*self).into();
         s.into_bytes().into()
     }
 }
 
 
-impl<'a> TryFrom<&'a FieldValue> for char {
+impl<'a> TryFrom<&'a FieldValue<'a>> for char {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a FieldValue<'a>) -> Result<Self, Self::Error> {
         if value.len() != 1 {
             Err(ConversionError::EncodingError)
         } else {
@@ -69,8 +68,8 @@ impl<'a> TryFrom<&'a FieldValue> for char {
 }
 
 
-impl IntoBytes<FieldValue> for char {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for char {
+    fn into_field_value(&self) -> FieldValue<'a> {
         vec!(*self as u8).into()
     }
 }

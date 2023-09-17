@@ -1,24 +1,25 @@
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::fields::converters::IntoBytes;
+use crate::fields::converters::IntoFieldValue;
 use crate::fields::converters::TryFrom;
 use crate::fields::ConversionError;
 use crate::message::Message;
 use crate::tags;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Default, Clone, Debug)]
-pub struct FieldMap {
+pub struct FieldMap<'a> {
     // fields: BTreeMap<Tag, Field>,
-    fields: BTreeMap<Tag, Field>,
-    groups: HashMap<Tag, Vec<Group>>,
+    fields: BTreeMap<Tag, Field<'a>>,
+    groups: HashMap<Tag, Vec<Group<'a>>>,
     // fields: HashMap<Tag, Field>,
     // groups: HashMap<Tag, Vec<Group>>,
-    repeated_tags: Vec<Field>,
+    repeated_tags: Vec<Field<'a>>,
     _field_order: FieldOrder,
 }
 
@@ -26,9 +27,9 @@ pub type Tag = i32;
 pub type Total = u32;
 pub type Length = u32;
 pub type FieldOrder = Vec<Tag>;
-pub(crate) type FieldBase = Field;
+pub(crate) type FieldBase<'a> = Field<'a>;
 // pub type FieldValue = Vec<u8>;
-pub type FieldValue = std::sync::Arc<[u8]>;
+pub type FieldValue<'a> = Cow<'a, [u8]>;
 
 #[derive(Clone, Debug)]
 pub enum FieldMapError {
@@ -43,13 +44,13 @@ impl From<ConversionError> for FieldMapError {
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct Group {
+pub struct Group<'a> {
     delim: Tag,
     field: Tag,
-    map: FieldMap,
+    map: FieldMap<'a>,
     field_order: Option<FieldOrder>,
 }
-impl Group {
+impl<'a> Group<'a> {
     pub fn new(field: Tag, delim: Tag) -> Self {
         Group {
             delim,
@@ -73,31 +74,31 @@ impl Group {
         }
     }
 }
-impl Deref for Group {
-    type Target = FieldMap;
+impl<'a> Deref for Group<'a> {
+    type Target = FieldMap<'a>;
     fn deref(&self) -> &Self::Target {
         &self.map
     }
 }
 
-impl DerefMut for Group {
+impl<'a> DerefMut for Group<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.map
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Field(Tag, FieldValue);
-impl Default for Field {
+pub struct Field<'a>(Tag, FieldValue<'a>);
+impl<'a> Default for Field<'a> {
     fn default() -> Self {
         Self(Default::default(), vec![].into())
     }
 }
 
-impl Field {
-    pub fn new<'a, T: IntoBytes<FieldValue> + TryFrom<&'a FieldValue, Error = ConversionError>>(tag: Tag, value: T) -> Self {
-        Field(tag, value.as_bytes())
+impl<'a> Field<'a> {
+    pub fn new<T: IntoFieldValue<'a, FieldValue<'a>> + TryFrom<&'a FieldValue<'a>, Error = ConversionError> + 'a>(tag: Tag, value: T) -> Self {
+        Field(tag, value.into_field_value())
     }
-    pub fn from_bytes(tag: Tag, value: std::sync::Arc<[u8]>) -> Self {
+    pub fn from_bytes(tag: Tag, value: FieldValue<'a>) -> Self {
         Field(tag, value)
     }
     pub fn tag(&self) -> Tag {
@@ -112,9 +113,9 @@ impl Field {
     pub(crate) fn to_string_field(&self) -> String {
         format!("{}={}", self.tag(), self.as_value::<&str>().ok().unwrap_or(""))
     }
-    pub fn as_value<'a, T>(&'a self) -> Result<T, ConversionError>
+    pub fn as_value<T>(&'a self) -> Result<T, ConversionError>
     where
-        T: TryFrom<&'a FieldValue, Error = ConversionError>,
+        T: TryFrom<&'a FieldValue<'a>, Error = ConversionError>,
     {
         TryFrom::try_from(&self.1)
     }
@@ -159,7 +160,7 @@ impl Field {
     }
 }
 
-impl FieldMap {
+impl<'a> FieldMap<'a> {
     pub fn from_field_order(_field_order: FieldOrder) -> Self {
         let fields = Default::default();
         let groups = Default::default();
@@ -184,7 +185,7 @@ impl FieldMap {
         true
     }
 
-    pub fn set_field_deref<F: Deref<Target = Field> + Clone>(
+    pub fn set_field_deref<F: Deref<Target = Field<'a>> + Clone>(
         &mut self,
         field: F,
         overwrite: Option<bool>,
@@ -197,12 +198,12 @@ impl FieldMap {
         true
     }
 
-    pub fn set_tag_value<'a, T: IntoBytes<FieldValue>>(&mut self, tag: Tag, value: T) {
-        let field_base = Field(tag, value.as_bytes());
+    pub fn set_tag_value<T: IntoFieldValue<'a, FieldValue<'a>>>(&mut self, tag: Tag, value: T) {
+        let field_base = Field(tag, value.into_field_value());
         self.set_field_base(field_base, None);
     }
 
-    pub fn set_field<'a, T: Into<Field>>(&mut self, field: T) {
+    pub fn set_field<T: Into<Field<'a>>>(&mut self, field: T) {
         self.set_field_base(field.into(), None);
     }
 
@@ -420,7 +421,7 @@ impl FieldMap {
         &mut self.repeated_tags
     }
 
-    pub fn entries<'a>(&'a self) -> impl Iterator<Item = (&'a Tag, &Field)> {
+    pub fn entries(&'a self) -> impl Iterator<Item = (&'a Tag, &Field)> {
         self.fields.iter()
     }
 

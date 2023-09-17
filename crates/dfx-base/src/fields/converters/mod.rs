@@ -19,15 +19,21 @@ where
     fn try_from(value: T) -> Result<Self, Self::Error>;
 }
 
-pub trait IntoBytes<T>
+pub trait IntoFieldValue<'a, T>
 where
     Self: Sized,
 {
-    fn as_bytes(&self) -> T;
+    fn into_field_value(&'a self) -> T;
 }
 
-impl IntoBytes<FieldValue> for &std::sync::Arc<[u8]> {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &std::sync::Arc<[u8]> {
+    fn into_field_value(&self) -> FieldValue<'a> {
+        self.to_vec().into()
+    }
+}
+
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for &std::borrow::Cow<'_, [u8]> {
+    fn into_field_value(&self) -> FieldValue<'a> {
         self.to_vec().into()
     }
 }

@@ -67,12 +67,12 @@ use crate::field_map::FieldValue;
 use crate::fields::converters::TryFrom;
 use crate::fields::ConversionError;
 
-use super::IntoBytes;
+use super::IntoFieldValue;
 
-impl<'a> TryFrom<&'a FieldValue> for ChronoDateTime<Utc> {
+impl<'a> TryFrom<&'a FieldValue<'a>> for ChronoDateTime<Utc> {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a FieldValue<'a>) -> Result<Self, Self::Error> {
         let time: &str = TryFrom::try_from(value)?;
         match Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS) {
             Ok(t) => Ok(t),
@@ -88,10 +88,10 @@ pub type Date = NaiveDate;
 pub type Time = NaiveTime;
 pub type DateTime = NaiveDateTime;
 
-impl<'a> TryFrom<&'a FieldValue> for DateTime {
+impl<'a> TryFrom<&'a FieldValue<'a>> for DateTime {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a FieldValue<'a>) -> Result<Self, Self::Error> {
         let time: &str = TryFrom::try_from(value)?;
         let format = match time.len() {
             DATE_TIME_FORMAT_WITH_NANOSECONDS_LEN => Ok(DATE_TIME_FORMAT_WITH_NANOSECONDS),
@@ -107,36 +107,36 @@ impl<'a> TryFrom<&'a FieldValue> for DateTime {
     }
 }
 
-impl<'a> TryFrom<&'a FieldValue> for Time {
+impl<'a> TryFrom<&'a FieldValue<'a>> for Time {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a FieldValue<'a>) -> Result<Self, Self::Error> {
         todo!()
     }
 }
 
-impl<'a> TryFrom<&'a FieldValue> for Date {
+impl<'a> TryFrom<&'a FieldValue<'a>> for Date {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from(value: &'a FieldValue<'a>) -> Result<Self, Self::Error> {
         todo!()
     }
 }
 
-impl IntoBytes<FieldValue> for DateTime {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for DateTime {
+    fn into_field_value(&self) -> FieldValue<'a> {
         todo!()
     }
 }
 
-impl IntoBytes<FieldValue> for Date {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for Date {
+    fn into_field_value(&self) -> FieldValue<'a> {
         todo!()
     }
 }
 
-impl IntoBytes<FieldValue> for Time {
-    fn as_bytes(&self) -> FieldValue {
+impl<'a> IntoFieldValue<'a, FieldValue<'a>> for Time {
+    fn into_field_value(&self) -> FieldValue<'a> {
         todo!()
     }
 }
