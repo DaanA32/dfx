@@ -206,7 +206,7 @@ impl Message {
             let byte = *byte;
             if byte >= b'0' && byte <= b'9' {
                 tag = 10 * tag;
-                tag += byte as i32 - b'0' as i32;
+                tag += byte as Tag - b'0' as Tag;
             } else {
                 return Err(MessageParseError::InvalidTagNumber(String::from_utf8_lossy(&msgstr[*pos..tagend]).to_string()));
             }
