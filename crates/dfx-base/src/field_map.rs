@@ -125,13 +125,25 @@ impl Field {
         //     .map(|b| *b as u32)
         //     .sum::<u32>()
         //     +
-        let mut total = 0;
-        let mut tag = self.tag() as u32;
-        while tag > 0 {
-            total += tag % 10 + '0' as u32;
-            tag = tag / 10;
-        }
-        total +
+        let checksum_neg = if self.tag() < 0 {
+            '-' as u32
+        } else {
+            0
+        };
+        let tag_checksum = if self.tag() == 0 {
+            '0' as u32
+        } else {
+            let mut total = 0;
+            let mut tag = if self.tag() < 0 { -self.tag() } else { self.tag() } as u32;
+            while tag > 0 {
+                total += tag % 10 + '0' as u32;
+                tag = tag / 10;
+            }
+            total
+        };
+
+        checksum_neg +
+        tag_checksum +
         b'=' as u32 +
         self.value().iter()
             .map(|b| *b as u32)
@@ -140,13 +152,21 @@ impl Field {
     }
     pub fn bytes_len(&self) -> u32 {
         // format!("{}=", self.tag()).as_bytes().len() as u32 +
-        let mut total = 0;
-        let mut tag = self.tag() as u32;
-        while tag > 0 {
-            total += 1;
-            tag = tag / 10;
-        }
-        total +
+        let length_negative = if self.tag() < 0 { 1 } else { 0 };
+        let tag_length = if self.tag() == 0 {
+            1 // "0" as bytes length
+        } else {
+            let mut total = 0;
+            let mut tag = if self.tag() < 0 { -self.tag() } else { self.tag() } as u32;
+            while tag > 0 {
+                total += 1;
+                tag = tag / 10;
+            }
+            total
+        };
+
+        length_negative +
+        tag_length +
         1 +
         self.value().len() as u32 + 1 //incl SOH
     }

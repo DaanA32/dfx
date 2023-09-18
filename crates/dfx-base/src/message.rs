@@ -197,23 +197,28 @@ impl Message {
             .ok_or_else(|| MessageParseError::FailedToFindEqualsAt(*pos))?;
 
         let tagend = *pos + tagend;
-        // if *pos > tagend {
-        //     return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
-        // }
+        if *pos >= tagend {
+            return Err(MessageParseError::PosGreaterThanLen(*pos, tagend));
+        }
 
         let mut tag = 0;
+        let mut neg = false;
+        let mut start = true;
         for byte in &msgstr[*pos..tagend] {
             let byte = *byte;
-            if byte >= b'0' && byte <= b'9' {
+            if byte == b'-' && start {
+                neg = true;
+                start = false;
+            } else if byte >= b'0' && byte <= b'9' {
                 tag = 10 * tag;
                 tag += byte as Tag - b'0' as Tag;
+                start = false;
             } else {
                 return Err(MessageParseError::InvalidTagNumber(String::from_utf8_lossy(&msgstr[*pos..tagend]).to_string()));
             }
         }
-        if tag == 0 {
-            return Err(MessageParseError::InvalidTagNumber(String::from_utf8_lossy(&msgstr[*pos..tagend]).to_string()));
-        }
+        let tag = if neg { -tag } else { tag };
+        eprintln!("tag: {tag}");
 
         *pos = tagend + 1;
 
@@ -812,18 +817,18 @@ impl MessageParseError {
             Self::ConversionError(_) => todo!(),
         }
     }
-    pub fn as_session_reject(self) -> SessionRejectReason {
+    pub fn as_session_reject(self) -> Option<SessionRejectReason> {
         match self {
-            Self::InvalidMessage(reason) => SessionRejectReason::OTHER(reason),
-            Self::InvalidTagNumber(_) => SessionRejectReason::INVALID_TAG_NUMBER(),
-            Self::FailedToFindEqualsAt(_) => todo!(),
-            Self::FailedToFindSohAt(_) => todo!(),
-            Self::PosGreaterThanLen(_, _) => todo!(),
-            Self::RepeatedTagWithoutGroupDelimiterTagException(_num, _delim) => todo!(),
-            Self::GroupDelimiterTagException(num, delim) => TagException::group_delimiter_tag_exception(num, delim).session_reject_reason().clone(),
-            Self::FieldMapError(_) => todo!(),
-            Self::Malformed { tag: _, .. } => SessionRejectReason::INVALID_MSGTYPE(),
-            Self::ConversionError(_) => todo!(),
+            Self::InvalidMessage(reason) => Some(SessionRejectReason::OTHER(reason)),
+            Self::InvalidTagNumber(_) => Some(SessionRejectReason::INVALID_TAG_NUMBER()),
+            Self::FailedToFindEqualsAt(_) => None,
+            Self::FailedToFindSohAt(_) => None,
+            Self::PosGreaterThanLen(_, _) => None,
+            Self::RepeatedTagWithoutGroupDelimiterTagException(_num, _delim) => None,
+            Self::GroupDelimiterTagException(num, delim) => Some(TagException::group_delimiter_tag_exception(num, delim).session_reject_reason().clone()),
+            Self::FieldMapError(_) => None,
+            Self::Malformed { tag: _, .. } => Some(SessionRejectReason::INVALID_MSGTYPE()),
+            Self::ConversionError(_) => None,
         }
     }
 }

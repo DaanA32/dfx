@@ -134,7 +134,7 @@ impl LogFactory for FileLogFactory {
         logger.unwrap()
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg(feature = "log")]
 pub struct MacroLogger {
     session_id: SessionId,

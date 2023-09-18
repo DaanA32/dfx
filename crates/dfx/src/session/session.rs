@@ -747,10 +747,13 @@ where App: Application + Clone + 'static,
                     self.log.on_event(format!("MessageParse Error: {parse_error:?}").as_str());
                     let field = parse_error.as_tag();
                     let reason = parse_error.as_session_reject();
-                    if let Ok(msg) = Message::new(&message) {
-                        self.generate_reject(msg, reason, field).unwrap();
-                    } else {
-                        self.log.on_event("Skipping message!.");
+                    match Message::new(&message) {
+                        Ok(msg) => {
+                            self.generate_reject(msg, reason.unwrap(), field).unwrap();
+                        }
+                        Err(err) => {
+                            self.log.on_event(format!("Skipping message due to {err:?}.").as_str());
+                        }
                     }
                 },
                 SessionHandleMessageError::TagException(msg, e) => {
@@ -796,6 +799,7 @@ where App: Application + Clone + 'static,
         let begin_string = Message::extract_begin_string(&msg)
             .map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
         let mut message = self.msg_factory.create(begin_string.as_str(), msg_type)?;
+        eprintln!("before from_string");
         message.from_string(
             &msg,
             self.validate_length_and_checksum,
@@ -804,6 +808,7 @@ where App: Application + Clone + 'static,
             Some(&self.msg_factory),
             false,
         ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
+        eprintln!("before handle_msg");
         self.handle_msg(message, &begin_string, msg_type)
     }
 
