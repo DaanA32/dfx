@@ -15,16 +15,8 @@ license = "MPL-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
-regex = "1.6.0"
-lazy_static = "1.4.0"
 chrono = "0.4.23"
 xmltree = "0.10.3"
-# chrono-tz = "0.8.0"
-# chashmap = "2.2.2"
-# derive_builder = "0.11.2"
-# openssl = "0.10.42"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

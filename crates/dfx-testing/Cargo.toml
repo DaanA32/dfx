@@ -17,7 +17,6 @@ license = "MPL-2.0"
 [dependencies]
 # dfx = { version = "0.1.0", path = "../dfx" }
 dfx-base = { path = "../dfx-base" }
-paste = "1.0"
 chrono = "0.4.23"
 lazy_static = "1.4.0"
 regex = "1.6.0"

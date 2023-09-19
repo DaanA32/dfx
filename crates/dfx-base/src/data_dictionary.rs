@@ -115,7 +115,6 @@ impl From<ConversionError> for MessageValidationError {
 #[derive(Debug)]
 /// TODO
 pub enum DataDictionaryError {
-    DeserializeError(serde_xml_rs::Error),
     IoError(std::io::Error),
     ParseError(ParseError),
     Missing { entry_type: Arc<str>, name: Arc<str> },
@@ -123,11 +122,6 @@ pub enum DataDictionaryError {
     ParseIntError(ParseIntError),
 }
 
-impl From<serde_xml_rs::Error> for DataDictionaryError {
-    fn from(error: serde_xml_rs::Error) -> Self {
-        Self::DeserializeError(error)
-    }
-}
 impl From<std::io::Error> for DataDictionaryError {
     fn from(error: std::io::Error) -> Self {
         Self::IoError(error)

@@ -17,15 +17,6 @@ license = "MPL-2.0"
 [dependencies]
 # dfx = { version = "0.1.0", path = "../dfx" }
 dfx-base = { version = "1.0.0-beta", path = "../dfx-base" }
-serde = { version = "1.0", features = ["derive"] }
-serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
-quick-xml = "0.26.0"
-regex = "1.6.0"
-lazy_static = "1.4.0"
-chrono = "0.4.23"
-chrono-tz = "0.8.0"
-chashmap = "2.2.2"
-derive_builder = "0.11.2"
 
 [build-dependencies]
 indoc = "1"

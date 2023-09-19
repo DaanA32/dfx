@@ -19,10 +19,6 @@ log = [ "dep:log" ]
 
 [dependencies]
 dfx-base = { version = "1.0.0-beta", path = "../dfx-base" }
-serde = { version = "1.0", features = ["derive"] }
-serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
-quick-xml = "0.26.0"
-regex = "1.6.0"
 lazy_static = "1.4.0"
 chrono = "0.4.23"
 chrono-tz = "0.8.0"
@@ -38,8 +34,4 @@ rusty-fork = "0.3.0"
 paste = "1.0"
 dfx-testing = { path = "../dfx-testing" }
 env_logger = "0.10.0"
-
-[build-dependencies]
-indoc = "1"
-heck = "0.4.0"
-dfx-base = { version = "1.0.0-beta", path = "../dfx-base" }
+regex = "1.6.0"
