@@ -1,6 +1,8 @@
 use chrono::DateTime;
 use chrono::Utc;
 
+use crate::FixChecksum;
+use crate::FixLength;
 use crate::fields::converters::IntoBytes;
 use crate::fields::converters::TryFrom;
 use crate::fields::ConversionError;
@@ -9,6 +11,7 @@ use crate::tags;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::num::Wrapping;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Default, Clone, Debug)]
@@ -119,63 +122,29 @@ impl Field {
         TryFrom::try_from(&self.1)
     }
 
-    pub fn get_total(&self) -> u32 {
-        // format!("{}=", self.tag()).as_bytes()
-        //     .iter()
-        //     .map(|b| *b as u32)
-        //     .sum::<u32>()
-        //     +
-        let checksum_neg = if self.tag() < 0 {
-            '-' as u32
-        } else {
-            0
-        };
-        let tag_checksum = if self.tag() == 0 {
-            '0' as u32
-        } else {
-            let mut total = 0;
-            let mut tag = if self.tag() < 0 { -self.tag() } else { self.tag() } as u32;
-            while tag > 0 {
-                total += tag % 10 + '0' as u32;
-                tag = tag / 10;
-            }
-            total
-        };
-
-        checksum_neg +
-        tag_checksum +
-        b'=' as u32 +
-        self.value().iter()
-            .map(|b| *b as u32)
-            .sum::<u32>()
-            + 1 //incl SOH
-    }
-    pub fn bytes_len(&self) -> u32 {
-        // format!("{}=", self.tag()).as_bytes().len() as u32 +
-        let length_negative = if self.tag() < 0 { 1 } else { 0 };
-        let tag_length = if self.tag() == 0 {
-            1 // "0" as bytes length
-        } else {
-            let mut total = 0;
-            let mut tag = if self.tag() < 0 { -self.tag() } else { self.tag() } as u32;
-            while tag > 0 {
-                total += 1;
-                tag = tag / 10;
-            }
-            total
-        };
-
-        length_negative +
-        tag_length +
-        1 +
-        self.value().len() as u32 + 1 //incl SOH
-    }
-
     pub(crate) fn to_usize(&self) -> Option<usize> {
         self.string_value().ok().map(|v| match v.parse::<usize>() {
             Ok(value) => Some(value),
             Err(_) => None,
         }).flatten()
+    }
+}
+
+impl FixChecksum for &Field {
+    fn checksum(self) -> std::num::Wrapping<u8> {
+        self.tag().checksum() +
+        Wrapping(b'=' as u8) +
+        self.value().checksum() +
+        Wrapping(1) //incl SOH
+    }
+}
+
+impl FixLength for &Field {
+    fn bytes_len(self) -> u32 {
+        self.tag().bytes_len() +
+        1 + // =
+        self.value().bytes_len() +
+        1 //incl SOH
     }
 }
 
@@ -385,13 +354,13 @@ impl FieldMap {
         let mut total = 0;
         for field in self.fields.values() {
             if field.tag() != tags::CheckSum {
-                total += field.get_total();
+                total += field.checksum().0 as Total;
             }
         }
 
         for field in self.repeated_tags() {
             if field.tag() != tags::CheckSum {
-                total += field.get_total();
+                total += field.checksum().0 as Total;
             }
         }
 
