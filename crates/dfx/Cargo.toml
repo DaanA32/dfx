@@ -1,6 +1,6 @@
 [package]
 name = "dfx"
-version = "1.0.0-alpha"
+version = "1.0.0-beta"
 edition = "2021"
 authors = ["Daan Adams @DaanA32"]
 homepage = "https://github.com/DaanA32/dfx"
@@ -18,7 +18,7 @@ default = [ "log" ]
 log = [ "dep:log" ]
 
 [dependencies]
-dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
+dfx-base = { version = "1.0.0-beta", path = "../dfx-base" }
 serde = { version = "1.0", features = ["derive"] }
 serde-xml-rs = "0.6.0" # TODO replace this with quick-xml
 quick-xml = "0.26.0"
@@ -42,4 +42,4 @@ env_logger = "0.10.0"
 [build-dependencies]
 indoc = "1"
 heck = "0.4.0"
-dfx-base = { version = "1.0.0-alpha", path = "../dfx-base" }
+dfx-base = { version = "1.0.0-beta", path = "../dfx-base" }
