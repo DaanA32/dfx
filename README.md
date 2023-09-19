@@ -44,7 +44,6 @@ A FIX protocol engine.
 - Cleanup session.rs
   - Simplify message handling
   - Simplify next / next_msg()
-- Generate report from test suite (For easier tracking)
 
 ## Credits
 Heavily derived / inspired from [QuickfixN](https://github.com/connamara/quickfixn/)
@@ -71,17 +70,17 @@ struct Application;
 impl dfx::session::Application for Application {
 
     fn on_create(&mut self, _session_id: &dfx::session_id::SessionId) -> Result<(), DoNotAccept> {
-        println!("TestApplication: {}", _session_id);
+        println!("Application: {}", _session_id);
         Ok(())
     }
 
     fn on_logon(&mut self, _session_id: &dfx::session_id::SessionId) -> Result<(), LogonReject> {
-        println!("TestApplication Logon: {}", _session_id);
+        println!("Application Logon: {}", _session_id);
         Ok(())
     }
 
     fn on_logout(&mut self, _session_id: &dfx::session_id::SessionId) -> Result<(), ApplicationError> {
-        println!("TestApplication Logout: {}", _session_id);
+        println!("Application Logout: {}", _session_id);
         Ok(())
     }
 
@@ -90,7 +89,7 @@ impl dfx::session::Application for Application {
         message: Message,
         _session_id: &dfx::session_id::SessionId,
     ) -> Result<Message, dfx::field_map::FieldMapError> {
-        println!("TestApplication To Admin: {}", _session_id);
+        println!("Application To Admin: {}", _session_id);
         Ok(message)
     }
 
@@ -99,7 +98,7 @@ impl dfx::session::Application for Application {
         _message: &Message,
         _session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::field_map::FieldMapError> {
-        println!("TestApplication From Admin: {}", _session_id);
+        println!("Application From Admin: {}", _session_id);
         Ok(())
     }
 
@@ -108,7 +107,7 @@ impl dfx::session::Application for Application {
         _message: &mut Message,
         _session_id: &dfx::session_id::SessionId,
     ) -> Result<(), ApplicationError> {
-        println!("TestApplication To App: {}", _session_id);
+        println!("Application To App: {}", _session_id);
         Ok(())
     }
 
@@ -117,8 +116,9 @@ impl dfx::session::Application for Application {
         message: &Message,
         session_id: &dfx::session_id::SessionId,
     ) -> Result<(), FromAppError> {
-        println!("TestApplication From App: {}", session_id);
-        // TODO Do something here
+        println!("Application From App: {}", session_id);
+        // Echo back to sender
+        Session::send_to_session(session_id, message.clone()).unwrap();
         Ok(())
     }
 }
