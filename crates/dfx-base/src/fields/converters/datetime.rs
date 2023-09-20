@@ -64,16 +64,16 @@ impl std::convert::TryFrom<String> for DateTimeFormat {
 use chrono::{DateTime as ChronoDateTime, TimeZone, Utc, NaiveDateTime, NaiveDate, NaiveTime, Local};
 
 use crate::field_map::FieldValue;
-use crate::fields::converters::TryFrom;
+use crate::fields::converters::TryFromFieldValue;
 use crate::fields::ConversionError;
 
-use super::IntoBytes;
+use super::IntoFieldValue;
 
-impl<'a> TryFrom<&'a FieldValue> for ChronoDateTime<Utc> {
+impl<'a> TryFromFieldValue<&'a FieldValue> for ChronoDateTime<Utc> {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
-        let time: &str = TryFrom::try_from(value)?;
+    fn try_from_field_value(value: &'a FieldValue) -> Result<Self, Self::Error> {
+        let time: &str = TryFromFieldValue::try_from_field_value(value)?;
         match Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS) {
             Ok(t) => Ok(t),
             Err(e) => match Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITH_MILLISECONDS) {
@@ -88,11 +88,11 @@ pub type Date = NaiveDate;
 pub type Time = NaiveTime;
 pub type DateTime = NaiveDateTime;
 
-impl<'a> TryFrom<&'a FieldValue> for DateTime {
+impl<'a> TryFromFieldValue<&'a FieldValue> for DateTime {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
-        let time: &str = TryFrom::try_from(value)?;
+    fn try_from_field_value(value: &'a FieldValue) -> Result<Self, Self::Error> {
+        let time: &str = TryFromFieldValue::try_from_field_value(value)?;
         let format = match time.len() {
             DATE_TIME_FORMAT_WITH_NANOSECONDS_LEN => Ok(DATE_TIME_FORMAT_WITH_NANOSECONDS),
             DATE_TIME_FORMAT_WITH_MICROSECONDS_LEN => Ok(DATE_TIME_FORMAT_WITH_MICROSECONDS),
@@ -107,36 +107,36 @@ impl<'a> TryFrom<&'a FieldValue> for DateTime {
     }
 }
 
-impl<'a> TryFrom<&'a FieldValue> for Time {
+impl<'a> TryFromFieldValue<&'a FieldValue> for Time {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from_field_value(value: &'a FieldValue) -> Result<Self, Self::Error> {
         todo!()
     }
 }
 
-impl<'a> TryFrom<&'a FieldValue> for Date {
+impl<'a> TryFromFieldValue<&'a FieldValue> for Date {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
+    fn try_from_field_value(value: &'a FieldValue) -> Result<Self, Self::Error> {
         todo!()
     }
 }
 
-impl IntoBytes<FieldValue> for DateTime {
-    fn as_bytes(&self) -> FieldValue {
+impl IntoFieldValue<FieldValue> for DateTime {
+    fn into_field_value(&self) -> FieldValue {
         todo!()
     }
 }
 
-impl IntoBytes<FieldValue> for Date {
-    fn as_bytes(&self) -> FieldValue {
+impl IntoFieldValue<FieldValue> for Date {
+    fn into_field_value(&self) -> FieldValue {
         todo!()
     }
 }
 
-impl IntoBytes<FieldValue> for Time {
-    fn as_bytes(&self) -> FieldValue {
+impl IntoFieldValue<FieldValue> for Time {
+    fn into_field_value(&self) -> FieldValue {
         todo!()
     }
 }

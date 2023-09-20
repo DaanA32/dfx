@@ -11,23 +11,23 @@ pub use decimal::*;
 
 use crate::field_map::FieldValue;
 
-pub trait TryFrom<T>
+pub trait TryFromFieldValue<T>
 where
     Self: Sized,
 {
     type Error;
-    fn try_from(value: T) -> Result<Self, Self::Error>;
+    fn try_from_field_value(value: T) -> Result<Self, Self::Error>;
 }
 
-pub trait IntoBytes<T>
+pub trait IntoFieldValue<T>
 where
     Self: Sized,
 {
-    fn as_bytes(&self) -> T;
+    fn into_field_value(&self) -> T;
 }
 
-impl IntoBytes<FieldValue> for &std::sync::Arc<[u8]> {
-    fn as_bytes(&self) -> FieldValue {
+impl IntoFieldValue<FieldValue> for &std::sync::Arc<[u8]> {
+    fn into_field_value(&self) -> FieldValue {
         self.to_vec().into()
     }
 }
