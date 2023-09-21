@@ -26,7 +26,7 @@ pub struct FieldMap {
 }
 
 pub type Tag = i32;
-pub type Total = u32;
+pub type Total = Wrapping<u8>;
 pub type Length = u32;
 pub type FieldOrder = Vec<Tag>;
 pub(crate) type FieldBase = Field;
@@ -165,7 +165,7 @@ impl FieldMap {
         src.clone()
     }
 
-    pub fn set_field_base(&mut self, field: Field, overwrite: Option<bool>) -> bool {
+    pub(crate) fn set_field_base(&mut self, field: Field, overwrite: Option<bool>) -> bool {
         if matches!(overwrite, Some(b) if !b) && self.fields.contains_key(&field.tag()) {
             return false;
         }
@@ -173,7 +173,7 @@ impl FieldMap {
         true
     }
 
-    pub fn set_field_deref<F: Deref<Target = Field> + Clone>(
+    pub(crate) fn set_field_deref<F: Deref<Target = Field> + Clone>(
         &mut self,
         field: F,
         overwrite: Option<bool>,
@@ -350,23 +350,23 @@ impl FieldMap {
         self.fields.len() == 0 && self.groups.len() == 0
     }
 
-    pub fn calculate_total(&self) -> Total {
-        let mut total = 0;
+    pub fn checksum(&self) -> Total {
+        let mut total = Total::default();
         for field in self.fields.values() {
             if field.tag() != tags::CheckSum {
-                total += field.checksum().0 as Total;
+                total += field.checksum();
             }
         }
 
         for field in self.repeated_tags() {
             if field.tag() != tags::CheckSum {
-                total += field.checksum().0 as Total;
+                total += field.checksum();
             }
         }
 
         for group_list in self.groups.values() {
             for group in group_list {
-                total += group.calculate_total();
+                total += group.checksum();
             }
         }
         total

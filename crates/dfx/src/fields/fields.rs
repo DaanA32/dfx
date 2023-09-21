@@ -46,6 +46,11 @@ impl Deref for EncryptMethod {
         &self.0
     }
 }
+impl Into<Field> for EncryptMethod {
+    fn into(self) -> Field {
+        self.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct HeartBtInt(Field);
@@ -68,6 +73,11 @@ impl Deref for HeartBtInt {
         &self.0
     }
 }
+impl Into<Field> for HeartBtInt {
+    fn into(self) -> Field {
+        self.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct DefaultApplVerID(Field);
@@ -81,6 +91,11 @@ impl Deref for DefaultApplVerID {
     type Target = Field;
     fn deref(&self) -> &<Self as Deref>::Target {
         &self.0
+    }
+}
+impl Into<Field> for DefaultApplVerID {
+    fn into(self) -> Field {
+        self.0
     }
 }
 
@@ -107,5 +122,10 @@ impl Deref for ResetSeqNumFlag {
     type Target = Field;
     fn deref(&self) -> &<Self as Deref>::Target {
         &self.0
+    }
+}
+impl Into<Field> for ResetSeqNumFlag {
+    fn into(self) -> Field {
+        self.0
     }
 }
