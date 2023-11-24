@@ -4,19 +4,25 @@ use base64::{engine::{general_purpose, self}, Engine, DecodeError, alphabet};
 use dfx::{session::{Application, SessionSettings}, connection::SocketInitiator, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message_factory::DefaultMessageFactory, tags::{self}};
 use hmac_sha256::HMAC;
 
-#[derive(Default, Clone, Debug)]
+use uuid::Uuid;
+use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::SyncSender;
+use std::thread;
+
+#[derive(Clone, Debug)]
 struct CoinbaseApp {
     password: String,
     secret: Vec<u8>,
+    sender: SyncSender<bool>,
 }
 
 impl CoinbaseApp {
-    pub fn new(password: &str, secret: &str) -> Result<Self, DecodeError> {
+    pub fn new(password: &str, secret: &str, sender: SyncSender<bool>) -> Result<Self, DecodeError> {
         let engine = engine::GeneralPurpose::new(
              &alphabet::URL_SAFE,
              general_purpose::PAD);
         let secret = engine.decode(&secret.replace("+", "-").replace("/", "_"))?;
-        Ok(CoinbaseApp { password: password.into(), secret })
+        Ok(CoinbaseApp { password: password.into(), secret, sender })
     }
 }
 
@@ -28,6 +34,17 @@ impl Application for CoinbaseApp {
 
     fn on_logon(&mut self, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::session::LogonReject> {
         println!("Logon {}", session_id);
+
+        let mut message = dfx::message::Message::default();
+        message.header_mut().set_tag_value(tags::MsgType, "D");
+        message.set_tag_value(tags::ClOrdID, Uuid::new_v4().to_string());
+        message.set_tag_value(tags::Symbol, "BTC-USD");
+        message.set_tag_value(tags::Side, "1");
+        message.set_tag_value(tags::OrderQty, "0.01");
+        // message.set_tag_value(tags::TimeInForce, 4); // FOK
+        message.set_tag_value(tags::OrdType, "1"); // Market
+        dfx::session::Session::send_to_session(session_id, message).unwrap();
+
         Ok(())
     }
 
@@ -80,9 +97,33 @@ impl Application for CoinbaseApp {
 
     fn from_app(
         &mut self,
-        _message: &dfx::message::Message,
-        _session_id: &dfx::session_id::SessionId,
+        message: &dfx::message::Message,
+        session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::session::FromAppError> {
+        let msg_type = message.header().get_string(tags::MsgType)?;
+        match msg_type.as_str() {
+            "8" => {
+                let ord_status = message.get_string(tags::OrdStatus)?;
+                let finished = match ord_status.as_str() {
+                    "2" => true,
+                    "3" => true,
+                    "4" => true,
+                    "7" => true,
+                    "8" => true,
+                    "9" => true,
+                    "C" => true,
+                    _ => false,
+                };
+                if finished {
+                    self.sender.send(true).unwrap();
+                    let mut message = dfx::message::Message::default();
+                    message.header_mut().set_tag_value(tags::MsgType, "5");
+                    dfx::session::Session::send_to_session(session_id, message).unwrap();
+                }
+            }
+            _ => {}
+        }
+
         Ok(())
     }
 }
@@ -116,7 +157,10 @@ fn main() {
 
     let key = key_var.unwrap();
     let pass = pass_var.unwrap();
-    let coinbase_app = CoinbaseApp::new(&pass, &key);
+
+
+    let (sender, receiver) = sync_channel(100);
+    let coinbase_app = CoinbaseApp::new(&pass, &key, sender);
     if let Err(err) = coinbase_app {
         println!("Failed to decode secret: {err:?}, {}", err);
         return;
@@ -131,6 +175,16 @@ fn main() {
         PrintlnLogFactory::new(),
         DefaultMessageFactory::new(),
     );
+
+    let running = initiator.running();
+    thread::spawn(move|| {
+        // this will block until the previous message has been received
+        let stop = receiver.recv().unwrap();
+        if stop {
+            running
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    });
 
     initiator.start();
     initiator.join()

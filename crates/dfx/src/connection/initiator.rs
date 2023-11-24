@@ -68,6 +68,9 @@ where App: Application + Clone + 'static,
             .store(false, std::sync::atomic::Ordering::Relaxed);
         self.join()
     }
+    pub fn running(&self) -> Arc<AtomicBool> {
+        self.running.clone()
+    }
 }
 
 pub(crate) struct SocketInitiatorThread<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
@@ -144,9 +147,7 @@ where App: Application + Clone + 'static,
     }
 
     fn event_loop(&mut self) -> Result<(), InitiatorError> {
-        println!("before");
         let stream = StreamFactory::create_client_stream(self.session_settings.socket_settings())?;
-        println!("after");
         let app = self.app.clone();
         let store_factory = self.store_factory.clone();
         let data_dictionary_provider = self.data_dictionary_provider.clone();

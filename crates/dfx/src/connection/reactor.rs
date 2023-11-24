@@ -103,12 +103,10 @@ where App: Application + Clone + 'static,
         if reactor.settings.len() == 1 {
             let session_setting = &reactor.settings[0];
             if session_setting.connection().is_initiator() {
-                eprintln!("Is initiator");
                 reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
             }
             if session_setting.connection().is_acceptor()
             && !session_setting.is_dynamic(){
-                eprintln!("Is acceptor");
                 reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
             }
         }

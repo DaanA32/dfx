@@ -799,7 +799,7 @@ where App: Application + Clone + 'static,
         let begin_string = Message::extract_begin_string(&msg)
             .map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
         let mut message = self.msg_factory.create(begin_string.as_str(), msg_type)?;
-        eprintln!("before from_string");
+        // eprintln!("before from_string");
         message.from_string(
             &msg,
             self.validate_length_and_checksum,
@@ -808,7 +808,7 @@ where App: Application + Clone + 'static,
             Some(&self.msg_factory),
             false,
         ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
-        eprintln!("before handle_msg");
+        //eprintln!("before handle_msg");
         self.handle_msg(message, &begin_string, msg_type)
     }
 
