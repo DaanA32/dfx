@@ -1,8 +1,8 @@
 use std::cmp;
 use std::cmp::min;
 use std::sync::mpsc::Receiver;
-use std::sync::mpsc::SyncSender;
-use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::Sender;
+use std::sync::mpsc::channel;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -50,7 +50,7 @@ use super::SessionSetting;
 const _BUF_SIZE: usize = 4096;
 
 lazy_static! {
-    static ref SESSION_MAP: CHashMap<SessionId, SyncSender<Message>> = CHashMap::new();
+    static ref SESSION_MAP: CHashMap<SessionId, Sender<Message>> = CHashMap::new();
 }
 
 #[allow(non_snake_case)]
@@ -72,7 +72,7 @@ fn connect(session_id: &SessionId) -> Result<Receiver<Message>, InternalSessionE
     if SESSION_MAP.contains_key(session_id) {
         return Err(InternalSessionError::AlreadyConnected);
     }
-    let (tx, rx) = sync_channel(512);
+    let (tx, rx) = channel();
     SESSION_MAP.insert_new(session_id.clone(), tx);
     Ok(rx)
 }
@@ -799,7 +799,6 @@ where App: Application + Clone + 'static,
         let begin_string = Message::extract_begin_string(&msg)
             .map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
         let mut message = self.msg_factory.create(begin_string.as_str(), msg_type)?;
-        eprintln!("before from_string");
         message.from_string(
             &msg,
             self.validate_length_and_checksum,
@@ -808,7 +807,6 @@ where App: Application + Clone + 'static,
             Some(&self.msg_factory),
             false,
         ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
-        eprintln!("before handle_msg");
         self.handle_msg(message, &begin_string, msg_type)
     }
 

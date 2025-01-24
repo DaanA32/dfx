@@ -103,12 +103,10 @@ where App: Application + Clone + 'static,
         if reactor.settings.len() == 1 {
             let session_setting = &reactor.settings[0];
             if session_setting.connection().is_initiator() {
-                eprintln!("Is initiator");
                 reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
             }
             if session_setting.connection().is_acceptor()
             && !session_setting.is_dynamic(){
-                eprintln!("Is acceptor");
                 reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
             }
         }
@@ -179,7 +177,6 @@ where App: Application + Clone + 'static,
             .as_mut()
             .unwrap()
             .shutdown(std::net::Shutdown::Both)?;
-        println!("Disconnected: {remote:?}");
         Ok(())
     }
 
@@ -239,7 +236,6 @@ where App: Application + Clone + 'static,
             } else {
                 let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
                 let session_id = message.extract_contra_session_id();
-                eprintln!("Extracted session id {session_id}");
                 let session_settings = self.for_session_id(&session_id);
                 match session_settings {
                     Some(settings) => {
@@ -289,7 +285,6 @@ where App: Application + Clone + 'static,
                         Ok(stream.flush()?)
                     }
                     ResponderEvent::Disconnect => {
-                        println!("Reactor: Disconnect");
                         Err(ReactorError::Disconnect)
                     }
                 },

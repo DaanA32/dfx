@@ -200,7 +200,6 @@ where App: Application + Sync + Clone + 'static,
             match listener.accept() {
                 Ok((stream, _addr)) => {
                     // TODO replace with connected event.
-                    println!("Connected: {_addr}");
                     let session_setting = &self.session_settings[0];
                     let stream = StreamFactory::configure_stream(
                         stream,
