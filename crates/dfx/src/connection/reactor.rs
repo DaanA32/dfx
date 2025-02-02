@@ -172,11 +172,9 @@ where App: Application + Clone + 'static,
             .session_id()
             .clone();
         self.set_disconnected(session_id);
-        let remote = self.stream.as_ref().unwrap().peer_addr()?;
-        self.stream
-            .as_mut()
-            .unwrap()
-            .shutdown(std::net::Shutdown::Both)?;
+        if let Some(stream) = self.stream.as_mut() {
+            stream.shutdown(std::net::Shutdown::Both)?;
+        }
         Ok(())
     }
 
