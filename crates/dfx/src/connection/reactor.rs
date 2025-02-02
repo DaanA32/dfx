@@ -103,11 +103,11 @@ where App: Application + Clone + 'static,
         if reactor.settings.len() == 1 {
             let session_setting = &reactor.settings[0];
             if session_setting.connection().is_initiator() {
-                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
+                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), session_setting));
             }
             if session_setting.connection().is_acceptor()
             && !session_setting.is_dynamic(){
-                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
+                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), session_setting));
             }
         }
         reactor.create_responder();
@@ -146,7 +146,7 @@ where App: Application + Clone + 'static,
     }
 
     fn event_loop(&mut self) -> Result<(), ReactorError> {
-        while let None = self.session {
+        while self.session.is_none() {
             self.read()?;
         }
 

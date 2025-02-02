@@ -32,6 +32,12 @@ impl MessageFactoryError {
 pub struct DefaultMessageFactory {
     factory_map: BTreeMap<String, Arc<Mutex<Box<dyn MessageFactory>>>>,
 }
+impl Default for DefaultMessageFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DefaultMessageFactory {
     pub fn new() -> Self {
         DefaultMessageFactory {

@@ -19,7 +19,7 @@ macro_rules! impl_checksum_unsigned {
                     let mut tag = self;
                     while tag > 0 {
                         total += Wrapping((tag % 10) as u8) + Wrapping('0' as u8);
-                        tag = tag / 10;
+                        tag /= 10;
                     }
                     total
                 }
@@ -38,7 +38,7 @@ macro_rules! impl_bytes_len_unsigned {
                     let mut tag = self;
                     while tag > 0 {
                         total += 1;
-                        tag = tag / 10;
+                        tag /= 10;
                     }
                     total
                 }
@@ -73,7 +73,7 @@ macro_rules! impl_checksum_signed {
                     let mut tag = self.abs();
                     while tag > 0 {
                         total += Wrapping((tag % 10) as u8) + Wrapping('0' as u8);
-                        tag = tag / 10;
+                        tag /= 10;
                     }
                     total + checksum_neg
                 }
@@ -97,7 +97,7 @@ macro_rules! impl_bytes_len_signed {
                     let mut tag = self.abs();
                     while tag > 0 {
                         total += 1;
-                        tag = tag / 10;
+                        tag /= 10;
                     }
                     total + checksum_neg
                 }

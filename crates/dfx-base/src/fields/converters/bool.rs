@@ -21,9 +21,9 @@ impl<'a> TryFrom<&'a FieldValue> for bool {
 impl IntoBytes<FieldValue> for bool {
     fn as_bytes(&self) -> FieldValue {
         if *self {
-            vec!['Y' as u8].into()
+            vec![b'Y'].into()
         } else {
-            vec!['N' as u8].into()
+            vec![b'N'].into()
         }
     }
 }

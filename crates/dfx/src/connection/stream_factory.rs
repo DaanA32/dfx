@@ -34,8 +34,8 @@ impl StreamError {
 impl Stream {
     pub(crate) fn peer_addr(&self) -> std::io::Result<Option<SocketAddr>> {
         match self {
-            Stream::Tcp(tcp) => tcp.peer_addr().map(|addr| Some(addr)),
-            Stream::Ssl(ssl) => ssl.get_ref().peer_addr().map(|addr| Some(addr)),
+            Stream::Tcp(tcp) => tcp.peer_addr().map(Some),
+            Stream::Ssl(ssl) => ssl.get_ref().peer_addr().map(Some),
         }
     }
     pub(crate) fn shutdown(&mut self, how: std::net::Shutdown) -> std::io::Result<()> {

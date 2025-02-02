@@ -1,7 +1,6 @@
 pub mod datetime;
 pub use datetime::{DateTime, Time, Date};
 mod string;
-pub use string::*;
 
 mod int;
 pub mod r#bool;

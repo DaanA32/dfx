@@ -514,7 +514,7 @@ impl SessionSetting {
     }
 
     pub(crate) fn socket_settings(&self) -> SocketSettings {
-        SocketSettings::new(self.connection.socket_addr().clone(), self.socket_options.clone(), self.ssl_options.clone())
+        SocketSettings::new(*self.connection.socket_addr(), self.socket_options.clone(), self.ssl_options.clone())
     }
 
     pub(crate) fn reconnect_interval(&self) -> Option<u32> {

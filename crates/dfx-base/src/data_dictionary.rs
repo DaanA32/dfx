@@ -179,7 +179,7 @@ impl Default for DataDictionary {
 impl DataDictionary {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<DataDictionary, DataDictionaryError> {
         let path: &Path = path.as_ref();
-        let mut reader = match File::open(&path) {
+        let mut reader = match File::open(path) {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
             Ok(file) => file,
         };
@@ -283,7 +283,7 @@ impl DataDictionary {
         Ok(())
     }
     fn check_has_no_repeated_tags(map: &FieldMap) -> Result<(), MessageValidationError> {
-        if let Some(field) = map.repeated_tags().get(0) {
+        if let Some(field) = map.repeated_tags().first() {
             Err(MessageValidationError::TagException(
                 TagException::repeated_tag(field.tag()),
             ))
@@ -442,7 +442,7 @@ impl DataDictionary {
             }
             self.check_has_value(field)?;
 
-            if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
+            if self.version.is_some() && !matches!(&self.version, Some(version) if version.is_empty()) {
                 self.check_valid_format(field)?;
 
                 if self.should_check_tag(field) {
@@ -454,8 +454,7 @@ impl DataDictionary {
                     {
                         self.check_is_in_message(field, msg_type)?;
                         self.check_group_count(field, message, msg_type)?;
-                    } else {
-                    }
+                    } 
                 }
             }
 
@@ -493,7 +492,7 @@ impl DataDictionary {
                     }
                     self.check_has_value(field)?;
 
-                    if !self.version.is_none() && !matches!(&self.version, Some(version) if version.is_empty()) {
+                    if self.version.is_some() && !matches!(&self.version, Some(version) if version.is_empty()) {
                         self.check_valid_format(field)?;
 
                         if self.should_check_tag(field) {
@@ -759,6 +758,12 @@ pub struct DDGroup {
     name: Arc<str>,
     map: DDMap,
 }
+impl Default for DDGroup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DDGroup {
     pub fn new() -> Self {
        DDGroup { num_fld: Tag::default(), delim: Tag::default(), required: bool::default(), name: "".into(), map: DDMap::new("group".into()) }
@@ -793,7 +798,7 @@ enum GoM<'a> {
     Map(&'a mut DDMap),
     Group(&'a mut DDGroup)
 }
-impl<'a> Deref for GoM<'a> {
+impl Deref for GoM<'_> {
     type Target = DDMap;
     fn deref(&self) -> &Self::Target {
         match self {
@@ -802,7 +807,7 @@ impl<'a> Deref for GoM<'a> {
         }
     }
 }
-impl<'a> DerefMut for GoM<'a> {
+impl DerefMut for GoM<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             GoM::Map(g) => g,
@@ -812,8 +817,6 @@ impl<'a> DerefMut for GoM<'a> {
 }
 
 use std::io::Read;
-use std::println;
-use std::str::FromStr;
 use std::sync::Arc;
 use xmltree::Element;
 
@@ -914,7 +917,7 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, Field>, BTreeMap<Arc<str
         {
             let enum_value = enum_node.attributes.get("enum")
                 .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "enum".into() })?.clone();
-            let description = enum_node.attributes.get("description").map(|s| s.clone()).unwrap_or_default();
+            let description = enum_node.attributes.get("description").cloned().unwrap_or_default();
             enums.insert(enum_value.into(), description.into());
         }
 
@@ -935,7 +938,7 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, Field>, BTreeMap<Arc<str
         fields_by_tag.insert(tag, dd_field.clone());
         fields_by_name.insert(name.clone().into(), dd_field);
     }
-    return Ok((fields_by_tag, fields_by_name));
+    Ok((fields_by_tag, fields_by_name))
 }
 
 fn cache_components(doc: &Element) -> Result<BTreeMap<Arc<str>, Element>, DataDictionaryError> {
@@ -970,7 +973,7 @@ fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, com
         let name: Arc<str> = message_node.attributes.get("name")
             .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone().into();
         let mut dd_map = DDMap::new(name);
-        parse_msg_element(&message_node, &mut dd_map, fields_by_name, components_by_name)?;
+        parse_msg_element(message_node, &mut dd_map, fields_by_name, components_by_name)?;
         let msg_type: Arc<str> = message_node.attributes.get("msgtype")
             .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "msgtype".into() })?.clone().into();
         messages.insert(msg_type, dd_map);
@@ -981,7 +984,7 @@ fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, com
 fn parse_header(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<DDMap, DataDictionaryError> {
     let mut dd_map = DDMap::new("header".into());
     if let Some(header_node) = doc.get_child("header") {
-        parse_msg_element(&header_node, &mut dd_map, fields_by_name, components_by_name)?;
+        parse_msg_element(header_node, &mut dd_map, fields_by_name, components_by_name)?;
     }
     Ok(dd_map)
 }
@@ -989,7 +992,7 @@ fn parse_header(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, compo
 fn parse_trailer(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<DDMap, DataDictionaryError> {
     let mut dd_map = DDMap::new("trailer".into());
     if let Some(trailer_node) = doc.get_child("trailer") {
-        parse_msg_element(&trailer_node, &mut dd_map, fields_by_name, components_by_name)?;
+        parse_msg_element(trailer_node, &mut dd_map, fields_by_name, components_by_name)?;
     }
     Ok(dd_map)
 }
@@ -1004,8 +1007,7 @@ fn verify_child_node(child_node: &Element, parent_node: &Element) {
     if !child_node.attributes.contains_key("name") {
         let message_type_name = parent_node
             .attributes
-            .get("name")
-            .map(|s| s.clone())
+            .get("name").cloned()
             .unwrap_or_else(|| parent_node.name.clone());
         panic!(
             "Malformed data dictionary: Found '{}' node without 'name' within parent '{}/{}'",
@@ -1032,8 +1034,7 @@ fn parse_msg_element_inner(
 ) -> Result<(), DataDictionaryError> {
     let message_type_name = node
         .attributes
-        .get("name")
-        .map(|s| s.clone())
+        .get("name").cloned()
         .unwrap_or_else(|| node.name.clone());
 
     if node.children.is_empty() {
@@ -1094,7 +1095,7 @@ fn parse_msg_element_inner(
                 "component" => {
                     let component_node = components_by_name
                         .get(&name_attribute)
-                        .ok_or(DataDictionaryError::Missing { entry_type: "component".into(), name: name_attribute.clone().into() })?
+                        .ok_or(DataDictionaryError::Missing { entry_type: "component".into(), name: name_attribute.clone() })?
                         .clone();
 
                     let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false);
@@ -1149,13 +1150,10 @@ mod tests {
             let handlinst = dd.fields_by_name.get("HandlInst");
             assert!(newordersingle.is_some());
             assert!(handlinst.is_some());
-            match (newordersingle, handlinst) {
-                (Some(newordersingle), Some(handlinst)) => {
-                    let handlinst_in_message = newordersingle.fields.contains_key(&handlinst.tag);
-                    println!("{:?}", handlinst_in_message);
-                    assert!(handlinst_in_message)
-                }
-                _ => (),
+            if let (Some(newordersingle), Some(handlinst)) = (newordersingle, handlinst) {
+                let handlinst_in_message = newordersingle.fields.contains_key(&handlinst.tag);
+                println!("{:?}", handlinst_in_message);
+                assert!(handlinst_in_message)
             }
         }
     }

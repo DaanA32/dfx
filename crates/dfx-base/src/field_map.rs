@@ -123,17 +123,17 @@ impl Field {
     }
 
     pub(crate) fn to_usize(&self) -> Option<usize> {
-        self.string_value().ok().map(|v| match v.parse::<usize>() {
+        self.string_value().ok().and_then(|v| match v.parse::<usize>() {
             Ok(value) => Some(value),
             Err(_) => None,
-        }).flatten()
+        })
     }
 }
 
 impl FixChecksum for &Field {
     fn checksum(self) -> std::num::Wrapping<u8> {
         self.tag().checksum() +
-        Wrapping(b'=' as u8) +
+        Wrapping(b'=') +
         self.value().checksum() +
         Wrapping(1) //incl SOH
     }
@@ -213,7 +213,7 @@ impl FieldMap {
         }
     }
     pub fn get_string_unchecked(&self, tag: Tag) -> String {
-        self.fields[&tag].string_value().unwrap().into() // explicit_unchecked
+        self.fields[&tag].string_value().unwrap() // explicit_unchecked
     }
     pub fn get_bool(&self, tag: Tag) -> bool {
         self.fields[&tag].string_value().ok() == Some("Y".into())
@@ -235,7 +235,7 @@ impl FieldMap {
 
     // Groups
     pub fn add_group(&mut self, _tag: Tag, group: &Group, set_count: Option<bool>) {
-        self.groups.entry(group.field()).or_insert_with(Vec::new);
+        self.groups.entry(group.field()).or_default();
         self.groups
             .get_mut(&group.field())
             .unwrap() //checked
@@ -281,7 +281,7 @@ impl FieldMap {
         }
 
         //TODO (index - 1) try into usize => field not found
-        Ok(&mut self.groups.get_mut(&field).ok_or_else(|| FieldMapError::FieldNotFound(field))?[index as usize - 1])
+        Ok(&mut self.groups.get_mut(&field).ok_or(FieldMapError::FieldNotFound(field))?[index as usize - 1])
     }
     /// index: Index in group starting at 1
     /// field: Field Tag (Tag of field which contains count of group)
@@ -301,7 +301,7 @@ impl FieldMap {
         } else {
             self.groups
                 .get_mut(&field)
-                .ok_or_else(|| FieldMapError::FieldNotFound(field))?
+                .ok_or(FieldMapError::FieldNotFound(field))?
                 //TODO (index - 1) try into usize => field not found
                 .remove((index as usize) - 1);
         }
@@ -326,10 +326,10 @@ impl FieldMap {
         let group_ref = self
             .groups
             .get_mut(&field)
-            .ok_or_else(|| FieldMapError::FieldNotFound(field))?
+            .ok_or(FieldMapError::FieldNotFound(field))?
             //TODO (index - 1) try into usize => field not found
             .get_mut(index as usize - 1)
-            .ok_or_else(|| FieldMapError::FieldNotFound(field))?;
+            .ok_or(FieldMapError::FieldNotFound(field))?;
         let group = std::mem::replace(group_ref, group);
 
         Ok(group)
@@ -409,7 +409,7 @@ impl FieldMap {
         &mut self.repeated_tags
     }
 
-    pub fn entries<'a>(&'a self) -> impl Iterator<Item = (&'a Tag, &Field)> {
+    pub fn entries(&self) -> impl Iterator<Item = (&Tag, &Field)> {
         self.fields.iter()
     }
 

@@ -77,7 +77,7 @@ fn connect(session_id: &SessionId) -> Result<Receiver<Message>, InternalSessionE
     Ok(rx)
 }
 fn disconnect_session(session_id: &SessionId) {
-    SESSION_MAP.remove(&session_id);
+    SESSION_MAP.remove(session_id);
 }
 
 //TODO: dyn to generic?
@@ -180,7 +180,7 @@ where App: Application + Clone + 'static,
     ) -> Self {
         // REVIEW is this dumb?
         add_data_dictionaries(&mut data_dictionary_provider, &settings);
-        let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&settings.session_id().begin_string()).clone();
+        let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(settings.session_id().begin_string()).clone();
         let application_data_dictionary = if settings.session_id().is_fixt() {
             data_dictionary_provider.get_application_data_dictionary(settings.default_appl_ver_id().unwrap()).clone()
         } else {
@@ -258,7 +258,7 @@ where App: Application + Clone + 'static,
         &mut self,
         session_id: &SessionId,
     ) -> Result<(), InternalSessionError> {
-        let receiver = connect(&session_id);
+        let receiver = connect(session_id);
         self.outbound = Some(receiver?);
         Ok(())
     }
@@ -406,7 +406,7 @@ where App: Application + Clone + 'static,
     fn generate_logon(&mut self) -> bool {
         let mut logon = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::LOGON)
+            .create(self.session_id.begin_string(), MsgType::LOGON)
             .unwrap(); // TODO handle unwrap
         logon.set_field_deref(EncryptMethod::new(EncryptMethod::NONE), None);
         logon.set_field_deref(HeartBtInt::new(self.state.heartbeat_int()), None);
@@ -436,11 +436,11 @@ where App: Application + Clone + 'static,
     fn generate_logon_other(&mut self, other: &Message) -> bool {
         let mut logon = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::LOGON)
+            .create(self.session_id.begin_string(), MsgType::LOGON)
             .unwrap(); // TODO handle unwrap
         logon.set_tag_value(tags::EncryptMethod, "0");
         if self.session_id.is_fixt() {
-            logon.set_tag_value(tags::DefaultApplVerID, &self.sender_default_appl_ver_id.as_ref().unwrap());
+            logon.set_tag_value(tags::DefaultApplVerID, self.sender_default_appl_ver_id.as_ref().unwrap());
         }
         logon.set_field_base(other.get_field(tags::HeartBtInt).unwrap().clone(), None);
 
@@ -463,13 +463,13 @@ where App: Application + Clone + 'static,
     fn generate_logout(&mut self, reason: Option<String>, other: Option<Message>) -> bool {
         let mut logout = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::LOGOUT)
+            .create(self.session_id.begin_string(), MsgType::LOGOUT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut logout, None);
         if matches!(reason.as_ref(), Some(text) if !text.is_empty()) {
             logout.set_tag_value(tags::Text, reason.as_ref().unwrap().as_str());
         }
-        if matches!(other.as_ref(), Some(_)) && self.enable_last_msg_seq_num_processed {
+        if other.as_ref().is_some() && self.enable_last_msg_seq_num_processed {
             if other
                 .as_ref()
                 .unwrap()
@@ -498,7 +498,7 @@ where App: Application + Clone + 'static,
     fn generate_heartbeat(&mut self) -> bool {
         let mut heartbeat = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::HEARTBEAT)
+            .create(self.session_id.begin_string(), MsgType::HEARTBEAT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         matches!(self.send_raw(heartbeat, 0), Ok(v) if v)
@@ -506,7 +506,7 @@ where App: Application + Clone + 'static,
     fn generate_heartbeat_other(&mut self, message: &Message) -> bool {
         let mut heartbeat = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::HEARTBEAT)
+            .create(self.session_id.begin_string(), MsgType::HEARTBEAT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         heartbeat.set_field_base(message.get_field(tags::TestReqID).unwrap().clone(), None);
@@ -525,7 +525,7 @@ where App: Application + Clone + 'static,
     fn generate_test_request(&mut self, reason: &str) -> bool {
         let mut heartbeat = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::TEST_REQUEST)
+            .create(self.session_id.begin_string(), MsgType::TEST_REQUEST)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         heartbeat.set_tag_value(tags::TestReqID, reason);
@@ -578,7 +578,7 @@ where App: Application + Clone + 'static,
                     false
                 };
                 if reset {
-                    self.state.reset(Some("ResetSeqNumFlag".into()));
+                    self.state.reset(Some("ResetSeqNumFlag"));
                     message.header_mut().set_field_base(
                         Field::new(
                             tags::MsgSeqNum,
@@ -625,32 +625,32 @@ where App: Application + Clone + 'static,
 
         message
             .header_mut()
-            .set_tag_value(tags::BeginString, &self.session_id.begin_string());
+            .set_tag_value(tags::BeginString, self.session_id.begin_string());
         message
             .header_mut()
-            .set_tag_value(tags::SenderCompID, &self.session_id.sender_comp_id());
+            .set_tag_value(tags::SenderCompID, self.session_id.sender_comp_id());
         if !self.session_id.sender_sub_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::SenderSubID, &self.session_id.sender_sub_id());
+                .set_tag_value(tags::SenderSubID, self.session_id.sender_sub_id());
         }
         if !self.session_id.sender_location_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::SenderLocationID, &self.session_id.sender_location_id());
+                .set_tag_value(tags::SenderLocationID, self.session_id.sender_location_id());
         }
         message
             .header_mut()
-            .set_tag_value(tags::TargetCompID, &self.session_id.target_comp_id());
+            .set_tag_value(tags::TargetCompID, self.session_id.target_comp_id());
         if !self.session_id.target_sub_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::TargetSubID, &self.session_id.target_sub_id());
+                .set_tag_value(tags::TargetSubID, self.session_id.target_sub_id());
         }
         if !self.session_id.target_location_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::TargetLocationID, &self.session_id.target_location_id());
+                .set_tag_value(tags::TargetLocationID, self.session_id.target_location_id());
         }
 
         let seq_num = format!(
@@ -829,7 +829,7 @@ where App: Application + Clone + 'static,
             if self.session_id.is_fixt() {
                 self.target_default_appl_ver_id = Some(message.get_int(tags::DefaultApplVerID)?);
             } else {
-                self.target_default_appl_ver_id = Some(Message::get_appl_ver_id(&begin_string)?);
+                self.target_default_appl_ver_id = Some(Message::get_appl_ver_id(begin_string)?);
             }
         }
 
@@ -838,7 +838,7 @@ where App: Application + Clone + 'static,
                 &message,
                 Some(&self.session_data_dictionary),
                 &self.application_data_dictionary,
-                &begin_string,
+                begin_string,
                 msg_type,
             )
         } else {
@@ -846,7 +846,7 @@ where App: Application + Clone + 'static,
                 &message,
                 Some(&self.session_data_dictionary),
                 &self.session_data_dictionary,
-                &begin_string,
+                begin_string,
                 msg_type,
             )
         };
@@ -1361,18 +1361,15 @@ where App: Application + Clone + 'static,
 
         let mut msg_seq_num = 0;
         if message.header().is_field_set(tags::MsgSeqNum) {
-            match message.header().get_int(tags::MsgSeqNum) {
-                Ok(seq_num) => {
-                    msg_seq_num = seq_num;
-                    reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num).as_str());
-                }
-                Err(_) => {}
+            if let Ok(seq_num) = message.header().get_int(tags::MsgSeqNum) {
+                msg_seq_num = seq_num;
+                reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num).as_str());
             }
         }
 
         let begin_string = &self.session_id.begin_string();
         if begin_string >= &BeginString::FIX42 {
-            if msg_type.len() > 0 {
+            if !msg_type.is_empty() {
                 reject.set_tag_value(tags::RefMsgType, &msg_type);
             }
             if (&BeginString::FIX42 == begin_string
@@ -1583,13 +1580,13 @@ where App: Application + Clone + 'static,
             reject.set_tag_value(tags::BusinessRejectReason, format!("{}", business_reject_reason.index()));
             reject
         } else {
-            let reject = self.msg_factory.create(self.session_id.begin_string(), MsgType::REJECT)?;
+            
             // TODO magic?
         //     reject = msgFactory_.Create(this.SessionID.BeginString, MsgType.REJECT);
         //     char[] reasonArray = reason.ToLower().ToCharArray();
         //     reasonArray[0] = char.ToUpper(reasonArray[0]);
         //     reason = new string(reasonArray);
-            reject
+            self.msg_factory.create(self.session_id.begin_string(), MsgType::REJECT)?
         };
 
         self.initialize_header(&mut reject, None);

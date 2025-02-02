@@ -41,8 +41,8 @@ impl<'a> TryFrom<&'a FieldValue> for u32 {
         let mut sum = 0;
         for byte in value.iter() {
             let byte = *byte;
-            if byte >= b'0' && byte <= b'9' {
-                sum = 10 * sum;
+            if byte.is_ascii_digit() {
+                sum *= 10;
                 sum += byte as u32 - b'0' as u32;
             } else {
                 return Err(ConversionError::IntParseErr);
@@ -131,11 +131,8 @@ impl<'a> TryFrom<&'a FieldValue> for f64 {
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let ref_str: &str = TryFrom::try_from(value)?;
         //TODO replace with better function
-        match ref_str.chars().next() {
-            Some('+') => {
-                return Err(ConversionError::IntParseErr);
-            },
-            _ => {}
+        if let Some('+') = ref_str.chars().next() {
+            return Err(ConversionError::IntParseErr);
         }
         ref_str.parse().map_err(|_e| ConversionError::IntParseErr)
     }
@@ -147,11 +144,8 @@ impl<'a> TryFrom<&'a FieldValue> for f32 {
     fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let ref_str: &str = TryFrom::try_from(value)?;
         //TODO replace with better function
-        match ref_str.chars().next() {
-            Some('+') => {
-                return Err(ConversionError::IntParseErr);
-            },
-            _ => {}
+        if let Some('+') = ref_str.chars().next() {
+            return Err(ConversionError::IntParseErr);
         }
         ref_str.parse().map_err(|_e| ConversionError::IntParseErr)
     }

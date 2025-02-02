@@ -229,7 +229,7 @@ impl DynamicSessionSettingBuilder {
         line_num: usize,
         line: &str,
     ) -> Result<(), SessionSettingsError> {
-        if line.len() == 0 {
+        if line.is_empty() {
             return Ok(());
         }
         let setting: Vec<&str> = line.split('=').collect();
@@ -417,20 +417,20 @@ impl DynamicSessionSettingBuilder {
                 .push("ConnectionType must be set to either 'acceptor' or 'initiator'.".into()),
         }
 
-        if let None = self.begin_string {
+        if self.begin_string.is_none() {
             //TODO check valid begin strings
             errors.push("BeginString must be set.".into());
         }
 
-        if let None = self.sender_comp_id {
+        if self.sender_comp_id.is_none() {
             errors.push("SenderCompID must be set.".into());
         }
 
-        if let None = self.target_comp_id {
+        if self.target_comp_id.is_none() {
             errors.push("TargetCompID must be set.".into());
         }
 
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             Err(SessionSettingsError::ValidationErrors(errors))
         } else {
             Ok(Validated(self))
@@ -464,8 +464,8 @@ impl DynamicSessionSettingBuilder {
                 )
                 .parse()
                 .unwrap(),
-                logon_timeout: self.logon_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(10),
-                logout_timeout: self.logout_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(2),
+                logon_timeout: self.logon_timeout.and_then(|v| v.parse().ok()).unwrap_or(10),
+                logout_timeout: self.logout_timeout.and_then(|v| v.parse().ok()).unwrap_or(2),
             },
             "initiator" => SettingsConnection::Initiator {
                 connect_addr: format!(
@@ -476,10 +476,10 @@ impl DynamicSessionSettingBuilder {
                 .to_socket_addrs()
                 .unwrap()
                 .next().unwrap(),
-                reconnect_interval: self.reconnect_interval.map(|v| v.parse().ok()).flatten().unwrap_or(30),
-                heart_bt_int: self.heart_bt_int.map(|v| v.parse().ok()).flatten().unwrap_or(30),
-                logon_timeout: self.logon_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(10),
-                logout_timeout: self.logout_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(2),
+                reconnect_interval: self.reconnect_interval.and_then(|v| v.parse().ok()).unwrap_or(30),
+                heart_bt_int: self.heart_bt_int.and_then(|v| v.parse().ok()).unwrap_or(30),
+                logon_timeout: self.logon_timeout.and_then(|v| v.parse().ok()).unwrap_or(10),
+                logout_timeout: self.logout_timeout.and_then(|v| v.parse().ok()).unwrap_or(2),
             },
             _ => unreachable!(),
         };
@@ -488,10 +488,10 @@ impl DynamicSessionSettingBuilder {
 
         let mut socket_options = SocketOptions::builder();
         socket_options.no_delay(self.socket_nodelay.map(|v| v == "Y").unwrap_or(true));
-        socket_options.receive_buffer_size(self.socket_receive_buffer_size.map(|v| v.parse().ok()).flatten().unwrap_or(8192));
-        socket_options.send_buffer_size(self.socket_send_buffer_size.map(|v| v.parse().ok()).flatten().unwrap_or(8192));
-        socket_options.receive_timeout(self.socket_receive_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(0));
-        socket_options.send_timeout(self.socket_send_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(0));
+        socket_options.receive_buffer_size(self.socket_receive_buffer_size.and_then(|v| v.parse().ok()).unwrap_or(8192));
+        socket_options.send_buffer_size(self.socket_send_buffer_size.and_then(|v| v.parse().ok()).unwrap_or(8192));
+        socket_options.receive_timeout(self.socket_receive_timeout.and_then(|v| v.parse().ok()).unwrap_or(0));
+        socket_options.send_timeout(self.socket_send_timeout.and_then(|v| v.parse().ok()).unwrap_or(0));
 
         builder.socket_options(socket_options.build().unwrap());
 
@@ -529,14 +529,14 @@ impl DynamicSessionSettingBuilder {
                     let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
                     let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
                     let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
-                    let timezone = timezone.map(|tz| tz.parse().ok()).flatten();
+                    let timezone = timezone.and_then(|tz| tz.parse().ok());
                     SessionSchedule::Weekly { start_day, end_day, start_time, end_time, timezone, use_localtime }
                 },
                 (None, None, Some(start_time), Some(end_time), timezone) => {
                     let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
                     let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
                     let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
-                    let timezone = timezone.map(|tz| tz.parse().ok()).flatten();
+                    let timezone = timezone.and_then(|tz| tz.parse().ok());
                     SessionSchedule::Daily { start_time, end_time, timezone, use_localtime }
                 },
                 (None, None, None, None, None) => SessionSchedule::NonStop,
@@ -553,9 +553,9 @@ impl DynamicSessionSettingBuilder {
             .reset_on_disconnect(self.reset_on_disconnect.map(|v| v == "Y").unwrap_or(false))
             .send_redundant_resend_requests(self.send_redundant_resend_requests.map(|v| v == "Y").unwrap_or(false))
             .resend_session_level_rejects(self.resend_session_level_rejects.map(|v| v == "Y").unwrap_or(false))
-            .time_stamp_precision(self.time_stamp_precision.map(|v| v.try_into().ok()).flatten().unwrap_or(DateTimeFormat::Seconds))
+            .time_stamp_precision(self.time_stamp_precision.and_then(|v| v.try_into().ok()).unwrap_or(DateTimeFormat::Seconds))
             .enable_last_msg_seq_num_processed(self.enable_last_msg_seq_num_processed.map(|v| v == "Y").unwrap_or(false))
-            .max_messages_in_resend_request(self.max_messages_in_resend_request.map(|v| v.parse().ok()).flatten().unwrap_or(0))
+            .max_messages_in_resend_request(self.max_messages_in_resend_request.and_then(|v| v.parse().ok()).unwrap_or(0))
             .send_logout_before_disconnect_from_timeout(self.send_logout_before_disconnect_from_timeout.map(|v| v == "Y").unwrap_or(false))
             .ignore_poss_dup_resend_requests(self.ignore_poss_dup_resend_requests.map(|v| v == "Y").unwrap_or(false))
             .requires_orig_sending_time(self.requires_orig_sending_time.map(|v| v == "Y").unwrap_or(true))
@@ -569,11 +569,11 @@ impl DynamicSessionSettingBuilder {
             .validate_length_and_checksum(self.validate_length_and_checksum.map(|v| v == "Y").unwrap_or(true))
             .allow_unknown_msg_fields(self.allow_unknown_msg_fields.map(|v| v == "Y").unwrap_or(false))
             .check_latency(self.check_latency.map(|v| v == "Y").unwrap_or(true))
-            .max_latency(self.max_latency.map(|v| v.parse().ok()).flatten().unwrap_or(120))
+            .max_latency(self.max_latency.and_then(|v| v.parse().ok()).unwrap_or(120))
             .build().unwrap();
         builder.validation_options(validation_options);
 
-        let ssl_options = match (self.ssl_enable.as_ref().map(|s| s.as_str()), is_initiator) {
+        let ssl_options = match (self.ssl_enable.as_deref(), is_initiator) {
             (Some(_x @ "Y"), true) => {
                 let mut builder = TlsConnector::builder();
                 if let Some(certificate_file) = self.ssl_certificate {
@@ -584,8 +584,8 @@ impl DynamicSessionSettingBuilder {
                     let identity = Identity::from_pkcs12(&certificate.to_der().unwrap(), self.ssl_certificate_password.as_ref().unwrap()).unwrap();
                     builder.identity(identity);
                 }
-                builder.min_protocol_version(self.ssl_min_protocol.as_ref().map(|r| protocol(r)).flatten());
-                builder.max_protocol_version(self.ssl_max_protocol.as_ref().map(|r| protocol(r)).flatten());
+                builder.min_protocol_version(self.ssl_min_protocol.as_ref().and_then(|r| protocol(r)));
+                builder.max_protocol_version(self.ssl_max_protocol.as_ref().and_then(|r| protocol(r)));
                 builder.use_sni(self.ssl_use_sni.as_ref().map(|v| v == "Y").unwrap_or(true));
                 builder.danger_accept_invalid_certs(self.ssl_accept_invalid_certs.as_ref().map(|v| v == "Y").unwrap_or(false));
                 builder.danger_accept_invalid_hostnames(self.ssl_accept_invalid_hostnames.as_ref().map(|v| v == "Y").unwrap_or(false));
@@ -611,8 +611,8 @@ impl DynamicSessionSettingBuilder {
                 let certificate = Certificate::from_pem(&buf).unwrap();
                 let identity = Identity::from_pkcs12(&certificate.to_der().unwrap(), self.ssl_certificate_password.as_ref().unwrap()).unwrap();
                 let mut builder = TlsAcceptor::builder(identity);
-                builder.min_protocol_version(self.ssl_min_protocol.as_ref().map(|r| protocol(r)).flatten());
-                builder.max_protocol_version(self.ssl_max_protocol.as_ref().map(|r| protocol(r)).flatten());
+                builder.min_protocol_version(self.ssl_min_protocol.as_ref().and_then(|r| protocol(r)));
+                builder.max_protocol_version(self.ssl_max_protocol.as_ref().and_then(|r| protocol(r)));
                 let acceptor = builder
                     .build()
                     .unwrap();

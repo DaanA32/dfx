@@ -56,6 +56,12 @@ impl PrintLnLogger {
         }
     }
 }
+impl Default for PrintlnLogFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PrintlnLogFactory {
     pub fn new() -> Self {
         PrintlnLogFactory
@@ -191,7 +197,7 @@ impl LogFactory for MacroLogFactory {
     fn create(&self, session_id: &SessionId) -> Self::Log {
         let path = self.settings.for_session_id(session_id)
             .unwrap().logging();
-        let logger = MacroLogger::new(session_id, path);
-        logger
+        
+        MacroLogger::new(session_id, path)
     }
 }

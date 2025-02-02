@@ -98,6 +98,12 @@ pub trait MessageStoreFactory {
 #[derive(Clone, Debug)]
 pub struct MemoryStoreFactory;
 
+impl Default for MemoryStoreFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemoryStoreFactory {
     pub fn new() -> Self {
         MemoryStoreFactory
@@ -256,7 +262,7 @@ impl FileStore {
         for i in start_seq_num..=end_seq_num {
             if let Some(msg_def) = self.offsets.get(&i) {
                 let mut msg_bytes = vec![0; msg_def.size as usize];
-                self.msg_file.as_ref().unwrap().seek(SeekFrom::Start(msg_def.index as u64))?;
+                self.msg_file.as_ref().unwrap().seek(SeekFrom::Start(msg_def.index))?;
                 self.msg_file.as_ref().unwrap().read_exact(&mut msg_bytes)?;
                 let msg = String::from_utf8_lossy(&msg_bytes).to_string();
                 messages.push(msg);
@@ -439,7 +445,7 @@ impl MessageStoreFactory for DefaultStoreFactory {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::Path, assert_eq, fs::File};
+    use std::{path::Path, assert_eq};
 
     use dfx_base::session_id::SessionId;
 

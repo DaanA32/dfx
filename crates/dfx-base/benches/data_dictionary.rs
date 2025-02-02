@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use dfx_base::{data_dictionary::DataDictionary, message::Message, message_factory::DefaultMessageFactory};
 use pprof::criterion::{PProfProfiler, Output};
 

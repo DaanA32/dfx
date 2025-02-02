@@ -1,7 +1,6 @@
 
 
 
-use crate::data_dictionary::DDGroup;
 use crate::data_dictionary::DDMap;
 use crate::data_dictionary::ArcGroup;
 use crate::data_dictionary::DataDictionary;
@@ -193,8 +192,8 @@ impl Message {
         _app_dd: Option<&DataDictionary>,
         size_hint: Option<usize>,
     ) -> Result<FieldBase, MessageParseError> {
-        let tagend = msgstr[*pos..].iter().position(|c| *c == '=' as u8)
-            .ok_or_else(|| MessageParseError::FailedToFindEqualsAt(*pos))?;
+        let tagend = msgstr[*pos..].iter().position(|c| *c == b'=')
+            .ok_or(MessageParseError::FailedToFindEqualsAt(*pos))?;
 
         let tagend = *pos + tagend;
         if *pos >= tagend {
@@ -209,8 +208,8 @@ impl Message {
             if byte == b'-' && start {
                 neg = true;
                 start = false;
-            } else if byte >= b'0' && byte <= b'9' {
-                tag = 10 * tag;
+            } else if byte.is_ascii_digit() {
+                tag *= 10;
                 tag += byte as Tag - b'0' as Tag;
                 start = false;
             } else {
@@ -226,7 +225,7 @@ impl Message {
         } else {
             msgstr[*pos..].iter().position(|c| *c == Message::SOH as u8)
         };
-        let fieldend = fieldend.ok_or_else(|| MessageParseError::FailedToFindSohAt(*pos))?;
+        let fieldend = fieldend.ok_or(MessageParseError::FailedToFindSohAt(*pos))?;
         let fieldend = *pos + fieldend;
         let value = &msgstr[*pos..fieldend];
         let field = FieldBase::from_bytes(tag, value.into());
@@ -561,7 +560,7 @@ impl Message {
     }
 
     pub fn is_admin(&self) -> bool {
-        matches!(self.header.get_field(tags::MsgType), Some(field) if Message::is_admin_msg_type(&field.value()))
+        matches!(self.header.get_field(tags::MsgType), Some(field) if Message::is_admin_msg_type(field.value()))
     }
 
     pub fn is_admin_msg_type(msg_type: &[u8]) -> bool {
@@ -838,7 +837,7 @@ mod tests {
     use crate::data_dictionary::DataDictionary;
     use crate::message::MessageParseError;
     use crate::message_factory::DefaultMessageFactory;
-    use std::fs::File;
+    
     #[test]
     fn test_parse() {
         let dd = DataDictionary::from_file("../../spec/FIX44.xml").expect("Able to read FIX44.xml file.");
@@ -921,7 +920,7 @@ mod tests {
         let expected = b"8=FIX.4.4|9=127|35=0|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|90=3|91=\xC1\x01\xC0|98=0|108=30|141=Y|553=username|554=password|10=149|";
         let msgstr: Vec<u8> = expected
             .iter()
-            .map(|b| if *b == '|' as u8 { 1_u8 } else { *b })
+            .map(|b| if *b == b'|' { 1_u8 } else { *b })
             .collect();
 
         let result = message.from_string::<DefaultMessageFactory>(&msgstr, false, Some(&dd), Some(&dd), None, false);

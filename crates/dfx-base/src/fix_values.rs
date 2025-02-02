@@ -51,7 +51,7 @@ impl Display for ApplVerID {
 impl ApplVerID {
     pub fn from_begin_string(begin_string: &str) -> &str {
         if BeginString::FIX40 == begin_string {
-            return ApplVerID::FIX40.as_str();
+            ApplVerID::FIX40.as_str()
         } else if BeginString::FIX41 == begin_string {
             return ApplVerID::FIX41.as_str();
         } else if BeginString::FIX42 == begin_string {
@@ -129,7 +129,7 @@ impl SessionRejectReason {
     }
 
     pub fn description(&self) -> String {
-        format!("{}", self.reason)
+        self.reason.to_string()
     }
 }
 
@@ -151,6 +151,6 @@ impl BusinessRejectReason {
     }
 
     pub fn description(&self) -> String {
-        format!("{}", self.reason)
+        self.reason.to_string()
     }
 }

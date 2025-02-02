@@ -15,7 +15,7 @@ impl CoinbaseApp {
         let engine = engine::GeneralPurpose::new(
              &alphabet::URL_SAFE,
              general_purpose::PAD);
-        let secret = engine.decode(&secret.replace("+", "-").replace("/", "_"))?;
+        let secret = engine.decode(secret.replace("+", "-").replace("/", "_"))?;
         Ok(CoinbaseApp { password: password.into(), secret })
     }
 }
@@ -52,7 +52,7 @@ impl Application for CoinbaseApp {
                 let target_comp_id = _session_id.target_comp_id();
                 let prehash = prehash(&sending_time, &msg_type, &msg_seq_num, sender_comp_id, target_comp_id, &self.password);
                 let signature = sign(prehash, &self.secret);
-                message.set_tag_value(tags::RawDataLength, signature.as_bytes().len());
+                message.set_tag_value(tags::RawDataLength, signature.len());
                 message.set_tag_value(tags::RawData, signature);
                 message.set_tag_value(8013, "S");
                 message.set_tag_value(9406, "N");
@@ -92,7 +92,7 @@ fn sign(prehash: String, key: &[u8]) -> String {
     let mut hmac = HMAC::new(key);
     hmac.update(prehash.as_bytes());
     let bytes = hmac.finalize();
-    general_purpose::STANDARD.encode(&bytes)
+    general_purpose::STANDARD.encode(bytes)
 }
 
 fn prehash(sending_time: &str, msg_type: &str, msg_seq_num: &str, sender_comp_id: &str, target_comp_id: &str, password: &str) -> String {

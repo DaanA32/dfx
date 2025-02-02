@@ -75,7 +75,7 @@ pub mod tests {
 
     use super::{Application, ApplicationExt, DoNotAccept, LogonReject};
     use dfx_base::message::Message;
-    use crate::session;
+    
 
     pub struct TestApplication;
 

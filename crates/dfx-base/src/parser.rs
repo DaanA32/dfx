@@ -83,12 +83,12 @@ pub fn read_fix(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
         return None;
     }
     let pos: Option<usize> = buffer.find("8=".as_bytes());
-    if pos == None || pos == Some(usize::MAX) {
+    if pos.is_none() || pos == Some(usize::MAX) {
         return None;
     }
     let pos = pos?;
     buffer.drain(..pos); //drain until 8=
-    if let Some((len, mut pos)) = extract_length(&buffer) {
+    if let Some((len, mut pos)) = extract_length(buffer) {
         pos += len;
         if buffer.len() < pos {
             return None;
@@ -137,7 +137,7 @@ pub fn read_msg_type(buffer: &[u8]) -> Option<&str> {
     let found = buffer[pos..].find('\x01');
     let end = found? + pos;
     match std::str::from_utf8(&buffer[pos..end]) {
-        Ok(s) if s.len() > 0 => Some(s),
+        Ok(s) if !s.is_empty() => Some(s),
         Ok(_) => None,
         Err(_) => None,
     }

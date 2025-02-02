@@ -133,7 +133,7 @@ fn generate_message_group(group: &DDGroup) -> String {
 
 fn generate_groups(message: &DDMap) -> String {
     let mut s = String::new();
-    for (_tag, group) in message.groups() {
+    for group in message.groups().values() {
         s.push_str(format!(r#"
 pub struct {group_name} {{
 
@@ -147,18 +147,17 @@ pub struct {group_name} {{
 
 fn generate_message_fields_groups(message: &DDMap) -> String {
     let mut s = String::new();
-    if message.fields().len() == 0 && message.groups().len() == 0  {
-        s.push_str(format!(r#"
-pub fn value(&self) -> &dfx_base::field_map::FieldMap {{
+    if message.fields().is_empty() && message.groups().is_empty()  {
+        s.push_str(r#"
+pub fn value(&self) -> &dfx_base::field_map::FieldMap {
     &self.inner
-}}
-"#,
-        ).as_str());
+}
+"#.to_string().as_str());
     } else {
-        for (_tag, field) in message.fields() {
+        for field in message.fields().values() {
             s.push_str(generate_message_field(field).as_str());
         }
-        for (_tag, group) in message.groups() {
+        for group in message.groups().values() {
             s.push_str(generate_message_group(group).as_str());
         }
     }
@@ -199,8 +198,8 @@ fn generate_message_factory(version: &str, data_dictionary: &DataDictionary) -> 
 
 fn generate_message_factory_create_group(_data_dictionary: &DataDictionary) -> String {
     let mut function = String::from("");
-    function.push_str(format!(r#"// TODO function
-        todo!("{{begin_string}} {{msg_type}} {{group_counter_tag}}")"#).as_str());
+    function.push_str(r#"// TODO function
+        todo!("{begin_string} {msg_type} {group_counter_tag}")"#.to_string().as_str());
     // TODO
     function
 }
@@ -228,7 +227,7 @@ fn generate_message(message: &DDMap, version: &str) -> String {
             {groups}
             "#
         ),
-        import_fields = if message.fields().len() == 0 && message.groups().len() == 0  { format!("") } else { format!("use crate::{version}::fields::*;") },
+        import_fields = if message.fields().is_empty() && message.groups().is_empty()  { String::new() } else { format!("use crate::{version}::fields::*;") },
         message_name = message.name().to_pascal_case(),
         functions = generate_message_fields_groups(message),
         groups = generate_groups(message)
