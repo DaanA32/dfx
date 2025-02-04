@@ -105,10 +105,12 @@ impl Default for MemoryStoreFactory {
 }
 
 impl MemoryStoreFactory {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         MemoryStoreFactory
     }
-    #[must_use] pub fn boxed() -> Box<dyn MessageStoreFactory> {
+    #[must_use]
+    pub fn boxed() -> Box<dyn MessageStoreFactory> {
         Box::new(MemoryStoreFactory)
     }
 }
@@ -180,9 +182,26 @@ impl FileStore {
         self.construct_from_file_cache()?;
         self.initialize_session_create_time()?;
 
-        self.seq_nums_file = Some(OpenOptions::new().read(true).write(true).create(true).open(&self.seq_nums_file_name)?);
-        self.msg_file = Some(OpenOptions::new().read(true).write(true).create(true).open(&self.msg_file_name)?);
-        self.header_file = Some(OpenOptions::new().append(true).create(true).open(&self.header_file_name)?);
+        self.seq_nums_file = Some(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(&self.seq_nums_file_name)?,
+        );
+        self.msg_file = Some(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(&self.msg_file_name)?,
+        );
+        self.header_file = Some(
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&self.header_file_name)?,
+        );
 
         Ok(())
     }
@@ -243,7 +262,9 @@ impl FileStore {
     }
 
     fn initialize_session_create_time(&mut self) -> io::Result<()> {
-        if Path::new(&self.session_file_name).exists() && fs::metadata(&self.session_file_name)?.len() > 0 {
+        if Path::new(&self.session_file_name).exists()
+            && fs::metadata(&self.session_file_name)?.len() > 0
+        {
             let mut contents = String::new();
             File::open(&self.session_file_name)?.read_to_string(&mut contents)?;
             let creation_time = contents.parse::<DateTime<Utc>>().unwrap();
@@ -262,7 +283,10 @@ impl FileStore {
         for i in start_seq_num..=end_seq_num {
             if let Some(msg_def) = self.offsets.get(&i) {
                 let mut msg_bytes = vec![0; msg_def.size as usize];
-                self.msg_file.as_ref().unwrap().seek(SeekFrom::Start(msg_def.index))?;
+                self.msg_file
+                    .as_ref()
+                    .unwrap()
+                    .seek(SeekFrom::Start(msg_def.index))?;
                 self.msg_file.as_ref().unwrap().read_exact(&mut msg_bytes)?;
                 let msg = String::from_utf8_lossy(&msg_bytes).to_string();
                 messages.push(msg);
@@ -283,7 +307,13 @@ impl FileStore {
             .open(&self.header_file_name)?;
         writeln!(header_file, "{msg_seq_num},{offset},{size}")?;
 
-        self.offsets.insert(msg_seq_num, MsgDef { index: offset, size });
+        self.offsets.insert(
+            msg_seq_num,
+            MsgDef {
+                index: offset,
+                size,
+            },
+        );
 
         self.msg_file.as_mut().unwrap().write_all(msg_bytes)?;
 
@@ -295,8 +325,7 @@ impl FileStore {
         self.set_seq_num()
     }
 
-    pub fn incr_next_sender_msg_seq_num(&mut self) -> io::Result<()>
-    {
+    pub fn incr_next_sender_msg_seq_num(&mut self) -> io::Result<()> {
         self.cache.incr_next_sender_msg_seq_num();
         self.set_seq_num()
     }
@@ -306,8 +335,7 @@ impl FileStore {
         self.set_seq_num()
     }
 
-    pub fn incr_next_target_msg_seq_num(&mut self) -> io::Result<()>
-    {
+    pub fn incr_next_target_msg_seq_num(&mut self) -> io::Result<()> {
         self.cache.incr_next_target_msg_seq_num();
         self.set_seq_num()
     }
@@ -315,8 +343,7 @@ impl FileStore {
     fn set_seq_num(&mut self) -> io::Result<()> {
         let seq_nums_str = format!(
             "{:010} : {:010}  ",
-            self.cache.next_sender_msg_seq_num,
-            self.cache.next_target_msg_seq_num
+            self.cache.next_sender_msg_seq_num, self.cache.next_target_msg_seq_num
         );
         let mut seq_nums_file = File::create(&self.seq_nums_file_name)?;
         seq_nums_file.write_all(seq_nums_str.as_bytes())?;
@@ -335,7 +362,6 @@ impl FileStore {
         self.open()?;
         Ok(())
     }
-
 }
 
 impl MessageStore for FileStore {
@@ -386,24 +412,29 @@ impl MessageStore for FileStore {
 
 #[derive(Clone, Debug)]
 pub struct FileStoreFactory {
-    settings: SessionSettings
+    settings: SessionSettings,
 }
 
 impl FileStoreFactory {
-    #[must_use] pub fn new(settings: &SessionSettings) -> Self {
+    #[must_use]
+    pub fn new(settings: &SessionSettings) -> Self {
         FileStoreFactory {
-            settings: settings.clone()
+            settings: settings.clone(),
         }
     }
-    #[must_use] pub fn boxed(settings: SessionSettings) -> Box<dyn MessageStoreFactory> {
+    #[must_use]
+    pub fn boxed(settings: SessionSettings) -> Box<dyn MessageStoreFactory> {
         Box::new(FileStoreFactory { settings })
     }
 }
 
 impl MessageStoreFactory for FileStoreFactory {
     fn create(&self, session_id: &SessionId) -> Box<dyn MessageStore> {
-        let path = self.settings.for_session_id(session_id)
-            .unwrap().persistence();
+        let path = self
+            .settings
+            .for_session_id(session_id)
+            .unwrap()
+            .persistence();
         let path = match path {
             crate::session::Persistence::FileStore { path } => path.clone(),
             crate::session::Persistence::Memory => Path::new(".").to_path_buf(),
@@ -420,22 +451,29 @@ pub struct DefaultStoreFactory {
 }
 
 impl DefaultStoreFactory {
-    #[must_use] pub fn new(settings: &SessionSettings) -> Self {
+    #[must_use]
+    pub fn new(settings: &SessionSettings) -> Self {
         DefaultStoreFactory {
-            settings: settings.clone()
+            settings: settings.clone(),
         }
     }
-    #[must_use] pub fn boxed(settings: &SessionSettings) -> Box<dyn MessageStoreFactory> {
+    #[must_use]
+    pub fn boxed(settings: &SessionSettings) -> Box<dyn MessageStoreFactory> {
         Box::new(DefaultStoreFactory::new(settings))
     }
 }
 
 impl MessageStoreFactory for DefaultStoreFactory {
     fn create(&self, session_id: &SessionId) -> Box<dyn MessageStore> {
-        let path = self.settings.for_session_id(session_id)
-            .unwrap().persistence();
+        let path = self
+            .settings
+            .for_session_id(session_id)
+            .unwrap()
+            .persistence();
         match path {
-            crate::session::Persistence::FileStore { path } => Box::new(FileStore::new(session_id, path).unwrap()),
+            crate::session::Persistence::FileStore { path } => {
+                Box::new(FileStore::new(session_id, path).unwrap())
+            }
             crate::session::Persistence::Memory => Box::new(MemoryStore::new()),
             // REVIEW what should the default be?
             crate::session::Persistence::None => Box::new(MemoryStore::new()),
@@ -445,7 +483,7 @@ impl MessageStoreFactory for DefaultStoreFactory {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::Path, assert_eq};
+    use std::{assert_eq, path::Path};
 
     use dfx_base::session_id::SessionId;
 
@@ -454,9 +492,19 @@ mod tests {
     use super::FileStore;
 
     #[test]
+    fn file_store_create() {
+        let session_id = SessionId::new("FIX4.4", "TEST", "", "", "STORE", "", "");
+        let path = std::env::temp_dir();
+        {
+            let store = FileStore::new(&session_id, &path);
+            assert!(store.is_ok());
+        }
+    }
+
+    #[test]
     fn file_store_rw_test() {
         let session_id = SessionId::new("FIX4.4", "TEST", "", "", "STORE", "", "");
-        let path = Path::new("/tmp").to_path_buf();
+        let path = std::env::temp_dir();
         {
             let store = FileStore::new(&session_id, &path);
             assert!(store.is_ok());
@@ -479,7 +527,7 @@ mod tests {
     #[test]
     fn file_store_time_test() {
         let session_id = SessionId::new("FIX4.4", "TEST", "", "", "TIME", "", "");
-        let path = Path::new("/tmp").to_path_buf();
+        let path = std::env::temp_dir();
         let time = {
             let store = FileStore::new(&session_id, &path);
             assert!(store.is_ok());
@@ -498,7 +546,7 @@ mod tests {
     #[test]
     fn file_store_messages_test() {
         let session_id = SessionId::new("FIX4.4", "TEST", "", "", "MESSAGE", "", "");
-        let path = Path::new("/tmp").to_path_buf();
+        let path = std::env::temp_dir();
         {
             let store = FileStore::new(&session_id, &path);
             assert!(store.is_ok());
