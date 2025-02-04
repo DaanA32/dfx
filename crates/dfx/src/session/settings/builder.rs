@@ -147,61 +147,61 @@ impl DynamicSessionSettingBuilder {
             SettingOption::ResetOnLogout => self.reset_on_logout = Some(value.into()),
             SettingOption::ResetOnDisconnect => self.reset_on_disconnect = Some(value.into()),
             SettingOption::ValidateFieldsOutOfOrder => {
-                self.validate_fields_out_of_order = Some(value.into())
+                self.validate_fields_out_of_order = Some(value.into());
             }
             SettingOption::ValidateFieldsHaveValues => {
-                self.validate_fields_have_values = Some(value.into())
+                self.validate_fields_have_values = Some(value.into());
             }
             SettingOption::ValidateUserDefinedFields => {
-                self.validate_user_defined_fields = Some(value.into())
+                self.validate_user_defined_fields = Some(value.into());
             }
             SettingOption::ValidateLengthAndChecksum => {
-                self.validate_length_and_checksum = Some(value.into())
+                self.validate_length_and_checksum = Some(value.into());
             }
             SettingOption::AllowUnknownMsgFields => {
-                self.allow_unknown_msg_fields = Some(value.into())
+                self.allow_unknown_msg_fields = Some(value.into());
             }
             SettingOption::DataDictionary => self.data_dictionary = Some(value.into()),
             SettingOption::TransportDataDictionary => {
-                self.transport_data_dictionary = Some(value.into())
+                self.transport_data_dictionary = Some(value.into());
             }
             SettingOption::AppDataDictionary => self.app_data_dictionary = Some(value.into()),
             SettingOption::PersistMessages => self.persist_messages = Some(value.into()),
             SettingOption::LogonTimeout => self.logon_timeout = Some(value.into()),
             SettingOption::LogoutTimeout => self.logout_timeout = Some(value.into()),
             SettingOption::SendRedundantResendRequests => {
-                self.send_redundant_resend_requests = Some(value.into())
+                self.send_redundant_resend_requests = Some(value.into());
             }
             SettingOption::ResendSessionLevelRejects => {
-                self.resend_session_level_rejects = Some(value.into())
+                self.resend_session_level_rejects = Some(value.into());
             }
             SettingOption::MillisecondsInTimeStamp => {
-                self.milliseconds_in_time_stamp = Some(value.into())
+                self.milliseconds_in_time_stamp = Some(value.into());
             }
             SettingOption::TimeStampPrecision => self.time_stamp_precision = Some(value.into()),
             SettingOption::EnableLastMsgSeqNumProcessed => {
-                self.enable_last_msg_seq_num_processed = Some(value.into())
+                self.enable_last_msg_seq_num_processed = Some(value.into());
             }
             SettingOption::MaxMessagesInResendRequest => {
-                self.max_messages_in_resend_request = Some(value.into())
+                self.max_messages_in_resend_request = Some(value.into());
             }
             SettingOption::SendLogoutBeforeDisconnectFromTimeout => {
-                self.send_logout_before_disconnect_from_timeout = Some(value.into())
+                self.send_logout_before_disconnect_from_timeout = Some(value.into());
             }
             SettingOption::SocketNodelay => self.socket_nodelay = Some(value.into()),
             SettingOption::SocketSendBufferSize => {
-                self.socket_send_buffer_size = Some(value.into())
+                self.socket_send_buffer_size = Some(value.into());
             }
             SettingOption::SocketReceiveBufferSize => {
-                self.socket_receive_buffer_size = Some(value.into())
+                self.socket_receive_buffer_size = Some(value.into());
             }
             SettingOption::SocketSendTimeout => self.socket_send_timeout = Some(value.into()),
             SettingOption::SocketReceiveTimeout => self.socket_receive_timeout = Some(value.into()),
             SettingOption::IgnorePossDupResendRequests => {
-                self.ignore_poss_dup_resend_requests = Some(value.into())
+                self.ignore_poss_dup_resend_requests = Some(value.into());
             }
             SettingOption::RequiresOrigSendingTime => {
-                self.requires_orig_sending_time = Some(value.into())
+                self.requires_orig_sending_time = Some(value.into());
             }
             SettingOption::CheckLatency => self.check_latency = Some(value.into()),
             SettingOption::MaxLatency => self.max_latency = Some(value.into()),
@@ -215,10 +215,10 @@ impl DynamicSessionSettingBuilder {
             SettingOption::SSLDisableBuiltInRoots => self.ssl_disable_built_in_roots = Some(value.into()),
             SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
             SettingOption::SSLCertificatePassword => {
-                self.ssl_certificate_password = Some(value.into())
+                self.ssl_certificate_password = Some(value.into());
             }
             SettingOption::SSLRequireClientCertificate => {
-                self.ssl_require_client_certificate = Some(value.into())
+                self.ssl_require_client_certificate = Some(value.into());
             }
             SettingOption::SSLCACertificate => self.ssl_ca_certificate = Some(value.into()),
         }
@@ -443,19 +443,19 @@ impl DynamicSessionSettingBuilder {
         let mut builder = SessionSetting::builder();
 
         let session_id = SessionId::new(
-            self.begin_string.unwrap_or("".into()),
-            self.sender_comp_id.unwrap_or("".into()),
-            self.sender_sub_id.unwrap_or("".into()),
-            self.sender_location_id.unwrap_or("".into()),
-            self.target_comp_id.unwrap_or("".into()),
-            self.target_sub_id.unwrap_or("".into()),
-            self.target_location_id.unwrap_or("".into()),
+            self.begin_string.unwrap_or_default(),
+            self.sender_comp_id.unwrap_or_default(),
+            self.sender_sub_id.unwrap_or_default(),
+            self.sender_location_id.unwrap_or_default(),
+            self.target_comp_id.unwrap_or_default(),
+            self.target_sub_id.unwrap_or_default(),
+            self.target_location_id.unwrap_or_default(),
         );
         builder.session_id(session_id);
 
         let connection = match self.connection_type.unwrap().as_str() {
             "acceptor" => SettingsConnection::Acceptor {
-                is_dynamic: self.is_dynamic.map(|v| v == "Y").unwrap_or(false),
+                is_dynamic: self.is_dynamic.is_some_and(|v| v == "Y"),
                 session_qualifier: self.session_qualifier,
                 accept_addr: format!(
                     "{}:{}",
@@ -487,7 +487,7 @@ impl DynamicSessionSettingBuilder {
         builder.connection(connection);
 
         let mut socket_options = SocketOptions::builder();
-        socket_options.no_delay(self.socket_nodelay.map(|v| v == "Y").unwrap_or(true));
+        socket_options.no_delay(self.socket_nodelay.map_or(true, |v| v == "Y"));
         socket_options.receive_buffer_size(self.socket_receive_buffer_size.and_then(|v| v.parse().ok()).unwrap_or(8192));
         socket_options.send_buffer_size(self.socket_send_buffer_size.and_then(|v| v.parse().ok()).unwrap_or(8192));
         socket_options.receive_timeout(self.socket_receive_timeout.and_then(|v| v.parse().ok()).unwrap_or(0));
@@ -503,7 +503,7 @@ impl DynamicSessionSettingBuilder {
 
         builder.logging(logging);
 
-        let persistence = if self.persist_messages.map(|v| v == "Y").unwrap_or(true) {
+        let persistence = if self.persist_messages.map_or(true, |v| v == "Y") {
             match self.file_store_path {
                 Some(value) => Persistence::FileStore { path: value.into() },
                 //TODO default to path log?
@@ -516,7 +516,7 @@ impl DynamicSessionSettingBuilder {
         builder.default_appl_ver_id(self.default_appl_ver_id);
 
         let any_set = self.start_day.as_ref().or(self.end_day.as_ref()).or(self.end_time.as_ref()).or(self.start_time.as_ref()).is_some();
-        let schedule = if self.non_stop_session.map(|v| v == "Y").unwrap_or(true) && !any_set {
+        let schedule = if self.non_stop_session.map_or(true, |v| v == "Y") && !any_set {
             SessionSchedule::NonStop
         // } else if self.even_minutes_session.map(|v| v == "Y").unwrap_or(true) && !any_set {
         //     #[cfg(test)]
@@ -528,14 +528,14 @@ impl DynamicSessionSettingBuilder {
                     let end_day = end_day.parse().unwrap();
                     let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
                     let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
-                    let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
+                    let use_localtime: bool = self.use_local_time.is_some_and(|v| v == "Y");
                     let timezone = timezone.and_then(|tz| tz.parse().ok());
                     SessionSchedule::Weekly { start_day, end_day, start_time, end_time, timezone, use_localtime }
                 },
                 (None, None, Some(start_time), Some(end_time), timezone) => {
                     let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
                     let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
-                    let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
+                    let use_localtime: bool = self.use_local_time.is_some_and(|v| v == "Y");
                     let timezone = timezone.and_then(|tz| tz.parse().ok());
                     SessionSchedule::Daily { start_time, end_time, timezone, use_localtime }
                 },
@@ -546,29 +546,29 @@ impl DynamicSessionSettingBuilder {
         builder.schedule(schedule);
 
         let validation_options = ValidationOptions::builder()
-            .milliseconds_in_time_stamp(self.milliseconds_in_time_stamp.map(|v| v == "Y").unwrap_or(false))
-            .refresh_on_logon(self.refresh_on_logon.map(|v| v == "Y").unwrap_or(false))
-            .reset_on_logon(self.reset_on_logon.map(|v| v == "Y").unwrap_or(false))
-            .reset_on_logout(self.reset_on_logout.map(|v| v == "Y").unwrap_or(false))
-            .reset_on_disconnect(self.reset_on_disconnect.map(|v| v == "Y").unwrap_or(false))
-            .send_redundant_resend_requests(self.send_redundant_resend_requests.map(|v| v == "Y").unwrap_or(false))
-            .resend_session_level_rejects(self.resend_session_level_rejects.map(|v| v == "Y").unwrap_or(false))
+            .milliseconds_in_time_stamp(self.milliseconds_in_time_stamp.is_some_and(|v| v == "Y"))
+            .refresh_on_logon(self.refresh_on_logon.is_some_and(|v| v == "Y"))
+            .reset_on_logon(self.reset_on_logon.is_some_and(|v| v == "Y"))
+            .reset_on_logout(self.reset_on_logout.is_some_and(|v| v == "Y"))
+            .reset_on_disconnect(self.reset_on_disconnect.is_some_and(|v| v == "Y"))
+            .send_redundant_resend_requests(self.send_redundant_resend_requests.is_some_and(|v| v == "Y"))
+            .resend_session_level_rejects(self.resend_session_level_rejects.is_some_and(|v| v == "Y"))
             .time_stamp_precision(self.time_stamp_precision.and_then(|v| v.try_into().ok()).unwrap_or(DateTimeFormat::Seconds))
-            .enable_last_msg_seq_num_processed(self.enable_last_msg_seq_num_processed.map(|v| v == "Y").unwrap_or(false))
+            .enable_last_msg_seq_num_processed(self.enable_last_msg_seq_num_processed.is_some_and(|v| v == "Y"))
             .max_messages_in_resend_request(self.max_messages_in_resend_request.and_then(|v| v.parse().ok()).unwrap_or(0))
-            .send_logout_before_disconnect_from_timeout(self.send_logout_before_disconnect_from_timeout.map(|v| v == "Y").unwrap_or(false))
-            .ignore_poss_dup_resend_requests(self.ignore_poss_dup_resend_requests.map(|v| v == "Y").unwrap_or(false))
-            .requires_orig_sending_time(self.requires_orig_sending_time.map(|v| v == "Y").unwrap_or(true))
-            .use_data_dictionary(self.use_data_dictionary.map(|v| v == "Y").unwrap_or(false))
+            .send_logout_before_disconnect_from_timeout(self.send_logout_before_disconnect_from_timeout.is_some_and(|v| v == "Y"))
+            .ignore_poss_dup_resend_requests(self.ignore_poss_dup_resend_requests.is_some_and(|v| v == "Y"))
+            .requires_orig_sending_time(self.requires_orig_sending_time.map_or(true, |v| v == "Y"))
+            .use_data_dictionary(self.use_data_dictionary.is_some_and(|v| v == "Y"))
             .data_dictionary(self.data_dictionary)
             .transport_data_dictionary(self.transport_data_dictionary)
             .app_data_dictionary(self.app_data_dictionary)
-            .validate_fields_out_of_order(self.validate_fields_out_of_order.map(|v| v == "Y").unwrap_or(true))
-            .validate_fields_have_values(self.validate_fields_have_values.map(|v| v == "Y").unwrap_or(true))
-            .validate_user_defined_fields(self.validate_user_defined_fields.map(|v| v == "Y").unwrap_or(true))
-            .validate_length_and_checksum(self.validate_length_and_checksum.map(|v| v == "Y").unwrap_or(true))
-            .allow_unknown_msg_fields(self.allow_unknown_msg_fields.map(|v| v == "Y").unwrap_or(false))
-            .check_latency(self.check_latency.map(|v| v == "Y").unwrap_or(true))
+            .validate_fields_out_of_order(self.validate_fields_out_of_order.map_or(true, |v| v == "Y"))
+            .validate_fields_have_values(self.validate_fields_have_values.map_or(true, |v| v == "Y"))
+            .validate_user_defined_fields(self.validate_user_defined_fields.map_or(true, |v| v == "Y"))
+            .validate_length_and_checksum(self.validate_length_and_checksum.map_or(true, |v| v == "Y"))
+            .allow_unknown_msg_fields(self.allow_unknown_msg_fields.is_some_and(|v| v == "Y"))
+            .check_latency(self.check_latency.map_or(true, |v| v == "Y"))
             .max_latency(self.max_latency.and_then(|v| v.parse().ok()).unwrap_or(120))
             .build().unwrap();
         builder.validation_options(validation_options);
@@ -586,19 +586,19 @@ impl DynamicSessionSettingBuilder {
                 }
                 builder.min_protocol_version(self.ssl_min_protocol.as_ref().and_then(|r| protocol(r)));
                 builder.max_protocol_version(self.ssl_max_protocol.as_ref().and_then(|r| protocol(r)));
-                builder.use_sni(self.ssl_use_sni.as_ref().map(|v| v == "Y").unwrap_or(true));
-                builder.danger_accept_invalid_certs(self.ssl_accept_invalid_certs.as_ref().map(|v| v == "Y").unwrap_or(false));
-                builder.danger_accept_invalid_hostnames(self.ssl_accept_invalid_hostnames.as_ref().map(|v| v == "Y").unwrap_or(false));
-                builder.disable_built_in_roots(self.ssl_disable_built_in_roots.as_ref().map(|v| v == "Y").unwrap_or(false));
+                builder.use_sni(self.ssl_use_sni.as_ref().map_or(true, |v| v == "Y"));
+                builder.danger_accept_invalid_certs(self.ssl_accept_invalid_certs.as_ref().is_some_and(|v| v == "Y"));
+                builder.danger_accept_invalid_hostnames(self.ssl_accept_invalid_hostnames.as_ref().is_some_and(|v| v == "Y"));
+                builder.disable_built_in_roots(self.ssl_disable_built_in_roots.as_ref().is_some_and(|v| v == "Y"));
 
                 // root_certificates: vec![],
                 // #[cfg(feature = "alpn")]
                 // alpn: vec![],
 
-                let host = self.socket_connect_host.as_ref().cloned();
-                let domain = self.ssl_server_name.as_ref().cloned()
+                let host = self.socket_connect_host.clone();
+                let domain = self.ssl_server_name.clone()
                     .or(host)
-                    .unwrap_or_else(|| String::from(""));
+                    .unwrap_or_default();
                 let initiator = builder
                     .build()
                     .unwrap();

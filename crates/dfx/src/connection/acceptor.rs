@@ -35,10 +35,9 @@ impl Display for AcceptorError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AcceptorError::BindError(err, socket) => fmt.write_fmt(format_args!(
-                "Failed to bind addr: {} error: {}",
-                socket, err
+                "Failed to bind addr: {socket} error: {err}"
             )),
-            AcceptorError::ConnectionError(err) => fmt.write_fmt(format_args!("{}", err)),
+            AcceptorError::ConnectionError(err) => fmt.write_fmt(format_args!("{err}")),
         }
     }
 }
@@ -117,7 +116,7 @@ where App: Application + Sync + Clone + 'static,
     pub fn endpoints(&self) -> Vec<SocketAddr>{
         self.thread
             .iter()
-            .filter_map(|t| t.endpoint())
+            .filter_map(ThreadState::endpoint)
             .collect()
     }
 
@@ -125,7 +124,7 @@ where App: Application + Sync + Clone + 'static,
     pub fn stop(&mut self) {
         self.running
             .store(false, std::sync::atomic::Ordering::Relaxed);
-        self.join()
+        self.join();
     }
 }
 

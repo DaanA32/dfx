@@ -27,7 +27,7 @@ fn field_type(field_type: &std::sync::Arc<str>) -> &'static str {
 fn generate_field(field: &DDField) -> String {
     format!(
         indoc!(
-            r#"
+            r"
             use std::borrow::Cow;
 
             use dfx_base::field_map::Tag;
@@ -93,7 +93,7 @@ fn generate_field(field: &DDField) -> String {
                     self.inner.into_owned()
                 }}
             }}
-            "#
+            "
         ),
         field_name = field.name().to_pascal_case(),
         tag = field.tag(),
@@ -103,14 +103,14 @@ fn generate_field(field: &DDField) -> String {
 
 fn generate_message_field(field: &DDField) -> String {
     format!(
-    r#"
+    r"
     pub fn {field_name}<'b: 'a>(&'b self) -> Option<{field_type}<'b>> {{
         self.inner.get_field({field_type}::tag()).map(|v| v.try_into().ok()).flatten()
     }}
     pub fn set_{field_name}<'b: 'a>(&mut self, {field_name}: {field_type}<'b>) {{
         self.inner.to_mut().set_field({field_name});
     }}
-        "#,
+        ",
         field_name = field.name().to_snake_case(),
         field_type = field.name().to_pascal_case(),
     )
@@ -118,14 +118,14 @@ fn generate_message_field(field: &DDField) -> String {
 
 fn generate_message_group(group: &DDGroup) -> String {
     format!(
-    r#"
+    r"
     pub fn {field_name}(&self) -> Option<{field_type}> {{
         todo!()
     }}
     pub fn set_{field_name}(&mut self, _{field_name}: {field_type}) {{
         todo!()
     }}
-        "#,
+        ",
         field_name = group.name().to_snake_case(),
         field_type = group.name().to_pascal_case(),
     )
@@ -134,11 +134,11 @@ fn generate_message_group(group: &DDGroup) -> String {
 fn generate_groups(message: &DDMap) -> String {
     let mut s = String::new();
     for group in message.groups().values() {
-        s.push_str(format!(r#"
+        s.push_str(format!(r"
 pub struct {group_name} {{
 
 }}
-"#,
+",
         group_name = group.name().to_pascal_case(),
         ).as_str());
     }
@@ -148,11 +148,11 @@ pub struct {group_name} {{
 fn generate_message_fields_groups(message: &DDMap) -> String {
     let mut s = String::new();
     if message.fields().is_empty() && message.groups().is_empty()  {
-        s.push_str(r#"
+        s.push_str(r"
 pub fn value(&self) -> &dfx_base::field_map::FieldMap {
     &self.inner
 }
-"#.to_string().as_str());
+".to_string().as_str());
     } else {
         for field in message.fields().values() {
             s.push_str(generate_message_field(field).as_str());
@@ -197,7 +197,7 @@ fn generate_message_factory(version: &str, data_dictionary: &DataDictionary) -> 
 }
 
 fn generate_message_factory_create_group(_data_dictionary: &DataDictionary) -> String {
-    let mut function = String::from("");
+    let mut function = String::new();
     function.push_str(r#"// TODO function
         todo!("{begin_string} {msg_type} {group_counter_tag}")"#.to_string().as_str());
     // TODO
@@ -207,7 +207,7 @@ fn generate_message_factory_create_group(_data_dictionary: &DataDictionary) -> S
 fn generate_message(message: &DDMap, version: &str) -> String {
     format!(
         indoc!(
-            r#"
+            r"
             use std::borrow::Cow;
 
             use dfx_base::message::Message;
@@ -225,7 +225,7 @@ fn generate_message(message: &DDMap, version: &str) -> String {
             }}
 
             {groups}
-            "#
+            "
         ),
         import_fields = if message.fields().is_empty() && message.groups().is_empty()  { String::new() } else { format!("use crate::{version}::fields::*;") },
         message_name = message.name().to_pascal_case(),
@@ -241,9 +241,9 @@ fn codegen(filename: &str) {
     let data_dictionary = DataDictionary::from_file(filename).expect("Unable to read filename {filename}");
 
     let version = data_dictionary.version().unwrap();
-    let _version_mod_name = version.to_ascii_lowercase().replace(".", "");
+    let _version_mod_name = version.to_ascii_lowercase().replace('.', "");
 
-    let out_dir = Path::new(&out_dir).join(version.to_ascii_lowercase().replace(".", ""));
+    let out_dir = Path::new(&out_dir).join(version.to_ascii_lowercase().replace('.', ""));
     if std::fs::read_dir(&out_dir).is_err() {
         std::fs::create_dir(&out_dir).unwrap();
     }
@@ -296,5 +296,5 @@ fn main() {
     println!("cargo:rerun-if-changed=crate/dfx-spec/build.rs");
     println!("cargo:rerun-if-changed=spec/");
 
-    codegen("../../spec/FIX44.xml")
+    codegen("../../spec/FIX44.xml");
 }

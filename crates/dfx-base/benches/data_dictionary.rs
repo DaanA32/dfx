@@ -12,41 +12,41 @@ fn criterion_benchmark_data_dictionary(c: &mut Criterion) {
         .measurement_time(Duration::from_secs(30));
     group.bench_function("FIXT11.xml", |b| {
         let data = include_str!("../../../spec/FIXT11.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX40.xml", |b| {
         let data = include_str!("../../../spec/FIX40.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX41.xml", |b| {
         let data = include_str!("../../../spec/FIX41.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX42.xml", |b| {
         let data = include_str!("../../../spec/FIX42.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX43.xml", |b| {
         let data = include_str!("../../../spec/FIX43.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX44.xml", |b| {
         let data = include_str!("../../../spec/FIX44.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX50.xml", |b| {
         let data = include_str!("../../../spec/FIX50.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX50SP1.xml", |b| {
         let data = include_str!("../../../spec/FIX50SP1.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
     group.bench_function("FIX50SP2.xml", |b| {
         let data = include_str!("../../../spec/FIX50SP2.xml");
-        b.iter(|| DataDictionary::load_from_string(black_box(data)))
+        b.iter(|| DataDictionary::load_from_string(black_box(data)));
     });
-    group.finish()
+    group.finish();
 }
 
 fn criterion_benchmark_message(c: &mut Criterion) {
@@ -102,19 +102,19 @@ fn criterion_benchmark_message(c: &mut Criterion) {
     let message = b"8=FIX.4.4\x019=115\x0135=A\x0134=1\x0149=sender-comp-id\x0152=20221025-10:49:30.969\x0156=target-comp-id\x0198=0\x01108=30\x01141=Y\x01553=username\x01554=password\x0110=159\x01";
     let mut msg = Message::default();
     let r = msg.from_string::<DefaultMessageFactory>(message, true, Some(&dd), Some(&dd), None, false);
-    eprintln!("{:?}", r);
+    eprintln!("{r:?}");
     assert!(r.is_ok());
     group.bench_function("FIX44.xml", |b| {
         b.iter(|| {
             let mut msg = Message::default();
             msg.from_string::<DefaultMessageFactory>(message, true, Some(&dd), Some(&dd), None, false)
-        })
+        });
     });
     group.bench_function("NO.xml", |b| {
         b.iter(|| {
             let mut msg = Message::default();
             msg.from_string::<DefaultMessageFactory>(message, true, None, None, None, false)
-        })
+        });
     });
     // group.bench_function("FIX50.xml", |b| {
     //     let data = include_str!("../../../spec/FIX50.xml");

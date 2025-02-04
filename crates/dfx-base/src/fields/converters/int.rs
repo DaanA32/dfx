@@ -43,7 +43,7 @@ impl<'a> TryFrom<&'a FieldValue> for u32 {
             let byte = *byte;
             if byte.is_ascii_digit() {
                 sum *= 10;
-                sum += byte as u32 - b'0' as u32;
+                sum += u32::from(byte) - u32::from(b'0');
             } else {
                 return Err(ConversionError::IntParseErr);
             }
@@ -153,18 +153,18 @@ impl<'a> TryFrom<&'a FieldValue> for f32 {
 
 impl IntoBytes<FieldValue> for usize {
     fn as_bytes(&self) -> FieldValue {
-        format!("{}", self).as_bytes().to_vec().into()
+        format!("{self}").as_bytes().to_vec().into()
     }
 }
 
 impl IntoBytes<FieldValue> for f64 {
     fn as_bytes(&self) -> FieldValue {
-        format!("{}", self).as_bytes().to_vec().into()
+        format!("{self}").as_bytes().to_vec().into()
     }
 }
 
 impl IntoBytes<FieldValue> for i64 {
     fn as_bytes(&self) -> FieldValue {
-        format!("{}", self).as_bytes().to_vec().into()
+        format!("{self}").as_bytes().to_vec().into()
     }
 }

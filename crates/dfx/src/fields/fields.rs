@@ -36,7 +36,7 @@ impl EncryptMethod {
         ))
     }
     pub fn string_value(val: u32) -> String {
-        format!("{}", val)
+        format!("{val}")
     }
     pub const NONE: u32 = 0;
 }
@@ -58,7 +58,7 @@ impl HeartBtInt {
         ))
     }
     pub fn string_value(val: u32) -> String {
-        format!("{}", val)
+        format!("{val}")
     }
     pub const NONE: u32 = 0;
 }

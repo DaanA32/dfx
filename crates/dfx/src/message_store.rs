@@ -105,10 +105,10 @@ impl Default for MemoryStoreFactory {
 }
 
 impl MemoryStoreFactory {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         MemoryStoreFactory
     }
-    pub fn boxed() -> Box<dyn MessageStoreFactory> {
+    #[must_use] pub fn boxed() -> Box<dyn MessageStoreFactory> {
         Box::new(MemoryStoreFactory)
     }
 }
@@ -281,7 +281,7 @@ impl FileStore {
             .append(true)
             .create(true)
             .open(&self.header_file_name)?;
-        writeln!(header_file, "{},{},{}", msg_seq_num, offset, size)?;
+        writeln!(header_file, "{msg_seq_num},{offset},{size}")?;
 
         self.offsets.insert(msg_seq_num, MsgDef { index: offset, size });
 
@@ -376,7 +376,7 @@ impl MessageStore for FileStore {
     }
 
     fn set(&mut self, msg_seq_num: u32, message_string: &str) {
-        self.set(msg_seq_num, message_string).unwrap()
+        self.set(msg_seq_num, message_string).unwrap();
     }
 
     fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
@@ -390,12 +390,12 @@ pub struct FileStoreFactory {
 }
 
 impl FileStoreFactory {
-    pub fn new(settings: &SessionSettings) -> Self {
+    #[must_use] pub fn new(settings: &SessionSettings) -> Self {
         FileStoreFactory {
             settings: settings.clone()
         }
     }
-    pub fn boxed(settings: SessionSettings) -> Box<dyn MessageStoreFactory> {
+    #[must_use] pub fn boxed(settings: SessionSettings) -> Box<dyn MessageStoreFactory> {
         Box::new(FileStoreFactory { settings })
     }
 }
@@ -420,12 +420,12 @@ pub struct DefaultStoreFactory {
 }
 
 impl DefaultStoreFactory {
-    pub fn new(settings: &SessionSettings) -> Self {
+    #[must_use] pub fn new(settings: &SessionSettings) -> Self {
         DefaultStoreFactory {
             settings: settings.clone()
         }
     }
-    pub fn boxed(settings: &SessionSettings) -> Box<dyn MessageStoreFactory> {
+    #[must_use] pub fn boxed(settings: &SessionSettings) -> Box<dyn MessageStoreFactory> {
         Box::new(DefaultStoreFactory::new(settings))
     }
 }

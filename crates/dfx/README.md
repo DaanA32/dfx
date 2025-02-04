@@ -23,8 +23,8 @@ A FIX protocol engine.
     > Currently not supported by Quickfix or Quickfix/N
   - [x] MISC
 - [x] SSL / TLS
-- [x] FileStore for messages
-- [x] FileLogger
+- [x] `FileStore` for messages
+- [x] `FileLogger`
   - [x] Similar to quickfix
   - [x] [`log`](https://docs.rs/log/latest/log/) Logger
 
@@ -40,10 +40,10 @@ A FIX protocol engine.
 - Codegen static data dictionary from xml.
 - Replace with Traits where possible
 - Allow compile time message definitions
-- MessageCracker
+- `MessageCracker`
 - Cleanup session.rs
   - Simplify message handling
-  - Simplify next / next_msg()
+  - Simplify next / `next_msg()`
 
 ## Credits
 Heavily derived / inspired from [QuickfixN](https://github.com/connamara/quickfixn/)

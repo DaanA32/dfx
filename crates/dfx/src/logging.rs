@@ -27,14 +27,14 @@ impl Logger for PrintLnLogger {
         println!(
             "[INCOMING] {} {}",
             self.session_id,
-            incoming.replace("\x01", "|")
+            incoming.replace('\x01', "|")
         );
     }
     fn on_outgoing(&self, outgoing: &str) {
         println!(
             "[OUTGOING] {} {}",
             self.session_id,
-            outgoing.replace("\x01", "|")
+            outgoing.replace('\x01', "|")
         );
     }
     fn on_event(&self, event: &str) {
@@ -50,7 +50,7 @@ pub trait LogFactory {
 #[derive(Debug, Clone)]
 pub struct PrintlnLogFactory;
 impl PrintLnLogger {
-    pub fn new(session_id: &SessionId) -> Self {
+    #[must_use] pub fn new(session_id: &SessionId) -> Self {
         PrintLnLogger {
             session_id: session_id.clone(),
         }
@@ -63,7 +63,7 @@ impl Default for PrintlnLogFactory {
 }
 
 impl PrintlnLogFactory {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         PrintlnLogFactory
     }
 }
@@ -83,7 +83,7 @@ pub struct FileLogger {
 
 impl FileLogger {
     pub fn new(session_id: &SessionId, options: &LoggingOptions) -> std::io::Result<Self> {
-        let log_path = options.file_log_path().map(|f| f.as_str()).unwrap_or_else(|| ".");
+        let log_path = options.file_log_path().map_or_else(|| ".", std::string::String::as_str);
         let prefix = session_id.prefix();
         let messages_file_name = format!("{log_path}/{prefix}.messages");
         let event_file_name = format!("{log_path}/{prefix}.event");
@@ -121,12 +121,12 @@ pub struct FileLogFactory {
     settings: SessionSettings
 }
 impl FileLogFactory {
-    pub fn new(settings: &SessionSettings) -> Self {
+    #[must_use] pub fn new(settings: &SessionSettings) -> Self {
         FileLogFactory {
             settings: settings.clone()
         }
     }
-    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = FileLogger>> {
+    #[must_use] pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = FileLogger>> {
         Box::new(FileLogFactory::new(settings))
     }
 }
@@ -148,7 +148,7 @@ pub struct MacroLogger {
 
 #[cfg(feature = "log")]
 impl MacroLogger {
-    pub fn new(session_id: &SessionId, _options: &LoggingOptions) -> Self {
+    #[must_use] pub fn new(session_id: &SessionId, _options: &LoggingOptions) -> Self {
         MacroLogger {
             session_id: session_id.clone()
         }
@@ -181,12 +181,12 @@ pub struct MacroLogFactory {
 }
 #[cfg(feature = "log")]
 impl MacroLogFactory {
-    pub fn new(settings: &SessionSettings) -> Self {
+    #[must_use] pub fn new(settings: &SessionSettings) -> Self {
         MacroLogFactory {
             settings: settings.clone()
         }
     }
-    pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = MacroLogger>> {
+    #[must_use] pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = MacroLogger>> {
         Box::new(MacroLogFactory::new(settings))
     }
 }
