@@ -18,10 +18,7 @@ impl MsgType {
     pub const BUSINESS_MESSAGE_REJECT: &'static str = "j";
 
     pub fn new(msg_type: &str) -> Self {
-        Self(Field::new(
-            Self::TAG,
-            msg_type
-        ))
+        Self(Field::new(Self::TAG, msg_type))
     }
 }
 
@@ -52,10 +49,7 @@ pub(crate) struct HeartBtInt(Field);
 impl HeartBtInt {
     pub const TAG: Tag = tags::HeartBtInt;
     pub fn new(val: u32) -> Self {
-        Self(Field::new(
-            HeartBtInt::TAG,
-            HeartBtInt::string_value(val),
-        ))
+        Self(Field::new(HeartBtInt::TAG, HeartBtInt::string_value(val)))
     }
     pub fn string_value(val: u32) -> String {
         format!("{val}")

@@ -1,9 +1,6 @@
 //! Connection helpers
 mod initiator;
-use std::{
-    fmt::Display,
-    net::AddrParseError,
-};
+use std::{fmt::Display, net::AddrParseError};
 
 pub use initiator::*;
 mod acceptor;

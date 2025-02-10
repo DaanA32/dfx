@@ -1,7 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    net::SocketAddr,
-};
+use std::{collections::BTreeMap, net::SocketAddr};
 
 mod builder;
 use builder::DynamicSessionSettingBuilder;
@@ -206,7 +203,6 @@ impl From<SettingOption> for String {
 }
 
 impl From<SettingOption> for &'static str {
-
     fn from(val: SettingOption) -> Self {
         match val {
             SettingOption::IsDynamic => "IsDynamic",
@@ -258,7 +254,9 @@ impl From<SettingOption> for &'static str {
             SettingOption::TimeStampPrecision => "TimeStampPrecision",
             SettingOption::EnableLastMsgSeqNumProcessed => "EnableLastMsgSeqNumProcessed",
             SettingOption::MaxMessagesInResendRequest => "MaxMessagesInResendRequest",
-            SettingOption::SendLogoutBeforeDisconnectFromTimeout => "SendLogoutBeforeDisconnectFromTimeout",
+            SettingOption::SendLogoutBeforeDisconnectFromTimeout => {
+                "SendLogoutBeforeDisconnectFromTimeout"
+            }
             SettingOption::SocketNodelay => "SocketNodelay",
             SettingOption::SocketSendBufferSize => "SocketSendBufferSize",
             SettingOption::SocketReceiveBufferSize => "SocketReceiveBufferSize",
@@ -349,9 +347,7 @@ impl SessionSettings {
                     .trim_matches(delims)
                     .eq_ignore_ascii_case("session")
             {
-                if let Some(value) =
-                    last_setting.replace(DynamicSessionSettingBuilder::default())
-                {
+                if let Some(value) = last_setting.replace(DynamicSessionSettingBuilder::default()) {
                     if let Some(default) = default.as_ref() {
                         settings.push(value.merge(default).validate()?.build()?);
                     } else {
@@ -413,8 +409,8 @@ impl SessionSettings {
 
 #[cfg(test)]
 mod tests {
-    use dfx_base::session_id::SessionId;
     use crate::session::SessionSettingsError;
+    use dfx_base::session_id::SessionId;
 
     use super::SessionSettings;
 
@@ -440,7 +436,10 @@ TargetCompID=target1
 
         assert_eq!(settings.sessions[0].session_id().sender_comp_id(), "sender");
 
-        assert_eq!(settings.sessions[0].session_id().target_comp_id(), "target1");
+        assert_eq!(
+            settings.sessions[0].session_id().target_comp_id(),
+            "target1"
+        );
     }
 
     #[test]
@@ -473,8 +472,14 @@ TargetCompID=*
         assert_eq!(settings.sessions[0].session_id().sender_comp_id(), "sender");
         assert_eq!(settings.sessions[1].session_id().sender_comp_id(), "sender");
 
-        assert_eq!(settings.sessions[0].session_id().target_comp_id(), "target1");
-        assert_eq!(settings.sessions[1].session_id().target_comp_id(), "target2");
+        assert_eq!(
+            settings.sessions[0].session_id().target_comp_id(),
+            "target1"
+        );
+        assert_eq!(
+            settings.sessions[1].session_id().target_comp_id(),
+            "target2"
+        );
 
         let session_id = SessionId::new("", "sender", "", "", "target1", "", "");
         assert_eq!(

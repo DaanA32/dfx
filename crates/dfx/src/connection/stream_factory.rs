@@ -89,7 +89,7 @@ impl StreamFactory {
     ) -> Result<Stream, ConnectionError> {
         let endpoint: SocketAddr = settings.get_endpoint()?;
         let stream = TcpStream::connect(endpoint)?;
-        let stream =  StreamFactory::configure_stream(stream, settings, false)?;
+        let stream = StreamFactory::configure_stream(stream, settings, false)?;
         Ok(stream)
     }
     pub(crate) fn configure_stream(
@@ -102,12 +102,12 @@ impl StreamFactory {
                 let mut stream = acceptor.accept(stream).unwrap();
                 StreamFactory::configure_stream_mut(stream.get_mut(), &settings)?;
                 Ok(Stream::Ssl(stream))
-            },
+            }
             Some(SslOptions::Initiator { initiator, domain }) => {
                 let mut stream = initiator.connect(domain, stream).unwrap();
                 StreamFactory::configure_stream_mut(stream.get_mut(), &settings)?;
                 Ok(Stream::Ssl(stream))
-            },
+            }
             None => {
                 StreamFactory::configure_stream_mut(&mut stream, &settings)?;
                 Ok(Stream::Tcp(stream))
@@ -120,11 +120,11 @@ impl StreamFactory {
     ) -> Result<(), ConnectionError> {
         stream.set_read_timeout(match settings.receive_timeout() {
             0 => None,
-            v => Some(Duration::from_millis(v))
+            v => Some(Duration::from_millis(v)),
         })?;
         stream.set_write_timeout(match settings.send_timeout() {
             0 => None,
-            v => Some(Duration::from_millis(v))
+            v => Some(Duration::from_millis(v)),
         })?;
         stream.set_nodelay(settings.no_delay())?;
         // This is only okay because there is a timeout due to heartbeats,

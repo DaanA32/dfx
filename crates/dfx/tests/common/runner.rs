@@ -6,8 +6,9 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Read, Write},
     net::{Shutdown, TcpListener, TcpStream},
+    path::Path,
     thread::{self, JoinHandle},
-    time::Duration, path::Path,
+    time::Duration,
 };
 
 #[allow(unused)]
@@ -91,7 +92,8 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     None => {}
                 }
             } else if let Some(capture) = I_CONNECT.captures(&line) {
-                let n = capture.get(1)
+                let n = capture
+                    .get(1)
                     .map(|c| c.as_str().replace(",", "").parse().unwrap())
                     .unwrap_or(0);
                 match capture.get(0) {
@@ -99,7 +101,8 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     None => {}
                 }
             } else if let Some(capture) = E_CONNECT.captures(&line) {
-                let n = capture.get(1)
+                let n = capture
+                    .get(1)
                     .map(|c| c.as_str().replace(",", "").parse().unwrap())
                     .unwrap_or(0);
                 match capture.get(0) {
@@ -107,7 +110,8 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     None => {}
                 }
             } else if let Some(capture) = I_DISCONNECT.captures(&line) {
-                let n = capture.get(1)
+                let n = capture
+                    .get(1)
                     .map(|c| c.as_str().replace(",", "").parse().unwrap())
                     .unwrap_or(0);
                 match capture.get(0) {
@@ -115,7 +119,8 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     None => {}
                 }
             } else if let Some(capture) = E_DISCONNECT.captures(&line) {
-                let n = capture.get(1)
+                let n = capture
+                    .get(1)
                     .map(|c| c.as_str().replace(",", "").parse().unwrap())
                     .unwrap_or(0);
                 match capture.get(0) {
@@ -123,7 +128,8 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     None => {}
                 }
             } else if let Some(capture) = I_MESSAGE.captures(&line) {
-                let n = capture.get(1)
+                let n = capture
+                    .get(1)
                     .map(|c| c.as_str().replace(",", "").parse().unwrap())
                     .unwrap_or(0);
                 match capture.get(2) {
@@ -133,7 +139,8 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
                     None => {}
                 }
             } else if let Some(capture) = E_MESSAGE.captures(&line) {
-                let n = capture.get(1)
+                let n = capture
+                    .get(1)
                     .map(|c| c.as_str().replace(",", "").parse().unwrap())
                     .unwrap_or(0);
                 match capture.get(2) {
@@ -148,7 +155,11 @@ pub fn steps(filename: &str) -> Vec<TestStep> {
     steps
 }
 
-pub fn create_thread(steps: Vec<TestStep>, port: u32, filename: &str) -> JoinHandle<Result<(), String>> {
+pub fn create_thread(
+    steps: Vec<TestStep>,
+    port: u32,
+    filename: &str,
+) -> JoinHandle<Result<(), String>> {
     let filename: String = filename.into();
     thread::spawn(move || perform_steps(steps, port, filename.as_str()))
 }
@@ -157,9 +168,17 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
     eprintln!("Running {} step(s) from {filename}", steps.len());
     println!("Runner: performing {} step(s).", steps.len());
     assert!(steps.len() > 0);
-    let filtered: Vec<&TestStep> = steps.iter().filter(|s| !matches!(s, TestStep::Comment(_))).collect();
-    if !(matches!(filtered[0], &TestStep::ExpectConnect(n)) || matches!(filtered[0], &TestStep::InitiateConnect(n))) {
-        assert!(matches!(filtered[0], &TestStep::ExpectConnect(n)) || matches!(filtered[0], &TestStep::InitiateConnect(n)));
+    let filtered: Vec<&TestStep> = steps
+        .iter()
+        .filter(|s| !matches!(s, TestStep::Comment(_)))
+        .collect();
+    if !(matches!(filtered[0], &TestStep::ExpectConnect(n))
+        || matches!(filtered[0], &TestStep::InitiateConnect(n)))
+    {
+        assert!(
+            matches!(filtered[0], &TestStep::ExpectConnect(n))
+                || matches!(filtered[0], &TestStep::InitiateConnect(n))
+        );
     }
     // let mut stream = None;
     let mut parser = Parser::default();
@@ -172,8 +191,10 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
             TestStep::InitiateConnect(n) => {
                 if stream_map.get(&n).is_none() {
                     let mut stream = TcpStream::connect(format!("127.0.0.1:{}", port))
-                            .expect("Connection initiated.");
-                    stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+                        .expect("Connection initiated.");
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(10)))
+                        .unwrap();
                     stream_map.insert(n, stream);
                 } else {
                     return Err(format!("Initiate connect[{n}] on existing stream"));
@@ -199,7 +220,7 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
                     s.shutdown(Shutdown::Both).expect("Closed stream");
                     stream_map.remove(&n);
                 } else {
-                    return Err(format!("Stream[{n}] was none during initiate disconnect"))
+                    return Err(format!("Stream[{n}] was none during initiate disconnect"));
                 }
             }
             TestStep::ExpectDisconnect(n) => {
@@ -207,21 +228,27 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
                     wait_for_disconnect(s);
                     stream_map.remove(&n);
                 } else {
-                    return Err(format!("Stream[{n}] was none during expect disconnect"))
+                    return Err(format!("Stream[{n}] was none during expect disconnect"));
                 }
             }
             TestStep::InitiateMessage(n, message) => {
                 if let Some(s) = stream_map.get_mut(&n) {
                     do_send(message, s);
                 } else {
-                    return Err(format!("Stream[{n}] was none during initiate message: {}", message))
+                    return Err(format!(
+                        "Stream[{n}] was none during initiate message: {}",
+                        message
+                    ));
                 }
             }
             TestStep::ExpectMessage(n, message) => {
                 if let Some(s) = stream_map.get_mut(&n) {
                     do_receive(s, message, &mut parser)?;
                 } else {
-                    return Err(format!("Stream[{n}] was none during expect message: {}", message))
+                    return Err(format!(
+                        "Stream[{n}] was none during expect message: {}",
+                        message
+                    ));
                 }
             }
             TestStep::Comment(message) => println!("{}", message),
@@ -280,7 +307,9 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
     let read_fields = to_fields(other, '\x01', true);
     let expected_fields = to_fields(message, '\x01', true);
     if read_fields != expected_fields {
-        Err(format!("Expected: {expected_fields:?}\nRead: {read_fields:?}"))
+        Err(format!(
+            "Expected: {expected_fields:?}\nRead: {read_fields:?}"
+        ))
     } else {
         Ok(())
     }
@@ -291,7 +320,10 @@ fn do_send(message: String, s: &mut TcpStream) {
     let mut message = message;
     while let Some(captures) = TIME.captures(&message) {
         // println!("{captures:?}");
-        let num = captures.get(3).map(|g| g.as_str().parse().unwrap_or_default()).unwrap_or_default();
+        let num = captures
+            .get(3)
+            .map(|g| g.as_str().parse().unwrap_or_default())
+            .unwrap_or_default();
         let offset = if match captures.get(2) {
             Some(s) if s.as_str() == "-" => false,
             _ => true,
@@ -302,19 +334,24 @@ fn do_send(message: String, s: &mut TcpStream) {
         };
 
         // println!("{offset}");
-        message = TIME.replacen(message.as_str(), 1, now
-                .checked_add_signed(chrono::Duration::seconds(offset)).unwrap()
-                .format(DATE_TIME_FORMAT_WITHOUT_MILLISECONDS)
-                .to_string()
-                .as_str()
-        ).to_string();
+        message = TIME
+            .replacen(
+                message.as_str(),
+                1,
+                now.checked_add_signed(chrono::Duration::seconds(offset))
+                    .unwrap()
+                    .format(DATE_TIME_FORMAT_WITHOUT_MILLISECONDS)
+                    .to_string()
+                    .as_str(),
+            )
+            .to_string();
         // println!("{message}");
     }
 
     let len = do_length(&message);
     let message = if message.contains("|9=") {
         message.replace(r"9=[0-9]+", format!("9={:03}", len).as_str())
-    }else{
+    } else {
         message.replacen(r"|", format!("|9={}|", len).as_str(), 1)
     };
     let message = message.replace("|", "\x01");
@@ -348,9 +385,7 @@ fn do_length(message: &str) -> u32 {
     };
     MESSAGE_L
         .captures(&message)
-        .map(|cap| {
-            cap.get(3).map(|mg| mg.as_str().bytes().len()).unwrap_or(0) as u32
-        })
+        .map(|cap| cap.get(3).map(|mg| mg.as_str().bytes().len()).unwrap_or(0) as u32)
         .unwrap_or(0)
 }
 

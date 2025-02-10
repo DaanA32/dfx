@@ -60,59 +60,86 @@ impl SessionId {
         }
     }
 
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.sender_comp_id.len() + self.target_comp_id.len() == 0
     }
 
-    #[must_use] pub fn id(&self) -> &str {
+    #[must_use]
+    pub fn id(&self) -> &str {
         self.id.as_ref()
     }
 
-    #[must_use] pub fn begin_string(&self) -> &str {
+    #[must_use]
+    pub fn begin_string(&self) -> &str {
         self.begin_string.as_ref()
     }
 
-    #[must_use] pub fn sender_comp_id(&self) -> &str {
+    #[must_use]
+    pub fn sender_comp_id(&self) -> &str {
         self.sender_comp_id.as_ref()
     }
 
-    #[must_use] pub fn sender_sub_id(&self) -> &str {
+    #[must_use]
+    pub fn sender_sub_id(&self) -> &str {
         self.sender_sub_id.as_ref()
     }
 
-    #[must_use] pub fn sender_location_id(&self) -> &str {
+    #[must_use]
+    pub fn sender_location_id(&self) -> &str {
         self.sender_location_id.as_ref()
     }
 
-    #[must_use] pub fn target_comp_id(&self) -> &str {
+    #[must_use]
+    pub fn target_comp_id(&self) -> &str {
         self.target_comp_id.as_ref()
     }
 
-    #[must_use] pub fn target_sub_id(&self) -> &str {
+    #[must_use]
+    pub fn target_sub_id(&self) -> &str {
         self.target_sub_id.as_ref()
     }
 
-    #[must_use] pub fn target_location_id(&self) -> &str {
+    #[must_use]
+    pub fn target_location_id(&self) -> &str {
         self.target_location_id.as_ref()
     }
 
-    #[must_use] pub fn is_fixt(&self) -> bool {
+    #[must_use]
+    pub fn is_fixt(&self) -> bool {
         self.is_fixt
     }
 
-
-    #[must_use] pub fn prefix(&self) -> String {
-        format!("{}-{}{}{}{}{}-{}{}{}{}{}",
+    #[must_use]
+    pub fn prefix(&self) -> String {
+        format!(
+            "{}-{}{}{}{}{}-{}{}{}{}{}",
             self.begin_string(),
             self.sender_comp_id(),
-            if self.sender_sub_id().is_empty() { "" } else { "-" },
+            if self.sender_sub_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.sender_sub_id(),
-            if self.sender_location_id().is_empty() { "" } else { "-" },
+            if self.sender_location_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.sender_location_id(),
             self.target_comp_id(),
-            if self.target_sub_id().is_empty() { "" } else { "-" },
+            if self.target_sub_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.target_sub_id(),
-            if self.target_location_id().is_empty() { "" } else { "-" },
+            if self.target_location_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.target_location_id(),
         )
     }

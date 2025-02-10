@@ -25,7 +25,8 @@ macro_rules! impl_checksum_unsigned {
                 }
             }
         }
-    };}
+    };
+}
 
 macro_rules! impl_bytes_len_unsigned {
     ($type_name:ident) => {
@@ -44,7 +45,8 @@ macro_rules! impl_bytes_len_unsigned {
                 }
             }
         }
-    };}
+    };
+}
 
 impl_checksum_unsigned!(u8);
 impl_checksum_unsigned!(u16);
@@ -79,7 +81,8 @@ macro_rules! impl_checksum_signed {
                 }
             }
         }
-    };}
+    };
+}
 
 macro_rules! impl_bytes_len_signed {
     ($type_name:ident) => {
@@ -88,11 +91,7 @@ macro_rules! impl_bytes_len_signed {
                 if self == 0 {
                     1
                 } else {
-                    let checksum_neg = if self < 0 {
-                        1
-                    } else {
-                        0
-                    };
+                    let checksum_neg = if self < 0 { 1 } else { 0 };
                     let mut total = 0;
                     let mut tag = self.abs();
                     while tag > 0 {
@@ -103,7 +102,8 @@ macro_rules! impl_bytes_len_signed {
                 }
             }
         }
-    };}
+    };
+}
 
 impl_checksum_signed!(i8);
 impl_checksum_signed!(i16);

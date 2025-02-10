@@ -16,10 +16,12 @@ pub struct DefaultDataDictionaryProvider {
     app: BTreeMap<String, DataDictionary>,
 }
 impl DefaultDataDictionaryProvider {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         DefaultDataDictionaryProvider::default()
     }
-    #[must_use] pub fn boxed() -> Box<dyn DataDictionaryProvider> {
+    #[must_use]
+    pub fn boxed() -> Box<dyn DataDictionaryProvider> {
         Box::new(DefaultDataDictionaryProvider::default())
     }
 }

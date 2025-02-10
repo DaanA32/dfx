@@ -17,7 +17,11 @@ pub(crate) struct SocketSettings {
 
 impl SocketSettings {
     /// Creates a new [`SocketSettings`].
-    pub(crate) fn new(socket_addr: SocketAddr, socket_options: SocketOptions, ssl_options: Option<SslOptions>) -> Self {
+    pub(crate) fn new(
+        socket_addr: SocketAddr,
+        socket_options: SocketOptions,
+        ssl_options: Option<SslOptions>,
+    ) -> Self {
         Self {
             addr: socket_addr,
             no_delay: socket_options.no_delay(),
@@ -25,14 +29,13 @@ impl SocketSettings {
             // receive_buffer_size: socket_options.receive_buffer_size(),
             send_timeout: socket_options.send_timeout(),
             receive_timeout: socket_options.receive_timeout(),
-            ssl_options
+            ssl_options,
         }
     }
 
     pub(crate) fn get_endpoint(&self) -> Result<SocketAddr, ConnectionError> {
         Ok(self.addr)
     }
-
 
     pub(crate) fn no_delay(&self) -> bool {
         self.no_delay

@@ -29,7 +29,8 @@ pub enum DateTimeFormat {
 }
 
 impl DateTimeFormat {
-    #[must_use] pub fn as_datetime_format(&self) -> &str {
+    #[must_use]
+    pub fn as_datetime_format(&self) -> &str {
         match self {
             DateTimeFormat::Nanoseconds => DATE_TIME_FORMAT_WITH_NANOSECONDS,
             DateTimeFormat::Microseconds => DATE_TIME_FORMAT_WITH_MICROSECONDS,
@@ -37,7 +38,8 @@ impl DateTimeFormat {
             DateTimeFormat::Seconds => DATE_TIME_FORMAT_WITHOUT_MILLISECONDS,
         }
     }
-    #[must_use] pub fn as_time_format(&self) -> &str {
+    #[must_use]
+    pub fn as_time_format(&self) -> &str {
         match self {
             DateTimeFormat::Nanoseconds => TIME_ONLY_FORMAT_WITH_NANOSECONDS,
             DateTimeFormat::Microseconds => TIME_ONLY_FORMAT_WITH_MICROSECONDS,
@@ -56,12 +58,14 @@ impl std::convert::TryFrom<String> for DateTimeFormat {
             "Microseconds" => Ok(Self::Microseconds),
             "Milliseconds" => Ok(Self::Milliseconds),
             "Seconds" => Ok(Self::Seconds),
-            _ => Err("Valid format is ... TODO")
+            _ => Err("Valid format is ... TODO"),
         }
     }
 }
 
-use chrono::{DateTime as ChronoDateTime, TimeZone, Utc, NaiveDateTime, NaiveDate, NaiveTime, Local};
+use chrono::{
+    DateTime as ChronoDateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc,
+};
 
 use crate::field_map::FieldValue;
 use crate::fields::converters::TryFrom;

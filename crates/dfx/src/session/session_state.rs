@@ -3,8 +3,8 @@
 use chrono::{DateTime, Utc};
 
 use crate::logging::Logger;
-use dfx_base::message::Message;
 use crate::message_store::MessageStore;
+use dfx_base::message::Message;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
@@ -506,7 +506,11 @@ impl<Log: Logger> SessionState<Log> {
     }
 
     pub(crate) fn get_messages(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
-        self.msg_store.get(begin_seq_num, end_seq_num).iter().map(|v| v.to_owned().clone()).collect()
+        self.msg_store
+            .get(begin_seq_num, end_seq_num)
+            .iter()
+            .map(|v| v.to_owned().clone())
+            .collect()
     }
 
     pub(crate) fn dequeue(&mut self, next_target_msg_seq_num: u32) -> Option<Message> {
@@ -550,8 +554,7 @@ pub(crate) fn within_heartbeat(
     last_received_time: Instant,
 ) -> bool {
     ((now - last_sent_time).as_millis() < heartbeat_int_ms)
-    &&
-    ((now - last_received_time).as_millis() < heartbeat_int_ms)
+        && ((now - last_received_time).as_millis() < heartbeat_int_ms)
 }
 
 pub(crate) fn need_heartbeat(

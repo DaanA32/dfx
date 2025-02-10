@@ -1,5 +1,5 @@
 use chrono::naive::Days;
-use chrono::{DateTime, Datelike, NaiveDateTime, NaiveTime, Utc, Weekday, Timelike, Duration};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, NaiveTime, Timelike, Utc, Weekday};
 use chrono_tz::Tz;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -24,9 +24,10 @@ pub(crate) enum SessionSchedule {
 }
 
 impl SessionSchedule {
-
     pub(crate) fn is_new_session(&self, old_time: DateTime<Utc>, test_time: DateTime<Utc>) -> bool {
-        if self == &SessionSchedule::NonStop { false } else {
+        if self == &SessionSchedule::NonStop {
+            false
+        } else {
             if old_time < test_time {
                 let next_end = self.next_end(old_time);
                 return old_time <= next_end && next_end < test_time;
@@ -48,7 +49,7 @@ impl SessionSchedule {
                 }
                 end += Duration::minutes(2);
                 end
-            },
+            }
             SessionSchedule::Weekly { end_day, .. } => {
                 let mut end = old_time;
                 let d = old_time;

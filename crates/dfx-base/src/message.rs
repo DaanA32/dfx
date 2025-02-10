@@ -1,8 +1,5 @@
-
-
-
-use crate::data_dictionary::DDMap;
 use crate::data_dictionary::ArcGroup;
+use crate::data_dictionary::DDMap;
 use crate::data_dictionary::DataDictionary;
 use crate::data_dictionary::MessageValidationError;
 use crate::data_dictionary::TagException;
@@ -11,10 +8,10 @@ use crate::field_map::FieldMap;
 use crate::field_map::FieldMapError;
 use crate::field_map::Group;
 use crate::field_map::Tag;
-use crate::fix_values::SessionRejectReason;
 use crate::fields::ApplVerID;
 use crate::fields::ConversionError;
 use crate::fix_values;
+use crate::fix_values::SessionRejectReason;
 pub use crate::message_factory::*;
 use crate::parser::read_msg_type;
 use crate::session_id::SessionId;
@@ -27,7 +24,8 @@ use std::ops::DerefMut;
 pub struct Header(FieldMap);
 
 impl Header {
-    #[must_use] pub fn calculate_string(&self) -> String {
+    #[must_use]
+    pub fn calculate_string(&self) -> String {
         self.0.calculate_string(Some(HEADER_FIELD_ORDER.to_vec()))
     }
 }
@@ -52,7 +50,8 @@ impl DerefMut for Header {
 pub struct Trailer(FieldMap);
 
 impl Trailer {
-    #[must_use] pub fn calculate_string(&self) -> String {
+    #[must_use]
+    pub fn calculate_string(&self) -> String {
         self.0.calculate_string(Some(TRAILER_FIELD_ORDER.to_vec()))
     }
 }
@@ -117,13 +116,15 @@ impl Message {
         Ok(message)
     }
 
-    #[must_use] pub fn header(&self) -> &Header {
+    #[must_use]
+    pub fn header(&self) -> &Header {
         &self.header
     }
     pub fn header_mut(&mut self) -> &mut Header {
         &mut self.header
     }
-    #[must_use] pub fn trailer(&self) -> &Trailer {
+    #[must_use]
+    pub fn trailer(&self) -> &Trailer {
         &self.trailer
     }
     pub fn trailer_mut(&mut self) -> &mut Trailer {
@@ -134,11 +135,14 @@ impl Message {
         if self.valid_structure_ {
             Ok(())
         } else {
-            Err(MessageValidationError::TagException(TagException::tag_out_of_order(self.field_)))
+            Err(MessageValidationError::TagException(
+                TagException::tag_out_of_order(self.field_),
+            ))
         }
     }
 
-    #[must_use] pub fn is_header_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
+    #[must_use]
+    pub fn is_header_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
         match tag {
             tags::BeginString => true,
             tags::BodyLength => true,
@@ -173,7 +177,8 @@ impl Message {
         }
     }
 
-    #[must_use] pub fn is_trailer_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
+    #[must_use]
+    pub fn is_trailer_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
         match tag {
             tags::SignatureLength => true,
             tags::Signature => true,
@@ -192,7 +197,9 @@ impl Message {
         _app_dd: Option<&DataDictionary>,
         size_hint: Option<usize>,
     ) -> Result<FieldBase, MessageParseError> {
-        let tagend = msgstr[*pos..].iter().position(|c| *c == b'=')
+        let tagend = msgstr[*pos..]
+            .iter()
+            .position(|c| *c == b'=')
             .ok_or(MessageParseError::FailedToFindEqualsAt(*pos))?;
 
         let tagend = *pos + tagend;
@@ -213,7 +220,9 @@ impl Message {
                 tag += Tag::from(byte) - Tag::from(b'0');
                 start = false;
             } else {
-                return Err(MessageParseError::InvalidTagNumber(String::from_utf8_lossy(&msgstr[*pos..tagend]).to_string()));
+                return Err(MessageParseError::InvalidTagNumber(
+                    String::from_utf8_lossy(&msgstr[*pos..tagend]).to_string(),
+                ));
             }
         }
         let tag = if neg { -tag } else { tag };
@@ -334,7 +343,7 @@ impl Message {
                             app_dd,
                             msg_factory,
                         )?;
-                    },
+                    }
                     _ => {}
                 }
             } else if Message::is_trailer_field(f.tag(), session_dd) {
@@ -356,7 +365,7 @@ impl Message {
                             app_dd,
                             msg_factory,
                         )?;
-                    },
+                    }
                     _ => {}
                 }
             } else if !ignore_body {
@@ -384,8 +393,8 @@ impl Message {
                             app_dd,
                             msg_factory,
                         )?;
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }
@@ -416,16 +425,18 @@ impl Message {
 
                 while pos < msgstr.len() {
                     let grp_pos = pos;
-                    let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
+                    let f =
+                        Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
                     match (session_dd, app_dd) {
                         (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
                             size_hint = f.to_usize();
                         }
-                        (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
+                        (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => {
+                            size_hint = f.to_usize()
+                        }
                         _ => size_hint = None,
                     };
                     if f.tag() == grp_entry_delimiter_tag {
-
                         if let Some(ingroup) = group {
                             // We were already building an entry, so the delimiter means it's done.
                             map.add_group(f.tag(), &ingroup, Some(false));
@@ -447,7 +458,6 @@ impl Message {
                         if group.is_none() {
                             group = Some(Group::new(grp_no_fld.tag(), grp_entry_delimiter_tag));
                         }
-
                     } else if !group_dd.is_field(f.tag()) {
                         // This field is not in the group, thus the repeating group is done.
 
@@ -498,7 +508,7 @@ impl Message {
                 }
 
                 Ok(grp_pos)
-            },
+            }
             None => Ok(pos),
         }
     }
@@ -556,11 +566,13 @@ impl Message {
         )
     }
 
-    #[must_use] pub fn is_admin(&self) -> bool {
+    #[must_use]
+    pub fn is_admin(&self) -> bool {
         matches!(self.header.get_field(tags::MsgType), Some(field) if Message::is_admin_msg_type(field.value()))
     }
 
-    #[must_use] pub fn is_admin_msg_type(msg_type: &[u8]) -> bool {
+    #[must_use]
+    pub fn is_admin_msg_type(msg_type: &[u8]) -> bool {
         msg_type.len() == 1 && "0A12345n".contains(msg_type[0] as char)
     }
 
@@ -573,10 +585,13 @@ impl Message {
     pub(crate) fn get_msg_type(bytes: &[u8]) -> Result<&str, MessageParseError> {
         match read_msg_type(bytes) {
             Some(s) => Ok(s),
-            None => Err(MessageParseError::Malformed { tag: 35, message: format!(
+            None => Err(MessageParseError::Malformed {
+                tag: 35,
+                message: format!(
                     "missing or malformed tag 35 in msg: {:?}",
                     String::from_utf8_lossy(bytes)
-            )})
+                ),
+            }),
         }
     }
 
@@ -611,7 +626,8 @@ impl Message {
 
         if let Some(begin_string) = header.get_field(tags::BeginString) {
             if begin_string.value().len() > 0 {
-                self.header.set_tag_value(tags::BeginString, begin_string.value());
+                self.header
+                    .set_tag_value(tags::BeginString, begin_string.value());
             }
 
             self.header.remove_field(tags::OnBehalfOfLocationID);
@@ -640,7 +656,8 @@ impl Message {
         if let Some(field) = header.get_field(tags::SenderCompID) {
             let sender_comp_id = field.value();
             if sender_comp_id.len() > 0 {
-                self.header.set_tag_value(tags::TargetCompID, sender_comp_id);
+                self.header
+                    .set_tag_value(tags::TargetCompID, sender_comp_id);
             }
         }
 
@@ -662,7 +679,8 @@ impl Message {
         if let Some(field) = header.get_field(tags::TargetCompID) {
             let target_comp_id = field.value();
             if target_comp_id.len() > 0 {
-                self.header.set_tag_value(tags::SenderCompID, target_comp_id);
+                self.header
+                    .set_tag_value(tags::SenderCompID, target_comp_id);
             }
         }
 
@@ -720,7 +738,8 @@ impl Message {
         }
     }
 
-    #[must_use] pub fn extract_contra_session_id(&self) -> SessionId {
+    #[must_use]
+    pub fn extract_contra_session_id(&self) -> SessionId {
         SessionId::new(
             self.header
                 .get_string(tags::BeginString)
@@ -798,7 +817,8 @@ impl From<ConversionError> for MessageParseError {
 }
 
 impl MessageParseError {
-    #[must_use] pub fn as_tag(&self) -> Option<Tag> {
+    #[must_use]
+    pub fn as_tag(&self) -> Option<Tag> {
         match self {
             Self::InvalidMessage(_) => None,
             Self::InvalidTagNumber(_) => None,
@@ -812,7 +832,8 @@ impl MessageParseError {
             Self::ConversionError(_) => todo!(),
         }
     }
-    #[must_use] pub fn as_session_reject(self) -> Option<SessionRejectReason> {
+    #[must_use]
+    pub fn as_session_reject(self) -> Option<SessionRejectReason> {
         match self {
             Self::InvalidMessage(reason) => Some(SessionRejectReason::OTHER(reason)),
             Self::InvalidTagNumber(_) => Some(SessionRejectReason::INVALID_TAG_NUMBER()),
@@ -820,7 +841,11 @@ impl MessageParseError {
             Self::FailedToFindSohAt(_) => None,
             Self::PosGreaterThanLen(_, _) => None,
             Self::RepeatedTagWithoutGroupDelimiterTagException(_num, _delim) => None,
-            Self::GroupDelimiterTagException(num, delim) => Some(TagException::group_delimiter_tag_exception(num, delim).session_reject_reason().clone()),
+            Self::GroupDelimiterTagException(num, delim) => Some(
+                TagException::group_delimiter_tag_exception(num, delim)
+                    .session_reject_reason()
+                    .clone(),
+            ),
             Self::FieldMapError(_) => None,
             Self::Malformed { tag: _, .. } => Some(SessionRejectReason::INVALID_MSGTYPE()),
             Self::ConversionError(_) => None,
@@ -834,10 +859,11 @@ mod tests {
     use crate::data_dictionary::DataDictionary;
     use crate::message::MessageParseError;
     use crate::message_factory::DefaultMessageFactory;
-    
+
     #[test]
     fn test_parse() {
-        let dd = DataDictionary::from_file("../../spec/FIX44.xml").expect("Able to read FIX44.xml file.");
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml")
+            .expect("Able to read FIX44.xml file.");
         println!("{dd:#?}");
 
         let mut message = Message::default();
@@ -846,8 +872,14 @@ mod tests {
         let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
 
         let msgstr = expected.replace('|', "\x01");
-        let result =
-            message.from_string::<DefaultMessageFactory>(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
+        let result = message.from_string::<DefaultMessageFactory>(
+            msgstr.as_bytes(),
+            true,
+            Some(&dd),
+            Some(&dd),
+            None,
+            false,
+        );
         println!("{result:?}");
         assert!(result.is_ok());
 
@@ -860,7 +892,8 @@ mod tests {
 
     #[test]
     fn test_validate() {
-        let dd = DataDictionary::from_file("../../spec/FIX44.xml").expect("Able to read FIX44.xml file.");
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml")
+            .expect("Able to read FIX44.xml file.");
 
         let mut message = Message::default();
 
@@ -868,8 +901,14 @@ mod tests {
         let expected = "8=FIX.4.4|9=115|35=A|34=1|49=sender-comp-id|52=20221025-10:49:30.969|56=target-comp-id|98=0|108=30|141=Y|553=username|554=password|10=159|";
 
         let msgstr = expected.replace('|', "\x01");
-        let result =
-            message.from_string::<DefaultMessageFactory>(msgstr.as_bytes(), true, Some(&dd), Some(&dd), None, false);
+        let result = message.from_string::<DefaultMessageFactory>(
+            msgstr.as_bytes(),
+            true,
+            Some(&dd),
+            Some(&dd),
+            None,
+            false,
+        );
         println!("{result:?}");
         assert!(result.is_ok());
         assert!(message.is_admin());
@@ -901,15 +940,13 @@ mod tests {
         let msgstr = msgstr.replace('|', "\x01");
         let msg_type = Message::get_msg_type(msgstr.as_bytes());
         assert!(msg_type.is_err());
-        assert!(matches!(
-            msg_type,
-            Err(MessageParseError::Malformed { .. })
-        ));
+        assert!(matches!(msg_type, Err(MessageParseError::Malformed { .. })));
     }
 
     #[test]
     fn test_get_msg_type_raw_data() {
-        let dd = DataDictionary::from_file("../../spec/FIX44.xml").expect("Able to read FIX44.xml file.");
+        let dd = DataDictionary::from_file("../../spec/FIX44.xml")
+            .expect("Able to read FIX44.xml file.");
 
         let mut message = Message::default();
 
@@ -920,7 +957,14 @@ mod tests {
             .map(|b| if *b == b'|' { 1_u8 } else { *b })
             .collect();
 
-        let result = message.from_string::<DefaultMessageFactory>(&msgstr, false, Some(&dd), Some(&dd), None, false);
+        let result = message.from_string::<DefaultMessageFactory>(
+            &msgstr,
+            false,
+            Some(&dd),
+            Some(&dd),
+            None,
+            false,
+        );
         println!("{result:?}");
         let actual = message.to_string().replace(Message::SOH, "|");
         println!("{actual}");

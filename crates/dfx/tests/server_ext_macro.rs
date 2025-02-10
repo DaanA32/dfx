@@ -46,19 +46,24 @@ fn path_from_version(version: &str) -> &str {
 macro_rules! imports {
     () => {
         use std::{
+            borrow::BorrowMut,
+            env,
+            fs::File,
+            io::{BufRead, BufReader},
             net::SocketAddr,
-            time::{Duration, Instant}, path::Path, io::{BufReader, BufRead}, fs::File, borrow::BorrowMut, env,
+            path::Path,
+            time::{Duration, Instant},
         };
 
+        use super::*;
         use dfx::{
             connection::SocketAcceptor,
-            session::{Session, SessionSettings},
-            message_store::MemoryStoreFactory,
             data_dictionary_provider::DefaultDataDictionaryProvider,
             logging::PrintlnLogFactory,
             message::DefaultMessageFactory,
+            message_store::MemoryStoreFactory,
+            session::{Session, SessionSettings},
         };
-        use super::*;
     };
 }
 
@@ -627,7 +632,7 @@ mod fix50sp2 {
     acceptor!(fix50sp2 -> "SessionReset");
 }
 
-#[cfg(feature="future")]
+#[cfg(feature = "future")]
 mod future {
     imports!();
     acceptor!(future -> "14j_OutOfRepeatingGroupMembers");

@@ -55,7 +55,6 @@ impl IntoBytes<FieldValue> for &String {
     }
 }
 
-
 impl<'a> TryFrom<&'a FieldValue> for char {
     type Error = ConversionError;
 
@@ -68,9 +67,8 @@ impl<'a> TryFrom<&'a FieldValue> for char {
     }
 }
 
-
 impl IntoBytes<FieldValue> for char {
     fn as_bytes(&self) -> FieldValue {
-        vec!(*self as u8).into()
+        vec![*self as u8].into()
     }
 }

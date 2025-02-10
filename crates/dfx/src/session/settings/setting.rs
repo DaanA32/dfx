@@ -1,17 +1,11 @@
 #![allow(dead_code)]
-use std::{
-    net::SocketAddr,
-    path::PathBuf,
-};
+use std::{net::SocketAddr, path::PathBuf};
 
 use derive_builder::Builder;
 
+use crate::{connection::SocketSettings, session::SessionSchedule};
 use dfx_base::fields::converters::datetime::DateTimeFormat;
 use native_tls::{TlsAcceptor, TlsConnector};
-use crate::{
-    connection::SocketSettings,
-    session::SessionSchedule,
-};
 
 use dfx_base::session_id::SessionId;
 
@@ -114,7 +108,6 @@ pub(crate) struct SocketOptions {
 }
 
 impl SocketOptions {
-
     pub(crate) fn builder() -> SocketOptionsBuilder {
         SocketOptionsBuilder::create_empty()
     }
@@ -142,15 +135,24 @@ impl SocketOptions {
 
 #[derive(Clone)]
 pub(crate) enum SslOptions {
-    Acceptor { acceptor: TlsAcceptor },
-    Initiator { initiator: TlsConnector, domain: String }
+    Acceptor {
+        acceptor: TlsAcceptor,
+    },
+    Initiator {
+        initiator: TlsConnector,
+        domain: String,
+    },
 }
 
 impl std::fmt::Debug for SslOptions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Acceptor { acceptor: _ } => f.debug_struct("Acceptor").finish(),
-            Self::Initiator { initiator, domain } => f.debug_struct("Initiator").field("initiator", initiator).field("domain", domain).finish(),
+            Self::Initiator { initiator, domain } => f
+                .debug_struct("Initiator")
+                .field("initiator", initiator)
+                .field("domain", domain)
+                .finish(),
         }
     }
 }
@@ -514,13 +516,19 @@ impl SessionSetting {
     }
 
     pub(crate) fn socket_settings(&self) -> SocketSettings {
-        SocketSettings::new(*self.connection.socket_addr(), self.socket_options.clone(), self.ssl_options.clone())
+        SocketSettings::new(
+            *self.connection.socket_addr(),
+            self.socket_options.clone(),
+            self.ssl_options.clone(),
+        )
     }
 
     pub(crate) fn reconnect_interval(&self) -> Option<u32> {
         match self.connection {
             SettingsConnection::Acceptor { .. } => None,
-            SettingsConnection::Initiator { reconnect_interval, .. } => Some(reconnect_interval),
+            SettingsConnection::Initiator {
+                reconnect_interval, ..
+            } => Some(reconnect_interval),
         }
     }
 

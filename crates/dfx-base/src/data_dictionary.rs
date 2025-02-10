@@ -1,21 +1,20 @@
-
 use crate::field_map::FieldBase;
 use crate::field_map::FieldMap;
 use crate::field_map::FieldMapError;
 use crate::field_map::Group;
 use crate::field_map::Tag;
 use crate::fields;
-use crate::fields::ConversionError;
 use crate::fields::types::FieldType;
+use crate::fields::ConversionError;
 use crate::fix_values::SessionRejectReason;
 use crate::message::Message;
 use crate::tags;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
-use xmltree::ParseError;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use xmltree::ParseError;
 
 use std::fs::File;
 use std::num::ParseIntError;
@@ -38,64 +37,147 @@ pub enum MessageValidationError {
 pub struct TagException {
     field: Tag,
     session_reject_reason: SessionRejectReason,
-    inner: Option<String>, //todo
+    inner: Option<String>,    //todo
     msg_type: Option<String>, //todo
 }
 
 impl TagException {
-    #[must_use] pub fn other(msg: String, tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::OTHER(msg), inner: None, msg_type: None }
+    #[must_use]
+    pub fn other(msg: String, tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::OTHER(msg),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn tag_out_of_order(tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::TAG_SPECIFIED_OUT_OF_REQUIRED_ORDER(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn tag_out_of_order(tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::TAG_SPECIFIED_OUT_OF_REQUIRED_ORDER(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn invalid_tag_number(tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::INVALID_TAG_NUMBER(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn invalid_tag_number(tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::INVALID_TAG_NUMBER(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn required_tag_missing(tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::REQUIRED_TAG_MISSING(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn required_tag_missing(tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::REQUIRED_TAG_MISSING(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn tag_not_defined_for_message(tag: Tag, msg_type: String) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::TAG_NOT_DEFINED_FOR_THIS_MESSAGE_TYPE(), inner: None, msg_type: Some(msg_type) }
+    #[must_use]
+    pub fn tag_not_defined_for_message(tag: Tag, msg_type: String) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::TAG_NOT_DEFINED_FOR_THIS_MESSAGE_TYPE(),
+            inner: None,
+            msg_type: Some(msg_type),
+        }
     }
-    #[must_use] pub fn no_tag_value(tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::TAG_SPECIFIED_WITHOUT_A_VALUE(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn no_tag_value(tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::TAG_SPECIFIED_WITHOUT_A_VALUE(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn incorrect_tag_value(tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::VALUE_IS_INCORRECT(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn incorrect_tag_value(tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::VALUE_IS_INCORRECT(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn repeated_tag(tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::TAG_APPEARS_MORE_THAN_ONCE(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn repeated_tag(tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::TAG_APPEARS_MORE_THAN_ONCE(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn incorrect_data_format(tag: Tag, inner: String) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::INCORRECT_DATA_FORMAT_FOR_VALUE(), inner: Some(inner), msg_type: None }
+    #[must_use]
+    pub fn incorrect_data_format(tag: Tag, inner: String) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason: SessionRejectReason::INCORRECT_DATA_FORMAT_FOR_VALUE(),
+            inner: Some(inner),
+            msg_type: None,
+        }
     } //TODO inner
-    #[must_use] pub fn invalid_message_type() -> TagException {
-        Self { field: tags::MsgType, session_reject_reason: SessionRejectReason::INVALID_MSGTYPE(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn invalid_message_type() -> TagException {
+        Self {
+            field: tags::MsgType,
+            session_reject_reason: SessionRejectReason::INVALID_MSGTYPE(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn repeating_group_count_mismatch(tag: Tag) -> TagException {
-        Self { field: tag, session_reject_reason: SessionRejectReason::INCORRECT_NUM_IN_GROUP_COUNT_FOR_REPEATING_GROUP(), inner: None, msg_type: None }
+    #[must_use]
+    pub fn repeating_group_count_mismatch(tag: Tag) -> TagException {
+        Self {
+            field: tag,
+            session_reject_reason:
+                SessionRejectReason::INCORRECT_NUM_IN_GROUP_COUNT_FOR_REPEATING_GROUP(),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn group_delimiter_tag_exception(counter_tag: Tag, delimiter_tag: Tag) -> TagException {
-        Self { field: counter_tag, session_reject_reason: SessionRejectReason::OTHER(format!("Group {counter_tag}'s first entry does not start with delimiter {delimiter_tag}")), inner: None, msg_type: None }
+    #[must_use]
+    pub fn group_delimiter_tag_exception(counter_tag: Tag, delimiter_tag: Tag) -> TagException {
+        Self {
+            field: counter_tag,
+            session_reject_reason: SessionRejectReason::OTHER(format!(
+                "Group {counter_tag}'s first entry does not start with delimiter {delimiter_tag}"
+            )),
+            inner: None,
+            msg_type: None,
+        }
     }
-    #[must_use] pub fn repeated_tag_without_group_delimiter_tag_exception(counter_tag: Tag, trouble_tag: Tag) -> TagException {
+    #[must_use]
+    pub fn repeated_tag_without_group_delimiter_tag_exception(
+        counter_tag: Tag,
+        trouble_tag: Tag,
+    ) -> TagException {
         Self { field: counter_tag, session_reject_reason: SessionRejectReason::OTHER(format!("Group {counter_tag} contains a repeat occurrence of tag {trouble_tag} in a single group, which is illegal.")), inner: None, msg_type: None }
     }
 
-    #[must_use] pub fn msg_type(&self) -> Option<&String> {
+    #[must_use]
+    pub fn msg_type(&self) -> Option<&String> {
         self.msg_type.as_ref()
     }
 
-    #[must_use] pub fn inner(&self) -> Option<&String> {
+    #[must_use]
+    pub fn inner(&self) -> Option<&String> {
         self.inner.as_ref()
     }
 
-    #[must_use] pub fn session_reject_reason(&self) -> &SessionRejectReason {
+    #[must_use]
+    pub fn session_reject_reason(&self) -> &SessionRejectReason {
         &self.session_reject_reason
     }
 
-    #[must_use] pub fn field(&self) -> Tag {
+    #[must_use]
+    pub fn field(&self) -> Tag {
         self.field
     }
 }
@@ -117,8 +199,13 @@ impl From<ConversionError> for MessageValidationError {
 pub enum DataDictionaryError {
     IoError(std::io::Error),
     ParseError(ParseError),
-    Missing { entry_type: Arc<str>, name: Arc<str> },
-    InvalidVersionType { version_type: Arc<str> },
+    Missing {
+        entry_type: Arc<str>,
+        name: Arc<str>,
+    },
+    InvalidVersionType {
+        version_type: Arc<str>,
+    },
     ParseIntError(ParseIntError),
 }
 
@@ -170,11 +257,10 @@ impl Default for DataDictionary {
             fields_by_name: Default::default(),
             messages: Default::default(),
             header: DDMap::new("header".into()),
-            trailer: DDMap::new("trailer".into())
+            trailer: DDMap::new("trailer".into()),
         }
     }
 }
-
 
 impl DataDictionary {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<DataDictionary, DataDictionaryError> {
@@ -190,22 +276,27 @@ impl DataDictionary {
         Ok(dd)
     }
 
-    #[must_use] pub fn version(&self) -> Option<&Arc<str>> {
+    #[must_use]
+    pub fn version(&self) -> Option<&Arc<str>> {
         self.version.as_ref()
     }
 
-    #[must_use] pub fn header(&self) -> &DDMap {
+    #[must_use]
+    pub fn header(&self) -> &DDMap {
         &self.header
     }
 
-    #[must_use] pub fn trailer(&self) -> &DDMap {
+    #[must_use]
+    pub fn trailer(&self) -> &DDMap {
         &self.trailer
     }
 
-    #[must_use] pub fn is_header_field(&self, tag: Tag) -> bool {
+    #[must_use]
+    pub fn is_header_field(&self, tag: Tag) -> bool {
         self.header.is_field(tag)
     }
-    #[must_use] pub fn is_trailer_field(&self, tag: Tag) -> bool {
+    #[must_use]
+    pub fn is_trailer_field(&self, tag: Tag) -> bool {
         self.trailer.is_field(tag)
     }
 
@@ -216,7 +307,6 @@ impl DataDictionary {
         begin_string: &str,
         msg_type: &str,
     ) -> Result<(), MessageValidationError> {
-
         if let Some(dictionary) = session_data_dictionary {
             if let Some(version) = dictionary.version() {
                 if version.as_ref() != begin_string {
@@ -228,8 +318,8 @@ impl DataDictionary {
             }
         }
 
-        let check_order_session = session_data_dictionary
-            .is_some_and(DataDictionary::check_fields_out_of_order);
+        let check_order_session =
+            session_data_dictionary.is_some_and(DataDictionary::check_fields_out_of_order);
         let check_order_app = app_data_dictionary.check_fields_out_of_order();
         if check_order_session || check_order_app {
             message.has_valid_structure()?;
@@ -254,7 +344,9 @@ impl DataDictionary {
             Ok(())
         } else {
             //TODO should this accept msg_type?
-            Err(MessageValidationError::TagException(TagException::invalid_message_type()))
+            Err(MessageValidationError::TagException(
+                TagException::invalid_message_type(),
+            ))
         }
     }
     fn check_has_required(
@@ -264,19 +356,25 @@ impl DataDictionary {
     ) -> Result<(), MessageValidationError> {
         for field in self.header.required_fields() {
             if !message.header().is_field_set(*field) {
-                return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
+                return Err(MessageValidationError::TagException(
+                    TagException::required_tag_missing(*field),
+                ));
             }
         }
 
         for field in self.trailer.required_fields() {
             if !message.trailer().is_field_set(*field) {
-                return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
+                return Err(MessageValidationError::TagException(
+                    TagException::required_tag_missing(*field),
+                ));
             }
         }
 
         for field in self.messages[msg_type].required_fields() {
             if !message.is_field_set(*field) {
-                return Err(MessageValidationError::TagException(TagException::required_tag_missing(*field)));
+                return Err(MessageValidationError::TagException(
+                    TagException::required_tag_missing(*field),
+                ));
             }
         }
         Ok(())
@@ -295,7 +393,9 @@ impl DataDictionary {
     }
     fn check_has_value(&self, field: &FieldBase) -> Result<(), MessageValidationError> {
         if self.check_fields_have_values && field.value().is_empty() {
-            Err(MessageValidationError::TagException(TagException::no_tag_value(field.tag())))
+            Err(MessageValidationError::TagException(
+                TagException::no_tag_value(field.tag()),
+            ))
         } else {
             Ok(())
         }
@@ -315,30 +415,32 @@ impl DataDictionary {
             let err = match field_type {
                 Ok(ftype) => match ftype {
                     FieldType::Boolean => field.as_value::<bool>().err(),
-                    FieldType::Char => { field.as_value::<char>().err() },
-                    FieldType::DateOnly => { field.as_value::<NaiveDate>().err() },
-                    FieldType::DateTime => { field.as_value::<NaiveDateTime>().err() },
-                    FieldType::Decimal => { field.as_value::<f32>().err() },
-                    FieldType::Int => { field.as_value::<i32>().err() },
+                    FieldType::Char => field.as_value::<char>().err(),
+                    FieldType::DateOnly => field.as_value::<NaiveDate>().err(),
+                    FieldType::DateTime => field.as_value::<NaiveDateTime>().err(),
+                    FieldType::Decimal => field.as_value::<f32>().err(),
+                    FieldType::Int => field.as_value::<i32>().err(),
                     FieldType::String => unreachable!(),
-                    FieldType::TimeOnly => { field.as_value::<NaiveTime>().err() },
+                    FieldType::TimeOnly => field.as_value::<NaiveTime>().err(),
                 },
                 Err(msg) => todo!("{msg}"),
             };
             if let Some(e) = err {
-                Err(MessageValidationError::TagException(TagException::incorrect_data_format(field.tag(), format!("{e:?}"))))
+                Err(MessageValidationError::TagException(
+                    TagException::incorrect_data_format(field.tag(), format!("{e:?}")),
+                ))
             } else {
                 Ok(())
             }
-
         } else {
             Ok(())
         }
-
     }
     fn check_valid_tag_number(&self, tag: Tag) -> Result<(), MessageValidationError> {
         if !self.allow_unknown_message_fields && !self.fields_by_tag.contains_key(&tag) {
-            return Err(MessageValidationError::TagException(TagException::invalid_tag_number(tag)));
+            return Err(MessageValidationError::TagException(
+                TagException::invalid_tag_number(tag),
+            ));
         }
         Ok(())
     }
@@ -352,14 +454,14 @@ impl DataDictionary {
                         for value in splitted {
                             if !fld.enums().contains_key(value) {
                                 return Err(MessageValidationError::TagException(
-                                    TagException::incorrect_tag_value(field.tag())
+                                    TagException::incorrect_tag_value(field.tag()),
                                 ));
                             }
                         }
                         Ok(())
                     } else if !fld.enums().contains_key(field.string_value()?.as_str()) {
                         Err(MessageValidationError::TagException(
-                            TagException::incorrect_tag_value(field.tag())
+                            TagException::incorrect_tag_value(field.tag()),
                         ))
                     } else {
                         Ok(())
@@ -384,7 +486,7 @@ impl DataDictionary {
             return Ok(());
         }
         Err(MessageValidationError::TagException(
-            TagException::tag_not_defined_for_message(field.tag(), msg_type.into())
+            TagException::tag_not_defined_for_message(field.tag(), msg_type.into()),
         ))
     }
     fn check_is_in_group(
@@ -397,7 +499,7 @@ impl DataDictionary {
             Ok(())
         } else {
             Err(MessageValidationError::TagException(
-                TagException::tag_not_defined_for_message(field.tag(), msg_type.into())
+                TagException::tag_not_defined_for_message(field.tag(), msg_type.into()),
             ))
         }
     }
@@ -411,7 +513,7 @@ impl DataDictionary {
             && map.get_int(field.tag())? as usize != map.group_count(field.tag()).unwrap_or(0)
         {
             return Err(MessageValidationError::TagException(
-                TagException::repeating_group_count_mismatch(field.tag())
+                TagException::repeating_group_count_mismatch(field.tag()),
             ));
         }
         Ok(())
@@ -437,11 +539,15 @@ impl DataDictionary {
         for (_k, v) in message.entries() {
             let field = v;
             if last_field != 0 && field.tag() == last_field {
-                return Err(MessageValidationError::TagException(TagException::repeated_tag(field.tag())));
+                return Err(MessageValidationError::TagException(
+                    TagException::repeated_tag(field.tag()),
+                ));
             }
             self.check_has_value(field)?;
 
-            if self.version.is_some() && !matches!(&self.version, Some(version) if version.is_empty()) {
+            if self.version.is_some()
+                && !matches!(&self.version, Some(version) if version.is_empty())
+            {
                 self.check_valid_format(field)?;
 
                 if self.should_check_tag(field) {
@@ -453,7 +559,7 @@ impl DataDictionary {
                     {
                         self.check_is_in_message(field, msg_type)?;
                         self.check_group_count(field, message, msg_type)?;
-                    } 
+                    }
                 }
             }
 
@@ -487,11 +593,15 @@ impl DataDictionary {
                     let field = v;
 
                     if last_field != 0 && field.tag() == last_field {
-                        return Err(MessageValidationError::TagException(TagException::repeated_tag(last_field)));
+                        return Err(MessageValidationError::TagException(
+                            TagException::repeated_tag(last_field),
+                        ));
                     }
                     self.check_has_value(field)?;
 
-                    if self.version.is_some() && !matches!(&self.version, Some(version) if version.is_empty()) {
+                    if self.version.is_some()
+                        && !matches!(&self.version, Some(version) if version.is_empty())
+                    {
                         self.check_valid_format(field)?;
 
                         if self.should_check_tag(field) {
@@ -520,11 +630,13 @@ impl DataDictionary {
         }
     }
 
-    #[must_use] pub fn get_map_for_message(&self, msg_type: &str) -> Option<&DDMap> {
+    #[must_use]
+    pub fn get_map_for_message(&self, msg_type: &str) -> Option<&DDMap> {
         self.messages.get(msg_type)
     }
 
-    #[must_use] pub fn get_field_by_name(&self, field_name: &str) -> Option<&Field> {
+    #[must_use]
+    pub fn get_field_by_name(&self, field_name: &str) -> Option<&Field> {
         self.fields_by_name.get(field_name)
     }
 
@@ -536,16 +648,18 @@ impl DataDictionary {
         self.length_fields.contains(&tag)
     }
 
-    #[must_use] pub fn fields_by_name(&self) -> &BTreeMap<Arc<str>, Field> {
+    #[must_use]
+    pub fn fields_by_name(&self) -> &BTreeMap<Arc<str>, Field> {
         &self.fields_by_name
     }
 
-    #[must_use] pub fn messages(&self) -> &BTreeMap<Arc<str>, DDMap> {
+    #[must_use]
+    pub fn messages(&self) -> &BTreeMap<Arc<str>, DDMap> {
         &self.messages
     }
 
-
-    #[must_use] pub fn check_fields_have_values(&self) -> bool {
+    #[must_use]
+    pub fn check_fields_have_values(&self) -> bool {
         self.check_fields_have_values
     }
 
@@ -565,7 +679,8 @@ impl DataDictionary {
         self.check_fields_out_of_order = check_fields_out_of_order;
     }
 
-    #[must_use] pub fn check_user_defined_fields(&self) -> bool {
+    #[must_use]
+    pub fn check_user_defined_fields(&self) -> bool {
         self.check_user_defined_fields
     }
 
@@ -577,7 +692,8 @@ impl DataDictionary {
         self.check_user_defined_fields = check_user_defined_fields;
     }
 
-    #[must_use] pub fn allow_unknown_message_fields(&self) -> bool {
+    #[must_use]
+    pub fn allow_unknown_message_fields(&self) -> bool {
         self.allow_unknown_message_fields
     }
 
@@ -600,7 +716,8 @@ pub struct DDMap {
     admin: bool,
 }
 impl DDMap {
-    #[must_use] pub fn new(name: Arc<str>) -> Self {
+    #[must_use]
+    pub fn new(name: Arc<str>) -> Self {
         DDMap {
             fields: BTreeMap::default(),
             groups: BTreeMap::default(),
@@ -610,7 +727,8 @@ impl DDMap {
             admin: false,
         }
     }
-    #[must_use] pub fn new_with_values(name: Arc<str>, msg_type: Arc<str>, admin: bool) -> Self {
+    #[must_use]
+    pub fn new_with_values(name: Arc<str>, msg_type: Arc<str>, admin: bool) -> Self {
         DDMap {
             fields: BTreeMap::default(),
             groups: BTreeMap::default(),
@@ -623,22 +741,27 @@ impl DDMap {
     pub fn add_field(&mut self, field: Field) {
         self.fields.insert(field.tag(), field);
     }
-    #[must_use] pub fn is_field(&self, tag: Tag) -> bool {
+    #[must_use]
+    pub fn is_field(&self, tag: Tag) -> bool {
         self.fields.contains_key(&tag)
     }
-    #[must_use] pub fn get_field(&self, tag: Tag) -> Option<&Field> {
+    #[must_use]
+    pub fn get_field(&self, tag: Tag) -> Option<&Field> {
         self.fields.get(&tag)
     }
     pub fn add_group(&mut self, group: ArcGroup) {
         self.groups.insert(group.delim(), group);
     }
-    #[must_use] pub fn is_group(&self, tag: Tag) -> bool {
+    #[must_use]
+    pub fn is_group(&self, tag: Tag) -> bool {
         self.groups.contains_key(&tag)
     }
-    #[must_use] pub fn get_group(&self, tag: Tag) -> Option<&ArcGroup> {
+    #[must_use]
+    pub fn get_group(&self, tag: Tag) -> Option<&ArcGroup> {
         self.groups.get(&tag)
     }
-    #[must_use] pub fn required_fields(&self) -> &BTreeSet<Tag> {
+    #[must_use]
+    pub fn required_fields(&self) -> &BTreeSet<Tag> {
         &self.required_fields
     }
     pub fn required_fields_mut(&mut self) -> &mut BTreeSet<Tag> {
@@ -647,21 +770,26 @@ impl DDMap {
     pub fn add_required_field(&mut self, tag: Tag) {
         self.required_fields.insert(tag);
     }
-    #[must_use] pub fn name(&self) -> &Arc<str> {
+    #[must_use]
+    pub fn name(&self) -> &Arc<str> {
         &self.name
     }
-    #[must_use] pub fn fields(&self) -> &BTreeMap<Tag, Field> {
+    #[must_use]
+    pub fn fields(&self) -> &BTreeMap<Tag, Field> {
         &self.fields
     }
-    #[must_use] pub fn groups(&self) -> &BTreeMap<Tag, ArcGroup> {
+    #[must_use]
+    pub fn groups(&self) -> &BTreeMap<Tag, ArcGroup> {
         &self.groups
     }
 
-    #[must_use] pub fn admin(&self) -> bool {
+    #[must_use]
+    pub fn admin(&self) -> bool {
         self.admin
     }
 
-    #[must_use] pub fn msg_type(&self) -> &str {
+    #[must_use]
+    pub fn msg_type(&self) -> &str {
         self.msg_type.as_ref()
     }
 }
@@ -700,12 +828,13 @@ pub struct DDField {
     is_multiple_value_field_with_enums: bool,
 }
 impl DDField {
-
-    #[must_use] pub fn from_xml_str(xml_str: &str) -> Self {
+    #[must_use]
+    pub fn from_xml_str(xml_str: &str) -> Self {
         todo!("DataDictionary::from_xml_str({xml_str})")
     }
 
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         tag: Tag,
         name: Arc<str>,
         enum_dictionary: BTreeMap<Arc<str>, Arc<str>>,
@@ -725,26 +854,33 @@ impl DDField {
             is_multiple_value_field_with_enums,
         }
     }
-    #[must_use] pub fn tag(&self) -> Tag {
+    #[must_use]
+    pub fn tag(&self) -> Tag {
         self.tag
     }
-    #[must_use] pub fn name(&self) -> &Arc<str> {
+    #[must_use]
+    pub fn name(&self) -> &Arc<str> {
         &self.name
     }
-    #[must_use] pub fn has_enums(&self) -> bool {
+    #[must_use]
+    pub fn has_enums(&self) -> bool {
         !self.enum_dictionary.is_empty()
     }
-    #[must_use] pub fn enums(&self) -> &BTreeMap<Arc<str>, Arc<str>> {
+    #[must_use]
+    pub fn enums(&self) -> &BTreeMap<Arc<str>, Arc<str>> {
         &self.enum_dictionary
     }
-    #[must_use] pub fn field_type(&self) -> &Arc<str> {
+    #[must_use]
+    pub fn field_type(&self) -> &Arc<str> {
         &self.field_type
     }
-    #[must_use] pub fn is_length_field(&self) -> bool {
+    #[must_use]
+    pub fn is_length_field(&self) -> bool {
         self.field_type.as_ref() == "LENGTH" && self.name.as_ref() != "BodyLength"
     }
 
-    #[must_use] pub fn is_multiple_value_field_with_enums(&self) -> bool {
+    #[must_use]
+    pub fn is_multiple_value_field_with_enums(&self) -> bool {
         self.is_multiple_value_field_with_enums
     }
 }
@@ -764,19 +900,30 @@ impl Default for DDGroup {
 }
 
 impl DDGroup {
-    #[must_use] pub fn new() -> Self {
-       DDGroup { num_fld: Tag::default(), delim: Tag::default(), required: bool::default(), name: "".into(), map: DDMap::new("group".into()) }
+    #[must_use]
+    pub fn new() -> Self {
+        DDGroup {
+            num_fld: Tag::default(),
+            delim: Tag::default(),
+            required: bool::default(),
+            name: "".into(),
+            map: DDMap::new("group".into()),
+        }
     }
-    #[must_use] pub fn name(&self) -> &Arc<str> {
+    #[must_use]
+    pub fn name(&self) -> &Arc<str> {
         &self.name
     }
-    #[must_use] pub fn num_fld(&self) -> Tag {
+    #[must_use]
+    pub fn num_fld(&self) -> Tag {
         self.num_fld
     }
-    #[must_use] pub fn delim(&self) -> Tag {
+    #[must_use]
+    pub fn delim(&self) -> Tag {
         self.delim
     }
-    #[must_use] pub fn required(&self) -> bool {
+    #[must_use]
+    pub fn required(&self) -> bool {
         self.required
     }
 }
@@ -795,7 +942,7 @@ impl DerefMut for DDGroup {
 #[derive(Debug)]
 enum GoM<'a> {
     Map(&'a mut DDMap),
-    Group(&'a mut DDGroup)
+    Group(&'a mut DDGroup),
 }
 impl Deref for GoM<'_> {
     type Target = DDMap;
@@ -820,7 +967,8 @@ use std::sync::Arc;
 use xmltree::Element;
 
 impl DataDictionary {
-    #[must_use] pub fn new() -> DataDictionary {
+    #[must_use]
+    pub fn new() -> DataDictionary {
         DataDictionary {
             version: None,
             length_fields: Vec::new(),
@@ -854,8 +1002,15 @@ impl DataDictionary {
         let header = parse_header(&root_doc, &fields_by_name, &components_by_name)?;
         let trailer = parse_trailer(&root_doc, &fields_by_name, &components_by_name)?;
 
-        let length_fields = fields_by_tag.iter()
-            .filter_map(|(tag, f)| if f.is_length_field() { Some(*tag) } else { None } )
+        let length_fields = fields_by_tag
+            .iter()
+            .filter_map(|(tag, f)| {
+                if f.is_length_field() {
+                    Some(*tag)
+                } else {
+                    None
+                }
+            })
             .collect();
 
         Ok(DataDictionary {
@@ -872,28 +1027,44 @@ impl DataDictionary {
             trailer,
         })
     }
-
 }
 
 fn get_version_info(doc: &Element) -> Result<(Arc<str>, Arc<str>, Arc<str>), DataDictionaryError> {
-    let major_version = doc.attributes.get("major")
-        .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "major".into() })?.to_string();
-    let minor_version = doc.attributes.get("minor")
-        .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "minor".into() })?.to_string();
+    let major_version = doc
+        .attributes
+        .get("major")
+        .ok_or(DataDictionaryError::Missing {
+            entry_type: "attribute".into(),
+            name: "major".into(),
+        })?
+        .to_string();
+    let minor_version = doc
+        .attributes
+        .get("minor")
+        .ok_or(DataDictionaryError::Missing {
+            entry_type: "attribute".into(),
+            name: "minor".into(),
+        })?
+        .to_string();
     let version = "FIX".to_string();
     let version_type = doc.attributes.get("type").unwrap_or(&version);
     if version_type != "FIX" && version_type != "FIXT" {
-        return Err(DataDictionaryError::InvalidVersionType { version_type: version_type.clone().into() });
+        return Err(DataDictionaryError::InvalidVersionType {
+            version_type: version_type.clone().into(),
+        });
     }
     let version = format!("{version_type}.{major_version}.{minor_version}");
     Ok((major_version.into(), minor_version.into(), version.into()))
 }
 
-fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, Field>, BTreeMap<Arc<str>, Field>), DataDictionaryError> {
+fn parse_fields(
+    doc: &Element,
+) -> Result<(BTreeMap<i32, Field>, BTreeMap<Arc<str>, Field>), DataDictionaryError> {
     let mut fields_by_tag: BTreeMap<i32, Field> = BTreeMap::new();
     let mut fields_by_name: BTreeMap<Arc<str>, Field> = BTreeMap::new();
     let field_nodes = doc
-        .children.iter()
+        .children
+        .iter()
         .filter_map(|c| c.as_element())
         .filter(|c| c.name == "fields")
         .flat_map(|node| node.children.iter())
@@ -901,22 +1072,49 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, Field>, BTreeMap<Arc<str
         .filter(|node| node.name == "field");
 
     for field_node in field_nodes {
-        let tag_str = field_node.attributes.get("number")
-            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "major".into() })?;
-        let name = field_node.attributes.get("name")
-            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?;
-        let field_type = field_node.attributes.get("type")
-            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "type".into() })?;
+        let tag_str = field_node
+            .attributes
+            .get("number")
+            .ok_or(DataDictionaryError::Missing {
+                entry_type: "attribute".into(),
+                name: "major".into(),
+            })?;
+        let name = field_node
+            .attributes
+            .get("name")
+            .ok_or(DataDictionaryError::Missing {
+                entry_type: "attribute".into(),
+                name: "name".into(),
+            })?;
+        let field_type = field_node
+            .attributes
+            .get("type")
+            .ok_or(DataDictionaryError::Missing {
+                entry_type: "attribute".into(),
+                name: "type".into(),
+            })?;
 
         let tag = tag_str.parse::<i32>()?;
         let mut enums = BTreeMap::new();
-        for enum_node in field_node.children.iter()
+        for enum_node in field_node
+            .children
+            .iter()
             .filter_map(|c| c.as_element())
             .filter(|c| c.name == "value")
         {
-            let enum_value = enum_node.attributes.get("enum")
-                .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "enum".into() })?.clone();
-            let description = enum_node.attributes.get("description").cloned().unwrap_or_default();
+            let enum_value = enum_node
+                .attributes
+                .get("enum")
+                .ok_or(DataDictionaryError::Missing {
+                    entry_type: "attribute".into(),
+                    name: "enum".into(),
+                })?
+                .clone();
+            let description = enum_node
+                .attributes
+                .get("description")
+                .cloned()
+                .unwrap_or_default();
             enums.insert(enum_value.into(), description.into());
         }
 
@@ -930,7 +1128,7 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, Field>, BTreeMap<Arc<str
             name: name.clone().into(),
             enum_dictionary: enums,
             field_type: field_type.clone().into(),
-            is_multiple_value_field_with_enums
+            is_multiple_value_field_with_enums,
         };
         let dd_field = Arc::new(dd_field);
 
@@ -943,7 +1141,8 @@ fn parse_fields(doc: &Element) -> Result<(BTreeMap<i32, Field>, BTreeMap<Arc<str
 fn cache_components(doc: &Element) -> Result<BTreeMap<Arc<str>, Element>, DataDictionaryError> {
     let mut components_by_name: BTreeMap<Arc<str>, Element> = BTreeMap::new();
     let component_nodes = doc
-        .children.iter()
+        .children
+        .iter()
         .filter_map(|c| c.as_element())
         .filter(|c| c.name == "components")
         .flat_map(|node| node.children.iter())
@@ -951,17 +1150,28 @@ fn cache_components(doc: &Element) -> Result<BTreeMap<Arc<str>, Element>, DataDi
         .filter(|node| node.name == "component");
 
     for component_node in component_nodes {
-        let name = component_node.attributes.get("name")
-            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone();
+        let name = component_node
+            .attributes
+            .get("name")
+            .ok_or(DataDictionaryError::Missing {
+                entry_type: "attribute".into(),
+                name: "name".into(),
+            })?
+            .clone();
         components_by_name.insert(name.into(), component_node.clone());
     }
     Ok(components_by_name)
 }
 
-fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<BTreeMap<Arc<str>, DDMap>, DataDictionaryError> {
+fn parse_messages(
+    doc: &Element,
+    fields_by_name: &BTreeMap<Arc<str>, Field>,
+    components_by_name: &BTreeMap<Arc<str>, Element>,
+) -> Result<BTreeMap<Arc<str>, DDMap>, DataDictionaryError> {
     let mut messages: BTreeMap<Arc<str>, DDMap> = BTreeMap::new();
     let message_nodes = doc
-        .children.iter()
+        .children
+        .iter()
         .filter_map(|c| c.as_element())
         .filter(|c| c.name == "messages")
         .flat_map(|node| node.children.iter())
@@ -969,18 +1179,41 @@ fn parse_messages(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, com
         .filter(|node| node.name == "message");
 
     for message_node in message_nodes {
-        let name: Arc<str> = message_node.attributes.get("name")
-            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone().into();
+        let name: Arc<str> = message_node
+            .attributes
+            .get("name")
+            .ok_or(DataDictionaryError::Missing {
+                entry_type: "attribute".into(),
+                name: "name".into(),
+            })?
+            .clone()
+            .into();
         let mut dd_map = DDMap::new(name);
-        parse_msg_element(message_node, &mut dd_map, fields_by_name, components_by_name)?;
-        let msg_type: Arc<str> = message_node.attributes.get("msgtype")
-            .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "msgtype".into() })?.clone().into();
+        parse_msg_element(
+            message_node,
+            &mut dd_map,
+            fields_by_name,
+            components_by_name,
+        )?;
+        let msg_type: Arc<str> = message_node
+            .attributes
+            .get("msgtype")
+            .ok_or(DataDictionaryError::Missing {
+                entry_type: "attribute".into(),
+                name: "msgtype".into(),
+            })?
+            .clone()
+            .into();
         messages.insert(msg_type, dd_map);
     }
     Ok(messages)
 }
 
-fn parse_header(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<DDMap, DataDictionaryError> {
+fn parse_header(
+    doc: &Element,
+    fields_by_name: &BTreeMap<Arc<str>, Field>,
+    components_by_name: &BTreeMap<Arc<str>, Element>,
+) -> Result<DDMap, DataDictionaryError> {
     let mut dd_map = DDMap::new("header".into());
     if let Some(header_node) = doc.get_child("header") {
         parse_msg_element(header_node, &mut dd_map, fields_by_name, components_by_name)?;
@@ -988,23 +1221,34 @@ fn parse_header(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, compo
     Ok(dd_map)
 }
 
-fn parse_trailer(doc: &Element, fields_by_name: &BTreeMap<Arc<str>, Field>, components_by_name: &BTreeMap<Arc<str>, Element>) -> Result<DDMap, DataDictionaryError> {
+fn parse_trailer(
+    doc: &Element,
+    fields_by_name: &BTreeMap<Arc<str>, Field>,
+    components_by_name: &BTreeMap<Arc<str>, Element>,
+) -> Result<DDMap, DataDictionaryError> {
     let mut dd_map = DDMap::new("trailer".into());
     if let Some(trailer_node) = doc.get_child("trailer") {
-        parse_msg_element(trailer_node, &mut dd_map, fields_by_name, components_by_name)?;
+        parse_msg_element(
+            trailer_node,
+            &mut dd_map,
+            fields_by_name,
+            components_by_name,
+        )?;
     }
     Ok(dd_map)
 }
 
 fn verify_child_node(child_node: &Element, parent_node: &Element) {
-    assert!(!child_node.attributes.is_empty(), 
-            "Malformed data dictionary: Found text-only node containing '{}'",
-            child_node.get_text().unwrap_or_default().trim()
-        );
+    assert!(
+        !child_node.attributes.is_empty(),
+        "Malformed data dictionary: Found text-only node containing '{}'",
+        child_node.get_text().unwrap_or_default().trim()
+    );
     if !child_node.attributes.contains_key("name") {
         let message_type_name = parent_node
             .attributes
-            .get("name").cloned()
+            .get("name")
+            .cloned()
             .unwrap_or_else(|| parent_node.name.clone());
         panic!(
             "Malformed data dictionary: Found '{}' node without 'name' within parent '{}/{}'",
@@ -1019,7 +1263,13 @@ fn parse_msg_element(
     fields_by_name: &BTreeMap<Arc<str>, Field>,
     components_by_name: &BTreeMap<Arc<str>, Element>,
 ) -> Result<(), DataDictionaryError> {
-    parse_msg_element_inner(node, &mut GoM::Map(dd_map), fields_by_name, components_by_name, None)
+    parse_msg_element_inner(
+        node,
+        &mut GoM::Map(dd_map),
+        fields_by_name,
+        components_by_name,
+        None,
+    )
 }
 
 fn parse_msg_element_inner(
@@ -1031,7 +1281,8 @@ fn parse_msg_element_inner(
 ) -> Result<(), DataDictionaryError> {
     let message_type_name = node
         .attributes
-        .get("name").cloned()
+        .get("name")
+        .cloned()
         .unwrap_or_else(|| node.name.clone());
 
     if node.children.is_empty() {
@@ -1042,12 +1293,19 @@ fn parse_msg_element_inner(
         if let Some(child_node) = child_node.as_element() {
             verify_child_node(child_node, node);
 
-            let name_attribute: Arc<str> = child_node.attributes.get("name")
-                .ok_or(DataDictionaryError::Missing { entry_type: "attribute".into(), name: "name".into() })?.clone().into();
+            let name_attribute: Arc<str> = child_node
+                .attributes
+                .get("name")
+                .ok_or(DataDictionaryError::Missing {
+                    entry_type: "attribute".into(),
+                    name: "name".into(),
+                })?
+                .clone()
+                .into();
 
             match child_node.name.as_str() {
                 "field" | "group" => {
-                    assert!(fields_by_name.contains_key(&name_attribute), 
+                    assert!(fields_by_name.contains_key(&name_attribute),
                             "Field '{name_attribute}' is not defined in <fields> section."
                         );
                     let dd_field = fields_by_name.get(&name_attribute)
