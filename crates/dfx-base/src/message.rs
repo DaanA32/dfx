@@ -540,8 +540,7 @@ impl Message {
     }
 
     fn checksum(&self) -> u32 {
-        (self.header.calculate_total() + self.calculate_total() + self.trailer.calculate_total())
-            % 256
+        u32::from((self.header.checksum() + self.body.checksum() + self.trailer.checksum()).0)
     }
 
     fn clear(&mut self) {

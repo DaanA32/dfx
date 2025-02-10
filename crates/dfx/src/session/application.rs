@@ -70,6 +70,7 @@ pub mod tests {
     use dfx_base::session_id::SessionId;
 
     use super::{Application, ApplicationExt, DoNotAccept, LogonReject};
+
     use dfx_base::message::Message;
 
     pub struct TestApplication;

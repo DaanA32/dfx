@@ -313,7 +313,10 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
         std::thread::sleep(Duration::from_millis(1000));
     }
     let other = other.expect("Read a message");
-    let other: String = String::from_utf8_lossy(&other).to_string();
+
+    let encoder = encoding_rs::WINDOWS_1252;
+    let (decoded, _decoder, _has_unmapped_chars) = encoder.decode(&other);
+    let other: String = decoded.to_string();
     // let other: String = other.iter().map(|b| *b as char).collect();
     // println!("Runner: Received {}", other.replace("\x01", "|"));
     let message = message.replace("|", "\x01");

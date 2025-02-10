@@ -458,19 +458,16 @@ where
             .msg_factory
             .create(self.session_id.begin_string(), MsgType::LOGON)
             .unwrap(); // TODO handle unwrap
-        logon.set_field_deref(EncryptMethod::new(EncryptMethod::NONE), None);
-        logon.set_field_deref(HeartBtInt::new(self.state.heartbeat_int()), None);
+        logon.set_field(EncryptMethod::new(EncryptMethod::NONE));
+        logon.set_field(HeartBtInt::new(self.state.heartbeat_int()));
 
         if self.session_id.is_fixt() {
-            logon.set_field_deref(
-                DefaultApplVerID::new(
-                    self.sender_default_appl_ver_id
-                        .as_ref()
-                        .unwrap()
-                        .to_string(),
-                ),
-                None,
-            );
+            logon.set_field(DefaultApplVerID::new(
+                self.sender_default_appl_ver_id
+                    .as_ref()
+                    .unwrap()
+                    .to_string(),
+            ));
         }
         if self.refresh_on_logon() {
             self.refresh();
@@ -479,7 +476,7 @@ where
             self.state.reset(Some("ResetOnLogon"));
         }
         if self.should_send_reset() {
-            logon.set_field_deref(ResetSeqNumFlag::new(true), None);
+            logon.set_field(ResetSeqNumFlag::new(true));
         }
 
         self.initialize_header(&mut logon, None);
@@ -500,7 +497,7 @@ where
                 self.sender_default_appl_ver_id.as_ref().unwrap(),
             );
         }
-        logon.set_field_base(other.get_field(tags::HeartBtInt).unwrap().clone(), None);
+        logon.set_field(other.get_field(tags::HeartBtInt).unwrap().clone());
 
         if self.enable_last_msg_seq_num_processed {
             if let Some(seq) = other.header().get_field(tags::MsgSeqNum) {
@@ -571,7 +568,7 @@ where
             .create(self.session_id.begin_string(), MsgType::HEARTBEAT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
-        heartbeat.set_field_base(message.get_field(tags::TestReqID).unwrap().clone(), None);
+        heartbeat.set_field(message.get_field(tags::TestReqID).unwrap().clone());
         self.log.on_event(
             format!(
                 "generate_heartbeat_other: {}",
@@ -650,13 +647,10 @@ where
                 };
                 if reset {
                     self.state.reset(Some("ResetSeqNumFlag"));
-                    message.header_mut().set_field_base(
-                        Field::new(
-                            tags::MsgSeqNum,
-                            format!("{}", self.state.next_sender_msg_seq_num()),
-                        ),
-                        None,
-                    );
+                    message.header_mut().set_field(Field::new(
+                        tags::MsgSeqNum,
+                        format!("{}", self.state.next_sender_msg_seq_num()),
+                    ));
                 }
                 self.state.set_sent_reset(reset);
             }

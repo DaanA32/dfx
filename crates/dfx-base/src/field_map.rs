@@ -1,8 +1,8 @@
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::fields::converters::IntoBytes;
-use crate::fields::converters::TryFrom;
+use crate::fields::converters::IntoFieldValue;
+use crate::fields::converters::TryFromFieldValue;
 use crate::fields::ConversionError;
 use crate::message::Message;
 use crate::tags;
@@ -26,7 +26,7 @@ pub struct FieldMap {
 }
 
 pub type Tag = i32;
-pub type Total = u32;
+pub type Total = Wrapping<u8>;
 pub type Length = u32;
 pub type FieldOrder = Vec<Tag>;
 pub(crate) type FieldBase = Field;
@@ -101,11 +101,8 @@ impl Default for Field {
 }
 
 impl Field {
-    pub fn new<'a, T: IntoBytes<FieldValue> + TryFrom<&'a FieldValue, Error = ConversionError>>(
-        tag: Tag,
-        value: T,
-    ) -> Self {
-        Field(tag, value.as_bytes())
+    pub fn new<'a, T: IntoFieldValue<FieldValue>>(tag: Tag, value: T) -> Self {
+        Field(tag, value.into_field_value())
     }
     #[must_use]
     pub fn from_bytes(tag: Tag, value: std::sync::Arc<[u8]>) -> Self {
@@ -131,9 +128,9 @@ impl Field {
     }
     pub fn as_value<'a, T>(&'a self) -> Result<T, ConversionError>
     where
-        T: TryFrom<&'a FieldValue, Error = ConversionError>,
+        T: TryFromFieldValue<&'a FieldValue, Error = ConversionError>,
     {
-        TryFrom::try_from(&self.1)
+        TryFromFieldValue::try_from_field_value(&self.1)
     }
 
     pub(crate) fn to_usize(&self) -> Option<usize> {
@@ -181,7 +178,7 @@ impl FieldMap {
         src.clone()
     }
 
-    pub fn set_field_base(&mut self, field: Field, overwrite: Option<bool>) -> bool {
+    pub(crate) fn set_field_base(&mut self, field: Field, overwrite: Option<bool>) -> bool {
         if matches!(overwrite, Some(b) if !b) && self.fields.contains_key(&field.tag()) {
             return false;
         }
@@ -189,7 +186,7 @@ impl FieldMap {
         true
     }
 
-    pub fn set_field_deref<F: Deref<Target = Field> + Clone>(
+    pub(crate) fn set_field_deref<F: Deref<Target = Field> + Clone>(
         &mut self,
         field: F,
         overwrite: Option<bool>,
@@ -202,8 +199,8 @@ impl FieldMap {
         true
     }
 
-    pub fn set_tag_value<'a, T: IntoBytes<FieldValue>>(&mut self, tag: Tag, value: T) {
-        let field_base = Field(tag, value.as_bytes());
+    pub fn set_tag_value<'a, T: IntoFieldValue<FieldValue>>(&mut self, tag: Tag, value: T) {
+        let field_base = Field(tag, value.into_field_value());
         self.set_field_base(field_base, None);
     }
 
@@ -375,23 +372,23 @@ impl FieldMap {
     }
 
     #[must_use]
-    pub fn calculate_total(&self) -> Total {
-        let mut total = 0;
+    pub fn checksum(&self) -> Total {
+        let mut total = Total::default();
         for field in self.fields.values() {
             if field.tag() != tags::CheckSum {
-                total += Total::from(field.checksum().0);
+                total += field.checksum();
             }
         }
 
         for field in self.repeated_tags() {
             if field.tag() != tags::CheckSum {
-                total += Total::from(field.checksum().0);
+                total += field.checksum();
             }
         }
 
         for group_list in self.groups.values() {
             for group in group_list {
-                total += group.calculate_total();
+                total += group.checksum();
             }
         }
         total

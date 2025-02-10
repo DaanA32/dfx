@@ -132,7 +132,9 @@ fn prehash(
     target_comp_id: &str,
     password: &str,
 ) -> String {
-    format!("{sending_time}\x01{msg_type}\x01{msg_seq_num}\x01{sender_comp_id}\x01{target_comp_id}\x01{password}")
+    format!(
+        "{sending_time}\x01{msg_type}\x01{msg_seq_num}\x01{sender_comp_id}\x01{target_comp_id}\x01{password}"
+    )
 }
 
 fn main() {

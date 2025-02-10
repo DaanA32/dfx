@@ -1,14 +1,14 @@
 use crate::field_map::FieldValue;
-use crate::fields::converters::TryFrom;
+use crate::fields::converters::TryFromFieldValue;
 use crate::fields::ConversionError;
 
-use super::IntoBytes;
+use super::IntoFieldValue;
 
-impl<'a> TryFrom<&'a FieldValue> for bool {
+impl<'a> TryFromFieldValue<&'a FieldValue> for bool {
     type Error = ConversionError;
 
-    fn try_from(value: &'a FieldValue) -> Result<Self, Self::Error> {
-        let ref_str: &str = TryFrom::try_from(value)?;
+    fn try_from_field_value(value: &'a FieldValue) -> Result<Self, Self::Error> {
+        let ref_str: &str = TryFromFieldValue::try_from_field_value(value)?;
 
         match ref_str {
             "Y" => Ok(true),
@@ -18,8 +18,8 @@ impl<'a> TryFrom<&'a FieldValue> for bool {
     }
 }
 
-impl IntoBytes<FieldValue> for bool {
-    fn as_bytes(&self) -> FieldValue {
+impl IntoFieldValue<FieldValue> for bool {
+    fn into_field_value(&self) -> FieldValue {
         if *self {
             vec![b'Y'].into()
         } else {
