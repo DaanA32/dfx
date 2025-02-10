@@ -1,4 +1,3 @@
-
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum FieldType {
     Boolean,
@@ -51,7 +50,10 @@ impl FieldType {
             "XIDREF" => Ok(Self::String),
             "TIME" => Ok(Self::DateTime),
             "DATE" => Ok(Self::String),
-            _ => Err(format!("Invalid type: {}", String::from_utf8_lossy(value.as_ref())))
+            _ => Err(format!(
+                "Invalid type: {}",
+                String::from_utf8_lossy(value.as_ref())
+            )),
         }
     }
 }

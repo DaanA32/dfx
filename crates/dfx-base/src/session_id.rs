@@ -107,19 +107,35 @@ impl SessionId {
         self.is_fixt
     }
 
-
     pub fn prefix(&self) -> String {
-        format!("{}-{}{}{}{}{}-{}{}{}{}{}",
+        format!(
+            "{}-{}{}{}{}{}-{}{}{}{}{}",
             self.begin_string(),
             self.sender_comp_id(),
-            if self.sender_sub_id().is_empty() { "" } else { "-" },
+            if self.sender_sub_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.sender_sub_id(),
-            if self.sender_location_id().is_empty() { "" } else { "-" },
+            if self.sender_location_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.sender_location_id(),
             self.target_comp_id(),
-            if self.target_sub_id().is_empty() { "" } else { "-" },
+            if self.target_sub_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.target_sub_id(),
-            if self.target_location_id().is_empty() { "" } else { "-" },
+            if self.target_location_id().is_empty() {
+                ""
+            } else {
+                "-"
+            },
             self.target_location_id(),
         )
     }

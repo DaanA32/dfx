@@ -1,8 +1,8 @@
 use std::cmp;
 use std::cmp::min;
+use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
-use std::sync::mpsc::sync_channel;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -16,30 +16,30 @@ use dfx_base::fix_values::BusinessRejectReason;
 use dfx_base::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
 
+use crate::fields::*;
+use crate::logging::LogFactory;
+use crate::logging::Logger;
 use dfx_base::data_dictionary::DataDictionary;
 use dfx_base::data_dictionary::MessageValidationError;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
 use dfx_base::field_map::Field;
 use dfx_base::field_map::FieldMapError;
 use dfx_base::field_map::Tag;
-use crate::fields::*;
-use dfx_base::fields::ConversionError;
 use dfx_base::fields::converters::datetime::DateTimeFormat;
+use dfx_base::fields::ConversionError;
 use dfx_base::fix_values::BeginString;
-use crate::logging::LogFactory;
-use crate::logging::Logger;
 
-use dfx_base::message::Message;
-use dfx_base::message::MessageParseError;
-use dfx_base::message_factory::MessageFactory;
-use dfx_base::message_factory::MessageFactoryError;
 use crate::message_store::MessageStoreFactory;
 use crate::session::Application;
 use crate::session::ApplicationError;
 use crate::session::Responder;
-use dfx_base::session_id::SessionId;
 use crate::session::SessionSchedule;
 use crate::session::SessionState;
+use dfx_base::message::Message;
+use dfx_base::message::MessageParseError;
+use dfx_base::message_factory::MessageFactory;
+use dfx_base::message_factory::MessageFactoryError;
+use dfx_base::session_id::SessionId;
 use dfx_base::tags;
 
 use super::FromAppError;
@@ -56,8 +56,8 @@ lazy_static! {
 #[allow(non_snake_case)]
 pub mod Session {
 
+    use super::{SessionError, SESSION_MAP};
     use dfx_base::{message::Message, session_id::SessionId};
-    use super::{SESSION_MAP, SessionError};
 
     pub fn send_to_session(session_id: &SessionId, message: Message) -> Result<(), SessionError> {
         match SESSION_MAP.get(session_id) {
@@ -66,7 +66,6 @@ pub mod Session {
         }
         Ok(())
     }
-
 }
 fn connect(session_id: &SessionId) -> Result<Receiver<Message>, InternalSessionError> {
     if SESSION_MAP.contains_key(session_id) {
@@ -77,12 +76,11 @@ fn connect(session_id: &SessionId) -> Result<Receiver<Message>, InternalSessionE
     Ok(rx)
 }
 fn disconnect_session(session_id: &SessionId) {
-    SESSION_MAP.remove(&session_id);
+    SESSION_MAP.remove(session_id);
 }
 
 //TODO: dyn to generic?
-pub(crate) struct ISession<App, DDP, Log, MF>
-{
+pub(crate) struct ISession<App, DDP, Log, MF> {
     application: App,
     session_id: SessionId,
     _data_dictionary_provider: DDP, // TODO: REMOVE candidate
@@ -127,10 +125,18 @@ fn add_data_dictionaries<D: DataDictionaryProvider>(provider: &mut D, settings: 
                     None => settings.session_id().begin_string(), // TODO error?
                 };
                 let mut dd = DataDictionary::from_file(path).unwrap();
-                dd.set_allow_unknown_message_fields(settings.validation_options().allow_unknown_msg_fields());
-                dd.set_check_fields_have_values(settings.validation_options().validate_fields_have_values());
-                dd.set_check_fields_out_of_order(settings.validation_options().validate_fields_out_of_order());
-                dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
+                dd.set_allow_unknown_message_fields(
+                    settings.validation_options().allow_unknown_msg_fields(),
+                );
+                dd.set_check_fields_have_values(
+                    settings.validation_options().validate_fields_have_values(),
+                );
+                dd.set_check_fields_out_of_order(
+                    settings.validation_options().validate_fields_out_of_order(),
+                );
+                dd.set_check_user_defined_fields(
+                    settings.validation_options().validate_user_defined_fields(),
+                );
 
                 provider.add_application_data_dictionary(appl_ver_id, dd);
 
@@ -139,10 +145,18 @@ fn add_data_dictionaries<D: DataDictionaryProvider>(provider: &mut D, settings: 
                     None => settings.session_id().begin_string(), // TODO error?
                 };
                 let mut dd = DataDictionary::from_file(path).unwrap();
-                dd.set_allow_unknown_message_fields(settings.validation_options().allow_unknown_msg_fields());
-                dd.set_check_fields_have_values(settings.validation_options().validate_fields_have_values());
-                dd.set_check_fields_out_of_order(settings.validation_options().validate_fields_out_of_order());
-                dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
+                dd.set_allow_unknown_message_fields(
+                    settings.validation_options().allow_unknown_msg_fields(),
+                );
+                dd.set_check_fields_have_values(
+                    settings.validation_options().validate_fields_have_values(),
+                );
+                dd.set_check_fields_out_of_order(
+                    settings.validation_options().validate_fields_out_of_order(),
+                );
+                dd.set_check_user_defined_fields(
+                    settings.validation_options().validate_user_defined_fields(),
+                );
 
                 provider.add_session_data_dictionary(settings.session_id().begin_string(), dd);
             }
@@ -153,21 +167,33 @@ fn add_data_dictionaries<D: DataDictionaryProvider>(provider: &mut D, settings: 
             };
 
             let mut dd = DataDictionary::from_file(path).unwrap();
-            dd.set_allow_unknown_message_fields(settings.validation_options().allow_unknown_msg_fields());
-            dd.set_check_fields_have_values(settings.validation_options().validate_fields_have_values());
-            dd.set_check_fields_out_of_order(settings.validation_options().validate_fields_out_of_order());
-            dd.set_check_user_defined_fields(settings.validation_options().validate_user_defined_fields());
+            dd.set_allow_unknown_message_fields(
+                settings.validation_options().allow_unknown_msg_fields(),
+            );
+            dd.set_check_fields_have_values(
+                settings.validation_options().validate_fields_have_values(),
+            );
+            dd.set_check_fields_out_of_order(
+                settings.validation_options().validate_fields_out_of_order(),
+            );
+            dd.set_check_user_defined_fields(
+                settings.validation_options().validate_user_defined_fields(),
+            );
             provider.add_session_data_dictionary(settings.session_id().begin_string(), dd.clone());
-            provider.add_application_data_dictionary(ApplVerID::from_begin_string(settings.session_id().begin_string()), dd);
+            provider.add_application_data_dictionary(
+                ApplVerID::from_begin_string(settings.session_id().begin_string()),
+                dd,
+            );
         }
     }
 }
 
 impl<App, DDP, Log, MF> ISession<App, DDP, Log, MF>
-where App: Application + Clone + 'static,
-      DDP: DataDictionaryProvider + Send + Clone + 'static,
-      Log: Logger + Clone,
-      MF: MessageFactory + Send + Clone + 'static,
+where
+    App: Application + Clone + 'static,
+    DDP: DataDictionaryProvider + Send + Clone + 'static,
+    Log: Logger + Clone,
+    MF: MessageFactory + Send + Clone + 'static,
 {
     pub(crate) fn from_settings(
         session_id: SessionId,
@@ -180,15 +206,24 @@ where App: Application + Clone + 'static,
     ) -> Self {
         // REVIEW is this dumb?
         add_data_dictionaries(&mut data_dictionary_provider, &settings);
-        let session_data_dictionary = data_dictionary_provider.get_session_data_dictionary(&settings.session_id().begin_string()).clone();
+        let session_data_dictionary = data_dictionary_provider
+            .get_session_data_dictionary(settings.session_id().begin_string())
+            .clone();
         let application_data_dictionary = if settings.session_id().is_fixt() {
-            data_dictionary_provider.get_application_data_dictionary(settings.default_appl_ver_id().unwrap()).clone()
+            data_dictionary_provider
+                .get_application_data_dictionary(settings.default_appl_ver_id().unwrap())
+                .clone()
         } else {
             session_data_dictionary.clone()
         };
 
         let msg_store = store_factory.create(&session_id);
-        let mut state = SessionState::new(settings.connection().is_initiator(), log.clone(), settings.connection().heart_bt_int().unwrap_or(30), msg_store);
+        let mut state = SessionState::new(
+            settings.connection().is_initiator(),
+            log.clone(),
+            settings.connection().heart_bt_int().unwrap_or(30),
+            msg_store,
+        );
         state.set_logon_timeout(settings.connection().logon_timeout());
         state.set_logout_timeout(settings.connection().logout_timeout());
 
@@ -222,7 +257,9 @@ where App: Application + Clone + 'static,
             msg_factory,
             //TODO app is IApplicationExt
             app_does_early_intercept: false,
-            sender_default_appl_ver_id: settings.default_appl_ver_id().map(|v| ApplVerID::from_begin_string(v).into()),
+            sender_default_appl_ver_id: settings
+                .default_appl_ver_id()
+                .map(|v| ApplVerID::from_begin_string(v).into()),
             target_default_appl_ver_id: None,
             session_data_dictionary,
             application_data_dictionary,
@@ -230,15 +267,29 @@ where App: Application + Clone + 'static,
             state,
             persist_messages: !matches!(settings.persistence(), Persistence::None),
             reset_on_disconnect: settings.validation_options().reset_on_disconnect(),
-            send_redundant_resend_requests: settings.validation_options().send_redundant_resend_requests(),
-            _resend_session_level_rejects: settings.validation_options().resend_session_level_rejects(),
-            validate_length_and_checksum: settings.validation_options().validate_length_and_checksum(),
+            send_redundant_resend_requests: settings
+                .validation_options()
+                .send_redundant_resend_requests(),
+            _resend_session_level_rejects: settings
+                .validation_options()
+                .resend_session_level_rejects(),
+            validate_length_and_checksum: settings
+                .validation_options()
+                .validate_length_and_checksum(),
             check_comp_id: true,
             time_stamp_precision: settings.validation_options().time_stamp_precision().clone(),
-            enable_last_msg_seq_num_processed: settings.validation_options().enable_last_msg_seq_num_processed(),
-            max_messages_in_resend_request: settings.validation_options().max_messages_in_resend_request(),
-            send_logout_before_timeout_disconnect: settings.validation_options().send_logout_before_disconnect_from_timeout(),
-            _ignore_poss_dup_resend_requests: settings.validation_options().ignore_poss_dup_resend_requests(),
+            enable_last_msg_seq_num_processed: settings
+                .validation_options()
+                .enable_last_msg_seq_num_processed(),
+            max_messages_in_resend_request: settings
+                .validation_options()
+                .max_messages_in_resend_request(),
+            send_logout_before_timeout_disconnect: settings
+                .validation_options()
+                .send_logout_before_disconnect_from_timeout(),
+            _ignore_poss_dup_resend_requests: settings
+                .validation_options()
+                .ignore_poss_dup_resend_requests(),
             requires_orig_sending_time: settings.validation_options().requires_orig_sending_time(),
             check_latency: settings.validation_options().check_latency(),
             max_latency: settings.validation_options().max_latency(),
@@ -258,7 +309,7 @@ where App: Application + Clone + 'static,
         &mut self,
         session_id: &SessionId,
     ) -> Result<(), InternalSessionError> {
-        let receiver = connect(&session_id);
+        let receiver = connect(session_id);
         self.outbound = Some(receiver?);
         Ok(())
     }
@@ -406,13 +457,18 @@ where App: Application + Clone + 'static,
     fn generate_logon(&mut self) -> bool {
         let mut logon = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::LOGON)
+            .create(self.session_id.begin_string(), MsgType::LOGON)
             .unwrap(); // TODO handle unwrap
         logon.set_field(EncryptMethod::new(EncryptMethod::NONE));
         logon.set_field(HeartBtInt::new(self.state.heartbeat_int()));
 
         if self.session_id.is_fixt() {
-            logon.set_field(DefaultApplVerID::new(self.sender_default_appl_ver_id.as_ref().unwrap().to_string()));
+            logon.set_field(DefaultApplVerID::new(
+                self.sender_default_appl_ver_id
+                    .as_ref()
+                    .unwrap()
+                    .to_string(),
+            ));
         }
         if self.refresh_on_logon() {
             self.refresh();
@@ -433,20 +489,26 @@ where App: Application + Clone + 'static,
     fn generate_logon_other(&mut self, other: &Message) -> bool {
         let mut logon = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::LOGON)
+            .create(self.session_id.begin_string(), MsgType::LOGON)
             .unwrap(); // TODO handle unwrap
         logon.set_tag_value(tags::EncryptMethod, "0");
         if self.session_id.is_fixt() {
-            logon.set_tag_value(tags::DefaultApplVerID, &self.sender_default_appl_ver_id.as_ref().unwrap());
+            logon.set_tag_value(
+                tags::DefaultApplVerID,
+                self.sender_default_appl_ver_id.as_ref().unwrap(),
+            );
         }
         logon.set_field(other.get_field(tags::HeartBtInt).unwrap().clone());
 
         if self.enable_last_msg_seq_num_processed {
             if let Some(seq) = other.header().get_field(tags::MsgSeqNum) {
                 let value: &FieldValue = seq.value();
-                logon.header_mut().set_tag_value(tags::LastMsgSeqNumProcessed, value);
+                logon
+                    .header_mut()
+                    .set_tag_value(tags::LastMsgSeqNumProcessed, value);
             } else {
-                self.log.on_event(format!("Error: No message sequence number: {}", other).as_str());
+                self.log
+                    .on_event(format!("Error: No message sequence number: {}", other).as_str());
             }
         }
 
@@ -460,13 +522,13 @@ where App: Application + Clone + 'static,
     fn generate_logout(&mut self, reason: Option<String>, other: Option<Message>) -> bool {
         let mut logout = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::LOGOUT)
+            .create(self.session_id.begin_string(), MsgType::LOGOUT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut logout, None);
         if matches!(reason.as_ref(), Some(text) if !text.is_empty()) {
             logout.set_tag_value(tags::Text, reason.as_ref().unwrap().as_str());
         }
-        if matches!(other.as_ref(), Some(_)) && self.enable_last_msg_seq_num_processed {
+        if other.as_ref().is_some() && self.enable_last_msg_seq_num_processed {
             if other
                 .as_ref()
                 .unwrap()
@@ -477,7 +539,8 @@ where App: Application + Clone + 'static,
                     .as_ref()
                     .unwrap()
                     .header()
-                    .get_field(tags::MsgSeqNum).unwrap();
+                    .get_field(tags::MsgSeqNum)
+                    .unwrap();
                 logout
                     .header_mut()
                     .set_tag_value(tags::LastMsgSeqNumProcessed, field.value());
@@ -495,7 +558,7 @@ where App: Application + Clone + 'static,
     fn generate_heartbeat(&mut self) -> bool {
         let mut heartbeat = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::HEARTBEAT)
+            .create(self.session_id.begin_string(), MsgType::HEARTBEAT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         matches!(self.send_raw(heartbeat, 0), Ok(v) if v)
@@ -503,17 +566,26 @@ where App: Application + Clone + 'static,
     fn generate_heartbeat_other(&mut self, message: &Message) -> bool {
         let mut heartbeat = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::HEARTBEAT)
+            .create(self.session_id.begin_string(), MsgType::HEARTBEAT)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         heartbeat.set_field(message.get_field(tags::TestReqID).unwrap().clone());
-        self.log.on_event(format!("generate_heartbeat_other: {}", self.enable_last_msg_seq_num_processed).as_str());
+        self.log.on_event(
+            format!(
+                "generate_heartbeat_other: {}",
+                self.enable_last_msg_seq_num_processed
+            )
+            .as_str(),
+        );
         if self.enable_last_msg_seq_num_processed {
             if let Some(seq) = message.header().get_field(tags::MsgSeqNum) {
                 let value: &FieldValue = seq.value();
-                heartbeat.header_mut().set_tag_value(tags::LastMsgSeqNumProcessed, value);
+                heartbeat
+                    .header_mut()
+                    .set_tag_value(tags::LastMsgSeqNumProcessed, value);
             } else {
-                self.log.on_event(format!("Error: No message sequence number: {}", message).as_str());
+                self.log
+                    .on_event(format!("Error: No message sequence number: {}", message).as_str());
             }
         }
         self.send_raw(heartbeat, 0).unwrap()
@@ -522,7 +594,7 @@ where App: Application + Clone + 'static,
     fn generate_test_request(&mut self, reason: &str) -> bool {
         let mut heartbeat = self
             .msg_factory
-            .create(&self.session_id.begin_string(), MsgType::TEST_REQUEST)
+            .create(self.session_id.begin_string(), MsgType::TEST_REQUEST)
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         heartbeat.set_tag_value(tags::TestReqID, reason);
@@ -575,19 +647,18 @@ where App: Application + Clone + 'static,
                     false
                 };
                 if reset {
-                    self.state.reset(Some("ResetSeqNumFlag".into()));
-                    message.header_mut().set_field(
-                        Field::new(
-                            tags::MsgSeqNum,
-                            format!("{}", self.state.next_sender_msg_seq_num()),
-                        )
-                    );
+                    self.state.reset(Some("ResetSeqNumFlag"));
+                    message.header_mut().set_field(Field::new(
+                        tags::MsgSeqNum,
+                        format!("{}", self.state.next_sender_msg_seq_num()),
+                    ));
                 }
                 self.state.set_sent_reset(reset);
             }
             Ok(message)
         } else {
-            self.application.to_app(&mut message, &self.session_id)
+            self.application
+                .to_app(&mut message, &self.session_id)
                 .map(|_| message)
         };
 
@@ -598,7 +669,7 @@ where App: Application + Clone + 'static,
                     self.persist(&message, &message_string);
                 }
                 Ok(self.send(message_string))
-            },
+            }
             Err(e) => match e {
                 ApplicationError::DoNotSend => Ok(false),
                 ApplicationError::FieldMapError(e) => Err(e),
@@ -621,32 +692,32 @@ where App: Application + Clone + 'static,
 
         message
             .header_mut()
-            .set_tag_value(tags::BeginString, &self.session_id.begin_string());
+            .set_tag_value(tags::BeginString, self.session_id.begin_string());
         message
             .header_mut()
-            .set_tag_value(tags::SenderCompID, &self.session_id.sender_comp_id());
+            .set_tag_value(tags::SenderCompID, self.session_id.sender_comp_id());
         if !self.session_id.sender_sub_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::SenderSubID, &self.session_id.sender_sub_id());
+                .set_tag_value(tags::SenderSubID, self.session_id.sender_sub_id());
         }
         if !self.session_id.sender_location_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::SenderLocationID, &self.session_id.sender_location_id());
+                .set_tag_value(tags::SenderLocationID, self.session_id.sender_location_id());
         }
         message
             .header_mut()
-            .set_tag_value(tags::TargetCompID, &self.session_id.target_comp_id());
+            .set_tag_value(tags::TargetCompID, self.session_id.target_comp_id());
         if !self.session_id.target_sub_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::TargetSubID, &self.session_id.target_sub_id());
+                .set_tag_value(tags::TargetSubID, self.session_id.target_sub_id());
         }
         if !self.session_id.target_location_id().is_empty() {
             message
                 .header_mut()
-                .set_tag_value(tags::TargetLocationID, &self.session_id.target_location_id());
+                .set_tag_value(tags::TargetLocationID, self.session_id.target_location_id());
         }
 
         let seq_num = format!(
@@ -657,7 +728,9 @@ where App: Application + Clone + 'static,
                 self.state.next_sender_msg_seq_num()
             }
         );
-        message.header_mut().set_tag_value(tags::MsgSeqNum, &seq_num);
+        message
+            .header_mut()
+            .set_tag_value(tags::MsgSeqNum, &seq_num);
 
         if self.enable_last_msg_seq_num_processed
             && !message.header().is_field_set(tags::LastMsgSeqNumProcessed)
@@ -672,7 +745,8 @@ where App: Application + Clone + 'static,
     }
 
     fn insert_orig_sending_time(&self, message: &mut Message, sending_time: NaiveDateTime) {
-        let fix42_or_above = self.session_id.begin_string() == BeginString::FIXT11 || self.session_id.begin_string() >= BeginString::FIX42;
+        let fix42_or_above = self.session_id.begin_string() == BeginString::FIXT11
+            || self.session_id.begin_string() >= BeginString::FIX42;
         let precision = if fix42_or_above {
             self.time_stamp_precision.as_datetime_format()
         } else {
@@ -738,9 +812,13 @@ where App: Application + Clone + 'static,
             match e {
                 SessionHandleMessageError::InvalidMessageError(e) => {
                     self.log.on_event(&e.message());
-                },
-                SessionHandleMessageError::MessageParseError { message, parse_error } => {
-                    self.log.on_event(format!("MessageParse Error: {parse_error:?}").as_str());
+                }
+                SessionHandleMessageError::MessageParseError {
+                    message,
+                    parse_error,
+                } => {
+                    self.log
+                        .on_event(format!("MessageParse Error: {parse_error:?}").as_str());
                     let field = parse_error.as_tag();
                     let reason = parse_error.as_session_reject();
                     match Message::new(&message) {
@@ -748,26 +826,37 @@ where App: Application + Clone + 'static,
                             self.generate_reject(msg, reason.unwrap(), field).unwrap();
                         }
                         Err(err) => {
-                            self.log.on_event(format!("Skipping message due to {err:?}.").as_str());
+                            self.log
+                                .on_event(format!("Skipping message due to {err:?}.").as_str());
                         }
                     }
-                },
+                }
                 SessionHandleMessageError::TagException(msg, e) => {
                     if let Some(msg) = e.inner() {
                         self.log.on_event(msg.as_str());
                     }
-                    self.generate_reject(msg, e.session_reject_reason().clone(), Some(e.field())).unwrap();
-                },
-                SessionHandleMessageError::UnsupportedVersion { message, expected, actual } => {
+                    self.generate_reject(msg, e.session_reject_reason().clone(), Some(e.field()))
+                        .unwrap();
+                }
+                SessionHandleMessageError::UnsupportedVersion {
+                    message,
+                    expected,
+                    actual,
+                } => {
                     let result = message.header().get_string(tags::MsgType);
                     if matches!(result, Ok(v) if MsgType::LOGOUT == v) {
                         self.next_logout(message).unwrap();
                     } else {
-                        self.log.on_event(format!("Received version {actual} but expected {expected}").as_str());
-                        self.generate_logout(Some(format!("Incorrect BeginString ({actual})")), None);
+                        self.log.on_event(
+                            format!("Received version {actual} but expected {expected}").as_str(),
+                        );
+                        self.generate_logout(
+                            Some(format!("Incorrect BeginString ({actual})")),
+                            None,
+                        );
                         self.state.incr_next_target_msg_seq_num();
                     }
-                },
+                }
                 SessionHandleMessageError::String(s) => self.log.on_event(&s),
                 SessionHandleMessageError::FieldMapError(fm) => todo!("{fm:?}"),
                 SessionHandleMessageError::ConversionError(conv) => todo!("{conv:?}"),
@@ -778,10 +867,15 @@ where App: Application + Clone + 'static,
                     };
                     self.generate_logout(reason, None);
                     self.disconnect(&disconnect_msg);
-                },
+                }
                 SessionHandleMessageError::UnknownMessageType { message, msg_type } => {
-                    self.log.on_event(format!("Unsupported message type: {}", msg_type).as_str());
-                    self.generate_business_message_reject(message, BusinessRejectReason::UNKNOWN_MESSAGE_TYPE()).unwrap();
+                    self.log
+                        .on_event(format!("Unsupported message type: {}", msg_type).as_str());
+                    self.generate_business_message_reject(
+                        message,
+                        BusinessRejectReason::UNKNOWN_MESSAGE_TYPE(),
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -790,25 +884,43 @@ where App: Application + Clone + 'static,
     }
 
     fn next_msg_handler(&mut self, msg: Vec<u8>) -> Result<(), SessionHandleMessageError> {
-        let msg_type = Message::identify_type(&msg)
-            .map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
-        let begin_string = Message::extract_begin_string(&msg)
-            .map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
+        let msg_type = Message::identify_type(&msg).map_err(|mp| {
+            SessionHandleMessageError::MessageParseError {
+                message: msg.clone(),
+                parse_error: mp,
+            }
+        })?;
+        let begin_string = Message::extract_begin_string(&msg).map_err(|mp| {
+            SessionHandleMessageError::MessageParseError {
+                message: msg.clone(),
+                parse_error: mp,
+            }
+        })?;
         let mut message = self.msg_factory.create(begin_string.as_str(), msg_type)?;
         eprintln!("before from_string");
-        message.from_string(
-            &msg,
-            self.validate_length_and_checksum,
-            Some(&self.session_data_dictionary),
-            Some(&self.application_data_dictionary),
-            Some(&self.msg_factory),
-            false,
-        ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg.clone(), parse_error: mp })?;
+        message
+            .from_string(
+                &msg,
+                self.validate_length_and_checksum,
+                Some(&self.session_data_dictionary),
+                Some(&self.application_data_dictionary),
+                Some(&self.msg_factory),
+                false,
+            )
+            .map_err(|mp| SessionHandleMessageError::MessageParseError {
+                message: msg.clone(),
+                parse_error: mp,
+            })?;
         eprintln!("before handle_msg");
         self.handle_msg(message, &begin_string, msg_type)
     }
 
-    fn handle_msg(&mut self, message: Message, begin_string: &str, msg_type: &str) -> Result<(), SessionHandleMessageError> {
+    fn handle_msg(
+        &mut self,
+        message: Message,
+        begin_string: &str,
+        msg_type: &str,
+    ) -> Result<(), SessionHandleMessageError> {
         if self.app_does_early_intercept {
             todo!("Do early intercept")
         }
@@ -827,34 +939,47 @@ where App: Application + Clone + 'static,
             if self.session_id.is_fixt() {
                 self.target_default_appl_ver_id = Some(message.get_int(tags::DefaultApplVerID)?);
             } else {
-                self.target_default_appl_ver_id = Some(Message::get_appl_ver_id(&begin_string)?);
+                self.target_default_appl_ver_id = Some(Message::get_appl_ver_id(begin_string)?);
             }
         }
 
-        let validation_result = if self.session_id.is_fixt() && !Message::is_admin_msg_type(msg_type.as_bytes()) {
-            DataDictionary::validate(
-                &message,
-                Some(&self.session_data_dictionary),
-                &self.application_data_dictionary,
-                &begin_string,
-                msg_type,
-            )
-        } else {
-            DataDictionary::validate(
-                &message,
-                Some(&self.session_data_dictionary),
-                &self.session_data_dictionary,
-                &begin_string,
-                msg_type,
-            )
-        };
+        let validation_result =
+            if self.session_id.is_fixt() && !Message::is_admin_msg_type(msg_type.as_bytes()) {
+                DataDictionary::validate(
+                    &message,
+                    Some(&self.session_data_dictionary),
+                    &self.application_data_dictionary,
+                    begin_string,
+                    msg_type,
+                )
+            } else {
+                DataDictionary::validate(
+                    &message,
+                    Some(&self.session_data_dictionary),
+                    &self.session_data_dictionary,
+                    begin_string,
+                    msg_type,
+                )
+            };
 
         if let Err(e) = validation_result {
             return Err(match e {
-                MessageValidationError::UnsupportedVersion { expected, actual } => SessionHandleMessageError::UnsupportedVersion { message, expected, actual },
-                MessageValidationError::TagException(tag_exception) => SessionHandleMessageError::TagException(message, tag_exception),
-                MessageValidationError::FieldMapError(fm) => SessionHandleMessageError::FieldMapError(fm),
-                MessageValidationError::ConversionError(ce) => SessionHandleMessageError::ConversionError(ce),
+                MessageValidationError::UnsupportedVersion { expected, actual } => {
+                    SessionHandleMessageError::UnsupportedVersion {
+                        message,
+                        expected,
+                        actual,
+                    }
+                }
+                MessageValidationError::TagException(tag_exception) => {
+                    SessionHandleMessageError::TagException(message, tag_exception)
+                }
+                MessageValidationError::FieldMapError(fm) => {
+                    SessionHandleMessageError::FieldMapError(fm)
+                }
+                MessageValidationError::ConversionError(ce) => {
+                    SessionHandleMessageError::ConversionError(ce)
+                }
             });
         }
 
@@ -884,18 +1009,30 @@ where App: Application + Clone + 'static,
     }
 
     fn next_queued(&mut self) {
-        while let Some(msg) = self.state.dequeue(self.state.msg_store().next_target_msg_seq_num()) {
-            self.log.on_event(format!("Processing queued message: {}", self.state.msg_store().next_target_msg_seq_num()).as_str());
+        while let Some(msg) = self
+            .state
+            .dequeue(self.state.msg_store().next_target_msg_seq_num())
+        {
+            self.log.on_event(
+                format!(
+                    "Processing queued message: {}",
+                    self.state.msg_store().next_target_msg_seq_num()
+                )
+                .as_str(),
+            );
 
-            match (msg.header().get_string(tags::MsgType), msg.header().get_string(tags::BeginString)) {
+            match (
+                msg.header().get_string(tags::MsgType),
+                msg.header().get_string(tags::BeginString),
+            ) {
                 (Ok(msg_type), Ok(begin_string)) => {
                     if msg_type == MsgType::LOGON || msg_type == MsgType::RESEND_REQUEST {
                         self.state.incr_next_target_msg_seq_num();
                     } else {
                         self.handle_msg(msg, &begin_string, &msg_type).unwrap();
                     }
-                },
-                e => todo!("session::next_queued {e:?}")
+                }
+                e => todo!("session::next_queued {e:?}"),
             }
         }
     }
@@ -1040,14 +1177,21 @@ where App: Application + Clone + 'static,
         Ok(())
     }
 
-    fn next_resend_request(&mut self, resend_request: Message) -> Result<(), SessionHandleMessageError> {
+    fn next_resend_request(
+        &mut self,
+        resend_request: Message,
+    ) -> Result<(), SessionHandleMessageError> {
         let resend_request = self.verify_opt(resend_request, false, false)?;
         if let Some(resend_request) = resend_request {
-            if !(self._ignore_poss_dup_resend_requests && resend_request.header().is_field_set(tags::PossDupFlag)) {
+            if !(self._ignore_poss_dup_resend_requests
+                && resend_request.header().is_field_set(tags::PossDupFlag))
+            {
                 let mut msg_seq_num;
                 let beg_seq_no = resend_request.get_int(tags::BeginSeqNo)?;
                 let mut end_seq_no = resend_request.get_int(tags::EndSeqNo)?;
-                self.log.on_event(format!("Got resend request from {beg_seq_no} to {end_seq_no}").as_str());
+                self.log.on_event(
+                    format!("Got resend request from {beg_seq_no} to {end_seq_no}").as_str(),
+                );
 
                 if end_seq_no == 999999 || end_seq_no == 0 {
                     end_seq_no = self.state.next_sender_msg_seq_num() - 1;
@@ -1061,7 +1205,8 @@ where App: Application + Clone + 'static,
                     }
                     self.generate_sequence_reset(&resend_request, beg_seq_no, end_seq_no)?;
                     msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
-                    if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num) {
+                    if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num)
+                    {
                         self.state.incr_next_target_msg_seq_num();
                     }
                     return Ok(());
@@ -1077,15 +1222,24 @@ where App: Application + Clone + 'static,
                         Some(&self.session_data_dictionary),
                         Some(&self.application_data_dictionary),
                         Some(&self.msg_factory),
-                        false
-                    ).map_err(|mp| SessionHandleMessageError::MessageParseError { message: msg_str.into_bytes(), parse_error: mp })?;
+                        false,
+                    )
+                    .map_err(|mp| {
+                        SessionHandleMessageError::MessageParseError {
+                            message: msg_str.into_bytes(),
+                            parse_error: mp,
+                        }
+                    })?;
                     msg_seq_num = msg.header().get_int(tags::MsgSeqNum)?;
 
                     if current != msg_seq_num && begin == 0 {
                         begin = current;
                     }
 
-                    if msg.is_admin() && !(self._resend_session_level_rejects && msg.header().get_string(tags::MsgType)? == MsgType::REJECT) {
+                    if msg.is_admin()
+                        && !(self._resend_session_level_rejects
+                            && msg.header().get_string(tags::MsgType)? == MsgType::REJECT)
+                    {
                         if begin == 0 {
                             begin = msg_seq_num;
                         }
@@ -1099,10 +1253,9 @@ where App: Application + Clone + 'static,
 
                             self.send(msg.to_string_mut());
                             begin = 0;
-                        }else{
+                        } else {
                             continue;
                         }
-
                     }
                     current = msg_seq_num + 1;
                 }
@@ -1239,7 +1392,11 @@ where App: Application + Clone + 'static,
         msg_seq_num < self.state.next_target_msg_seq_num()
     }
 
-    fn do_target_too_high(&mut self, msg: Message, msg_seq_num: u32) -> Result<(), SessionHandleMessageError> {
+    fn do_target_too_high(
+        &mut self,
+        msg: Message,
+        msg_seq_num: u32,
+    ) -> Result<(), SessionHandleMessageError> {
         let begin_string = msg.header().get_string(tags::BeginString)?;
 
         self.log.on_event(
@@ -1270,7 +1427,11 @@ where App: Application + Clone + 'static,
         Ok(())
     }
 
-    fn do_target_too_low(&mut self, message: Message, msg_seq_num: u32) -> Result<(), SessionHandleMessageError> {
+    fn do_target_too_low(
+        &mut self,
+        message: Message,
+        msg_seq_num: u32,
+    ) -> Result<(), SessionHandleMessageError> {
         let poss_dup_flag = message.header().is_field_set(tags::PossDupFlag)
             && message.header().get_bool(tags::PossDupFlag);
 
@@ -1359,25 +1520,25 @@ where App: Application + Clone + 'static,
 
         let mut msg_seq_num = 0;
         if message.header().is_field_set(tags::MsgSeqNum) {
-            match message.header().get_int(tags::MsgSeqNum) {
-                Ok(seq_num) => {
-                    msg_seq_num = seq_num;
-                    reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num).as_str());
-                }
-                Err(_) => {}
+            if let Ok(seq_num) = message.header().get_int(tags::MsgSeqNum) {
+                msg_seq_num = seq_num;
+                reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num).as_str());
             }
         }
 
         let begin_string = &self.session_id.begin_string();
         if begin_string >= &BeginString::FIX42 {
-            if msg_type.len() > 0 {
+            if !msg_type.is_empty() {
                 reject.set_tag_value(tags::RefMsgType, &msg_type);
             }
             if (&BeginString::FIX42 == begin_string
                 && reason.tag() <= SessionRejectReason::INVALID_MSGTYPE().tag()/*.value*/)
                 || begin_string > &BeginString::FIX42
             {
-                reject.set_tag_value(tags::SessionRejectReason, format!("{}", reason.tag()) /*.value*/);
+                reject.set_tag_value(
+                    tags::SessionRejectReason,
+                    format!("{}", reason.tag()), /*.value*/
+                );
             }
         }
 
@@ -1391,7 +1552,10 @@ where App: Application + Clone + 'static,
         if field != 0 || SessionRejectReason::INVALID_TAG_NUMBER().reason() == reason.reason() {
             if SessionRejectReason::INVALID_MSGTYPE() == reason {
                 if self.session_id.begin_string() >= BeginString::FIX43 {
-                    self.populate_reject_reason(&mut reject, reason.description().as_str() /*.description*/);
+                    self.populate_reject_reason(
+                        &mut reject,
+                        reason.description().as_str(), /*.description*/
+                    );
                 } else {
                     self.populate_session_reject_reason(
                         &mut reject,
@@ -1411,16 +1575,22 @@ where App: Application + Clone + 'static,
             self.log.on_event(
                 format!(
                     "Message {} Rejected: {} (Field={})",
-                    msg_seq_num, reason.description(), /*.description*/ field
+                    msg_seq_num,
+                    reason.description(),
+                    /*.description*/ field
                 )
                 .as_str(),
             );
         } else {
-            self.populate_reject_reason(&mut reject, reason.description().as_str() /*.description*/);
+            self.populate_reject_reason(
+                &mut reject,
+                reason.description().as_str(), /*.description*/
+            );
             self.log.on_event(
                 format!(
                     "Message {} Rejected: {}",
-                    msg_seq_num, reason.description() /*.description*/
+                    msg_seq_num,
+                    reason.description() /*.description*/
                 )
                 .as_str(),
             );
@@ -1469,7 +1639,6 @@ where App: Application + Clone + 'static,
     }
 
     fn do_poss_dup(&mut self, message: Message) -> Result<(), SessionHandleMessageError> {
-
         let msg_type = message.header().get_string(tags::MsgType)?;
         if msg_type == MsgType::SEQUENCE_RESET && !self.requires_orig_sending_time {
             return Ok(());
@@ -1532,27 +1701,46 @@ where App: Application + Clone + 'static,
         end_seq_no: u32,
     ) -> Result<(), SessionHandleMessageError> {
         let begin_string = self.session_id.begin_string();
-        let mut sequence_reset = self.msg_factory.create(begin_string, MsgType::SEQUENCE_RESET)?;
+        let mut sequence_reset = self
+            .msg_factory
+            .create(begin_string, MsgType::SEQUENCE_RESET)?;
         self.initialize_header(&mut sequence_reset, None);
         let new_seq_no = end_seq_no;
-        sequence_reset.header_mut().set_tag_value(tags::PossDupFlag, true);
+        sequence_reset
+            .header_mut()
+            .set_tag_value(tags::PossDupFlag, true);
         let sending_time = sequence_reset.header().get_datetime(tags::SendingTime)?;
         self.insert_orig_sending_time(&mut sequence_reset, sending_time.naive_local());
 
-        sequence_reset.header_mut().set_tag_value(tags::MsgSeqNum, begin_seq_no as i64);
+        sequence_reset
+            .header_mut()
+            .set_tag_value(tags::MsgSeqNum, begin_seq_no as i64);
         sequence_reset.set_tag_value(tags::NewSeqNo, new_seq_no as i64);
         sequence_reset.set_tag_value(tags::GapFillFlag, true);
-        if /* resend_request.is_some() && */ self.enable_last_msg_seq_num_processed {
-            let seq_num: Option<Result<i64, _>> = received_message.get_field(tags::MsgSeqNum).map(|v| v.as_value());
+        if
+        /* resend_request.is_some() && */
+        self.enable_last_msg_seq_num_processed {
+            let seq_num: Option<Result<i64, _>> = received_message
+                .get_field(tags::MsgSeqNum)
+                .map(|v| v.as_value());
             if let Some(result) = seq_num {
-                sequence_reset.header_mut().set_tag_value(tags::LastMsgSeqNumProcessed, result?);
+                sequence_reset
+                    .header_mut()
+                    .set_tag_value(tags::LastMsgSeqNumProcessed, result?);
             } else {
-                self.log().on_event(format!("Error: Received message without MsgSeqNum: {}", received_message).as_str());
+                self.log().on_event(
+                    format!(
+                        "Error: Received message without MsgSeqNum: {}",
+                        received_message
+                    )
+                    .as_str(),
+                );
             }
         }
 
         self.send_raw(sequence_reset, begin_seq_no)?;
-        self.log().on_event(format!("Sent SequenceReset TO: {}", begin_seq_no).as_str());
+        self.log()
+            .on_event(format!("Sent SequenceReset TO: {}", begin_seq_no).as_str());
         Ok(())
     }
 
@@ -1567,27 +1755,37 @@ where App: Application + Clone + 'static,
         match self.application.to_app(&mut msg, &self.session_id) {
             Err(ApplicationError::DoNotSend) => None,
             Ok(()) => Some(msg),
-            _ => Some(msg)
+            _ => Some(msg),
         }
     }
 
-    fn generate_business_message_reject(&mut self, message: Message, business_reject_reason: BusinessRejectReason) -> Result<(), SessionHandleMessageError> {
+    fn generate_business_message_reject(
+        &mut self,
+        message: Message,
+        business_reject_reason: BusinessRejectReason,
+    ) -> Result<(), SessionHandleMessageError> {
         let msg_type = message.header().get_string(tags::MsgType)?;
         let msg_seq_num = message.header().get_int(tags::MsgSeqNum)?;
         let reason = business_reject_reason.reason();
         let mut reject = if self.session_id.begin_string() >= BeginString::FIX42 {
-            let mut reject = self.msg_factory.create(self.session_id.begin_string(), MsgType::BUSINESS_MESSAGE_REJECT)?;
+            let mut reject = self.msg_factory.create(
+                self.session_id.begin_string(),
+                MsgType::BUSINESS_MESSAGE_REJECT,
+            )?;
             reject.set_tag_value(tags::RefMsgType, msg_type);
-            reject.set_tag_value(tags::BusinessRejectReason, format!("{}", business_reject_reason.index()));
+            reject.set_tag_value(
+                tags::BusinessRejectReason,
+                format!("{}", business_reject_reason.index()),
+            );
             reject
         } else {
-            let reject = self.msg_factory.create(self.session_id.begin_string(), MsgType::REJECT)?;
             // TODO magic?
-        //     reject = msgFactory_.Create(this.SessionID.BeginString, MsgType.REJECT);
-        //     char[] reasonArray = reason.ToLower().ToCharArray();
-        //     reasonArray[0] = char.ToUpper(reasonArray[0]);
-        //     reason = new string(reasonArray);
-            reject
+            //     reject = msgFactory_.Create(this.SessionID.BeginString, MsgType.REJECT);
+            //     char[] reasonArray = reason.ToLower().ToCharArray();
+            //     reasonArray[0] = char.ToUpper(reasonArray[0]);
+            //     reason = new string(reasonArray);
+            self.msg_factory
+                .create(self.session_id.begin_string(), MsgType::REJECT)?
         };
 
         self.initialize_header(&mut reject, None);
@@ -1595,7 +1793,8 @@ where App: Application + Clone + 'static,
         self.state.incr_next_target_msg_seq_num();
 
         reject.set_tag_value(tags::Text, reason);
-        self.log.on_event("Reject sent for Message: {msg_seq_num} Reason:{reason}");
+        self.log
+            .on_event("Reject sent for Message: {msg_seq_num} Reason:{reason}");
         self.send_raw(reject, 0)?;
         Ok(())
     }
@@ -1622,17 +1821,29 @@ pub(crate) enum InternalSessionError {
 
 #[derive(Debug, Clone)]
 pub(crate) enum SessionHandleMessageError {
-    UnsupportedVersion { message: Message, expected: String, actual: String },
-    UnknownMessageType { message: Message, msg_type: String },
+    UnsupportedVersion {
+        message: Message,
+        expected: String,
+        actual: String,
+    },
+    UnknownMessageType {
+        message: Message,
+        msg_type: String,
+    },
     // MessageFactory::create
     InvalidMessageError(MessageFactoryError),
     // Message::from_string
-    MessageParseError { message: Vec<u8>, parse_error: MessageParseError },
+    MessageParseError {
+        message: Vec<u8>,
+        parse_error: MessageParseError,
+    },
     // DataDictionaryError
     TagException(Message, TagException),
     //TODO?
     String(String),
-    LogonReject { reason: Option<String> },
+    LogonReject {
+        reason: Option<String>,
+    },
     // Handle same way?
     FieldMapError(FieldMapError),
     ConversionError(ConversionError),
@@ -1660,7 +1871,7 @@ impl From<String> for SessionHandleMessageError {
 }
 impl From<LogonReject> for SessionHandleMessageError {
     fn from(e: LogonReject) -> Self {
-        SessionHandleMessageError::LogonReject { reason: e.reason}
+        SessionHandleMessageError::LogonReject { reason: e.reason }
     }
 }
 impl From<FieldMapError> for SessionHandleMessageError {
@@ -1676,7 +1887,9 @@ impl From<dfx_base::fields::ConversionError> for SessionHandleMessageError {
 impl From<FromAppError> for SessionHandleMessageError {
     fn from(from_app_error: FromAppError) -> Self {
         match from_app_error {
-            FromAppError::UnknownMessageType { message, msg_type } => SessionHandleMessageError::UnknownMessageType { message, msg_type },
+            FromAppError::UnknownMessageType { message, msg_type } => {
+                SessionHandleMessageError::UnknownMessageType { message, msg_type }
+            }
             FromAppError::FieldMapError(fm) => SessionHandleMessageError::FieldMapError(fm),
         }
     }

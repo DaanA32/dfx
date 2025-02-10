@@ -18,7 +18,7 @@ pub enum FromAppError {
 
 #[derive(Debug, Clone)]
 pub struct LogonReject {
-    pub reason: Option<String>
+    pub reason: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub struct DoNotAccept;
@@ -54,11 +54,7 @@ pub trait Application: Send {
         message: &mut Message,
         session_id: &SessionId,
     ) -> Result<(), ApplicationError>;
-    fn from_app(
-        &mut self,
-        message: &Message,
-        session_id: &SessionId,
-    ) -> Result<(), FromAppError>;
+    fn from_app(&mut self, message: &Message, session_id: &SessionId) -> Result<(), FromAppError>;
 }
 
 pub trait ApplicationExt: Application {
@@ -74,30 +70,21 @@ pub mod tests {
     use dfx_base::session_id::SessionId;
 
     use super::{Application, ApplicationExt, DoNotAccept, LogonReject};
+
     use dfx_base::message::Message;
-    use crate::session;
 
     pub struct TestApplication;
 
     impl Application for TestApplication {
-        fn on_create(
-            &mut self,
-            _session_id: &SessionId,
-        ) -> Result<(), DoNotAccept> {
+        fn on_create(&mut self, _session_id: &SessionId) -> Result<(), DoNotAccept> {
             Ok(())
         }
 
-        fn on_logon(
-            &mut self,
-            _session_id: &SessionId,
-        ) -> Result<(), LogonReject> {
+        fn on_logon(&mut self, _session_id: &SessionId) -> Result<(), LogonReject> {
             Ok(())
         }
 
-        fn on_logout(
-            &mut self,
-            _session_id: &SessionId,
-        ) -> Result<(), super::ApplicationError> {
+        fn on_logout(&mut self, _session_id: &SessionId) -> Result<(), super::ApplicationError> {
             Ok(())
         }
 

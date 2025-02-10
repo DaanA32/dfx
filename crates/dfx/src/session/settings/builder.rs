@@ -1,14 +1,15 @@
-use std::{net::ToSocketAddrs, fs::File, io::Read};
+use std::{fs::File, io::Read, net::ToSocketAddrs};
 
 use chrono::NaiveTime;
 
-use dfx_base::session_id::SessionId;
-use dfx_base::fields::converters::datetime::DateTimeFormat;
-use native_tls::{Protocol, TlsConnector, Identity, Certificate, TlsAcceptor};
 use crate::session::SessionSchedule;
+use dfx_base::fields::converters::datetime::DateTimeFormat;
+use dfx_base::session_id::SessionId;
+use native_tls::{Certificate, Identity, Protocol, TlsAcceptor, TlsConnector};
 
 use super::{
-    ConnectionType, SessionSetting, SessionSettingsError, SettingOption, SettingsConnection, SocketOptions, LoggingOptions, Persistence, ValidationOptions, SslOptions,
+    ConnectionType, LoggingOptions, Persistence, SessionSetting, SessionSettingsError,
+    SettingOption, SettingsConnection, SocketOptions, SslOptions, ValidationOptions,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -210,9 +211,15 @@ impl DynamicSessionSettingBuilder {
             SettingOption::SSLMinProtocol => self.ssl_min_protocol = Some(value.into()),
             SettingOption::SSLMaxProtocol => self.ssl_max_protocol = Some(value.into()),
             SettingOption::SSLUseSNI => self.ssl_use_sni = Some(value.into()),
-            SettingOption::SSLAcceptInvalidCerts => self.ssl_accept_invalid_certs = Some(value.into()),
-            SettingOption::SSLAcceptInvalidHostnames => self.ssl_accept_invalid_hostnames = Some(value.into()),
-            SettingOption::SSLDisableBuiltInRoots => self.ssl_disable_built_in_roots = Some(value.into()),
+            SettingOption::SSLAcceptInvalidCerts => {
+                self.ssl_accept_invalid_certs = Some(value.into())
+            }
+            SettingOption::SSLAcceptInvalidHostnames => {
+                self.ssl_accept_invalid_hostnames = Some(value.into())
+            }
+            SettingOption::SSLDisableBuiltInRoots => {
+                self.ssl_disable_built_in_roots = Some(value.into())
+            }
             SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
             SettingOption::SSLCertificatePassword => {
                 self.ssl_certificate_password = Some(value.into())
@@ -229,7 +236,7 @@ impl DynamicSessionSettingBuilder {
         line_num: usize,
         line: &str,
     ) -> Result<(), SessionSettingsError> {
-        if line.len() == 0 {
+        if line.is_empty() {
             return Ok(());
         }
         let setting: Vec<&str> = line.split('=').collect();
@@ -391,9 +398,15 @@ impl DynamicSessionSettingBuilder {
         self.ssl_min_protocol = self.ssl_min_protocol.or(other.ssl_min_protocol.clone());
         self.ssl_max_protocol = self.ssl_max_protocol.or(other.ssl_max_protocol.clone());
         self.ssl_use_sni = self.ssl_use_sni.or(other.ssl_use_sni.clone());
-        self.ssl_accept_invalid_certs = self.ssl_accept_invalid_certs.or(other.ssl_accept_invalid_certs.clone());
-        self.ssl_accept_invalid_hostnames = self.ssl_accept_invalid_hostnames.or(other.ssl_accept_invalid_hostnames.clone());
-        self.ssl_disable_built_in_roots = self.ssl_disable_built_in_roots.or(other.ssl_disable_built_in_roots.clone());
+        self.ssl_accept_invalid_certs = self
+            .ssl_accept_invalid_certs
+            .or(other.ssl_accept_invalid_certs.clone());
+        self.ssl_accept_invalid_hostnames = self
+            .ssl_accept_invalid_hostnames
+            .or(other.ssl_accept_invalid_hostnames.clone());
+        self.ssl_disable_built_in_roots = self
+            .ssl_disable_built_in_roots
+            .or(other.ssl_disable_built_in_roots.clone());
         self.ssl_certificate = self.ssl_certificate.or(other.ssl_certificate.clone());
         self.ssl_certificate_password = self
             .ssl_certificate_password
@@ -417,20 +430,20 @@ impl DynamicSessionSettingBuilder {
                 .push("ConnectionType must be set to either 'acceptor' or 'initiator'.".into()),
         }
 
-        if let None = self.begin_string {
+        if self.begin_string.is_none() {
             //TODO check valid begin strings
             errors.push("BeginString must be set.".into());
         }
 
-        if let None = self.sender_comp_id {
+        if self.sender_comp_id.is_none() {
             errors.push("SenderCompID must be set.".into());
         }
 
-        if let None = self.target_comp_id {
+        if self.target_comp_id.is_none() {
             errors.push("TargetCompID must be set.".into());
         }
 
-        if errors.len() > 0 {
+        if !errors.is_empty() {
             Err(SessionSettingsError::ValidationErrors(errors))
         } else {
             Ok(Validated(self))
@@ -439,7 +452,6 @@ impl DynamicSessionSettingBuilder {
 
     // TODO check if these are the correct default values
     fn build(self) -> Result<SessionSetting, SessionSettingsError> {
-
         let mut builder = SessionSetting::builder();
 
         let session_id = SessionId::new(
@@ -459,13 +471,20 @@ impl DynamicSessionSettingBuilder {
                 session_qualifier: self.session_qualifier,
                 accept_addr: format!(
                     "{}:{}",
-                    self.socket_accept_host.unwrap_or_else(|| "127.0.0.1".to_string()),
+                    self.socket_accept_host
+                        .unwrap_or_else(|| "127.0.0.1".to_string()),
                     self.socket_accept_port.unwrap()
                 )
                 .parse()
                 .unwrap(),
-                logon_timeout: self.logon_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(10),
-                logout_timeout: self.logout_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(2),
+                logon_timeout: self
+                    .logon_timeout
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(10),
+                logout_timeout: self
+                    .logout_timeout
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(2),
             },
             "initiator" => SettingsConnection::Initiator {
                 connect_addr: format!(
@@ -475,11 +494,21 @@ impl DynamicSessionSettingBuilder {
                 )
                 .to_socket_addrs()
                 .unwrap()
-                .next().unwrap(),
-                reconnect_interval: self.reconnect_interval.map(|v| v.parse().ok()).flatten().unwrap_or(30),
-                heart_bt_int: self.heart_bt_int.map(|v| v.parse().ok()).flatten().unwrap_or(30),
-                logon_timeout: self.logon_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(10),
-                logout_timeout: self.logout_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(2),
+                .next()
+                .unwrap(),
+                reconnect_interval: self
+                    .reconnect_interval
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(30),
+                heart_bt_int: self.heart_bt_int.and_then(|v| v.parse().ok()).unwrap_or(30),
+                logon_timeout: self
+                    .logon_timeout
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(10),
+                logout_timeout: self
+                    .logout_timeout
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(2),
             },
             _ => unreachable!(),
         };
@@ -488,10 +517,26 @@ impl DynamicSessionSettingBuilder {
 
         let mut socket_options = SocketOptions::builder();
         socket_options.no_delay(self.socket_nodelay.map(|v| v == "Y").unwrap_or(true));
-        socket_options.receive_buffer_size(self.socket_receive_buffer_size.map(|v| v.parse().ok()).flatten().unwrap_or(8192));
-        socket_options.send_buffer_size(self.socket_send_buffer_size.map(|v| v.parse().ok()).flatten().unwrap_or(8192));
-        socket_options.receive_timeout(self.socket_receive_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(0));
-        socket_options.send_timeout(self.socket_send_timeout.map(|v| v.parse().ok()).flatten().unwrap_or(0));
+        socket_options.receive_buffer_size(
+            self.socket_receive_buffer_size
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(8192),
+        );
+        socket_options.send_buffer_size(
+            self.socket_send_buffer_size
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(8192),
+        );
+        socket_options.receive_timeout(
+            self.socket_receive_timeout
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
+        );
+        socket_options.send_timeout(
+            self.socket_send_timeout
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
+        );
 
         builder.socket_options(socket_options.build().unwrap());
 
@@ -515,30 +560,56 @@ impl DynamicSessionSettingBuilder {
         builder.persistence(persistence);
         builder.default_appl_ver_id(self.default_appl_ver_id);
 
-        let any_set = self.start_day.as_ref().or(self.end_day.as_ref()).or(self.end_time.as_ref()).or(self.start_time.as_ref()).is_some();
+        let any_set = self
+            .start_day
+            .as_ref()
+            .or(self.end_day.as_ref())
+            .or(self.end_time.as_ref())
+            .or(self.start_time.as_ref())
+            .is_some();
         let schedule = if self.non_stop_session.map(|v| v == "Y").unwrap_or(true) && !any_set {
             SessionSchedule::NonStop
         // } else if self.even_minutes_session.map(|v| v == "Y").unwrap_or(true) && !any_set {
         //     #[cfg(test)]
         //     SessionSchedule::EvenMinutes
         } else {
-            match (self.start_day, self.end_day, self.start_time, self.end_time, self.time_zone) {
+            match (
+                self.start_day,
+                self.end_day,
+                self.start_time,
+                self.end_time,
+                self.time_zone,
+            ) {
                 (Some(start_day), Some(end_day), Some(start_time), Some(end_time), timezone) => {
                     let start_day = start_day.parse().unwrap();
                     let end_day = end_day.parse().unwrap();
                     let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
                     let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
-                    let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
-                    let timezone = timezone.map(|tz| tz.parse().ok()).flatten();
-                    SessionSchedule::Weekly { start_day, end_day, start_time, end_time, timezone, use_localtime }
-                },
+                    let use_localtime: bool =
+                        self.use_local_time.map(|v| v == "Y").unwrap_or(false);
+                    let timezone = timezone.and_then(|tz| tz.parse().ok());
+                    SessionSchedule::Weekly {
+                        start_day,
+                        end_day,
+                        start_time,
+                        end_time,
+                        timezone,
+                        use_localtime,
+                    }
+                }
                 (None, None, Some(start_time), Some(end_time), timezone) => {
                     let start_time = NaiveTime::parse_from_str(&start_time, "%H:%M:%S").unwrap();
                     let end_time = NaiveTime::parse_from_str(&end_time, "%H:%M:%S").unwrap();
-                    let use_localtime: bool = self.use_local_time.map(|v| v == "Y").unwrap_or(false);
-                    let timezone = timezone.map(|tz| tz.parse().ok()).flatten();
-                    SessionSchedule::Daily { start_time, end_time, timezone, use_localtime }
-                },
+                    let use_localtime: bool =
+                        self.use_local_time.map(|v| v == "Y").unwrap_or(false);
+                    let timezone = timezone.and_then(|tz| tz.parse().ok());
+                    SessionSchedule::Daily {
+                        start_time,
+                        end_time,
+                        timezone,
+                        use_localtime,
+                    }
+                }
                 (None, None, None, None, None) => SessionSchedule::NonStop,
                 _ => unreachable!(),
             }
@@ -546,34 +617,91 @@ impl DynamicSessionSettingBuilder {
         builder.schedule(schedule);
 
         let validation_options = ValidationOptions::builder()
-            .milliseconds_in_time_stamp(self.milliseconds_in_time_stamp.map(|v| v == "Y").unwrap_or(false))
+            .milliseconds_in_time_stamp(
+                self.milliseconds_in_time_stamp
+                    .map(|v| v == "Y")
+                    .unwrap_or(false),
+            )
             .refresh_on_logon(self.refresh_on_logon.map(|v| v == "Y").unwrap_or(false))
             .reset_on_logon(self.reset_on_logon.map(|v| v == "Y").unwrap_or(false))
             .reset_on_logout(self.reset_on_logout.map(|v| v == "Y").unwrap_or(false))
             .reset_on_disconnect(self.reset_on_disconnect.map(|v| v == "Y").unwrap_or(false))
-            .send_redundant_resend_requests(self.send_redundant_resend_requests.map(|v| v == "Y").unwrap_or(false))
-            .resend_session_level_rejects(self.resend_session_level_rejects.map(|v| v == "Y").unwrap_or(false))
-            .time_stamp_precision(self.time_stamp_precision.map(|v| v.try_into().ok()).flatten().unwrap_or(DateTimeFormat::Seconds))
-            .enable_last_msg_seq_num_processed(self.enable_last_msg_seq_num_processed.map(|v| v == "Y").unwrap_or(false))
-            .max_messages_in_resend_request(self.max_messages_in_resend_request.map(|v| v.parse().ok()).flatten().unwrap_or(0))
-            .send_logout_before_disconnect_from_timeout(self.send_logout_before_disconnect_from_timeout.map(|v| v == "Y").unwrap_or(false))
-            .ignore_poss_dup_resend_requests(self.ignore_poss_dup_resend_requests.map(|v| v == "Y").unwrap_or(false))
-            .requires_orig_sending_time(self.requires_orig_sending_time.map(|v| v == "Y").unwrap_or(true))
+            .send_redundant_resend_requests(
+                self.send_redundant_resend_requests
+                    .map(|v| v == "Y")
+                    .unwrap_or(false),
+            )
+            .resend_session_level_rejects(
+                self.resend_session_level_rejects
+                    .map(|v| v == "Y")
+                    .unwrap_or(false),
+            )
+            .time_stamp_precision(
+                self.time_stamp_precision
+                    .and_then(|v| v.try_into().ok())
+                    .unwrap_or(DateTimeFormat::Seconds),
+            )
+            .enable_last_msg_seq_num_processed(
+                self.enable_last_msg_seq_num_processed
+                    .map(|v| v == "Y")
+                    .unwrap_or(false),
+            )
+            .max_messages_in_resend_request(
+                self.max_messages_in_resend_request
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0),
+            )
+            .send_logout_before_disconnect_from_timeout(
+                self.send_logout_before_disconnect_from_timeout
+                    .map(|v| v == "Y")
+                    .unwrap_or(false),
+            )
+            .ignore_poss_dup_resend_requests(
+                self.ignore_poss_dup_resend_requests
+                    .map(|v| v == "Y")
+                    .unwrap_or(false),
+            )
+            .requires_orig_sending_time(
+                self.requires_orig_sending_time
+                    .map(|v| v == "Y")
+                    .unwrap_or(true),
+            )
             .use_data_dictionary(self.use_data_dictionary.map(|v| v == "Y").unwrap_or(false))
             .data_dictionary(self.data_dictionary)
             .transport_data_dictionary(self.transport_data_dictionary)
             .app_data_dictionary(self.app_data_dictionary)
-            .validate_fields_out_of_order(self.validate_fields_out_of_order.map(|v| v == "Y").unwrap_or(true))
-            .validate_fields_have_values(self.validate_fields_have_values.map(|v| v == "Y").unwrap_or(true))
-            .validate_user_defined_fields(self.validate_user_defined_fields.map(|v| v == "Y").unwrap_or(true))
-            .validate_length_and_checksum(self.validate_length_and_checksum.map(|v| v == "Y").unwrap_or(true))
-            .allow_unknown_msg_fields(self.allow_unknown_msg_fields.map(|v| v == "Y").unwrap_or(false))
+            .validate_fields_out_of_order(
+                self.validate_fields_out_of_order
+                    .map(|v| v == "Y")
+                    .unwrap_or(true),
+            )
+            .validate_fields_have_values(
+                self.validate_fields_have_values
+                    .map(|v| v == "Y")
+                    .unwrap_or(true),
+            )
+            .validate_user_defined_fields(
+                self.validate_user_defined_fields
+                    .map(|v| v == "Y")
+                    .unwrap_or(true),
+            )
+            .validate_length_and_checksum(
+                self.validate_length_and_checksum
+                    .map(|v| v == "Y")
+                    .unwrap_or(true),
+            )
+            .allow_unknown_msg_fields(
+                self.allow_unknown_msg_fields
+                    .map(|v| v == "Y")
+                    .unwrap_or(false),
+            )
             .check_latency(self.check_latency.map(|v| v == "Y").unwrap_or(true))
-            .max_latency(self.max_latency.map(|v| v.parse().ok()).flatten().unwrap_or(120))
-            .build().unwrap();
+            .max_latency(self.max_latency.and_then(|v| v.parse().ok()).unwrap_or(120))
+            .build()
+            .unwrap();
         builder.validation_options(validation_options);
 
-        let ssl_options = match (self.ssl_enable.as_ref().map(|s| s.as_str()), is_initiator) {
+        let ssl_options = match (self.ssl_enable.as_deref(), is_initiator) {
             (Some(_x @ "Y"), true) => {
                 let mut builder = TlsConnector::builder();
                 if let Some(certificate_file) = self.ssl_certificate {
@@ -581,43 +709,69 @@ impl DynamicSessionSettingBuilder {
                     let mut buf = vec![];
                     file.read_to_end(&mut buf).unwrap();
                     let certificate = Certificate::from_pem(&buf).unwrap();
-                    let identity = Identity::from_pkcs12(&certificate.to_der().unwrap(), self.ssl_certificate_password.as_ref().unwrap()).unwrap();
+                    let identity = Identity::from_pkcs12(
+                        &certificate.to_der().unwrap(),
+                        self.ssl_certificate_password.as_ref().unwrap(),
+                    )
+                    .unwrap();
                     builder.identity(identity);
                 }
-                builder.min_protocol_version(self.ssl_min_protocol.as_ref().map(|r| protocol(r)).flatten());
-                builder.max_protocol_version(self.ssl_max_protocol.as_ref().map(|r| protocol(r)).flatten());
+                builder
+                    .min_protocol_version(self.ssl_min_protocol.as_ref().and_then(|r| protocol(r)));
+                builder
+                    .max_protocol_version(self.ssl_max_protocol.as_ref().and_then(|r| protocol(r)));
                 builder.use_sni(self.ssl_use_sni.as_ref().map(|v| v == "Y").unwrap_or(true));
-                builder.danger_accept_invalid_certs(self.ssl_accept_invalid_certs.as_ref().map(|v| v == "Y").unwrap_or(false));
-                builder.danger_accept_invalid_hostnames(self.ssl_accept_invalid_hostnames.as_ref().map(|v| v == "Y").unwrap_or(false));
-                builder.disable_built_in_roots(self.ssl_disable_built_in_roots.as_ref().map(|v| v == "Y").unwrap_or(false));
+                builder.danger_accept_invalid_certs(
+                    self.ssl_accept_invalid_certs
+                        .as_ref()
+                        .map(|v| v == "Y")
+                        .unwrap_or(false),
+                );
+                builder.danger_accept_invalid_hostnames(
+                    self.ssl_accept_invalid_hostnames
+                        .as_ref()
+                        .map(|v| v == "Y")
+                        .unwrap_or(false),
+                );
+                builder.disable_built_in_roots(
+                    self.ssl_disable_built_in_roots
+                        .as_ref()
+                        .map(|v| v == "Y")
+                        .unwrap_or(false),
+                );
 
                 // root_certificates: vec![],
                 // #[cfg(feature = "alpn")]
                 // alpn: vec![],
 
                 let host = self.socket_connect_host.as_ref().cloned();
-                let domain = self.ssl_server_name.as_ref().cloned()
+                let domain = self
+                    .ssl_server_name
+                    .as_ref()
+                    .cloned()
                     .or(host)
                     .unwrap_or_else(|| String::from(""));
-                let initiator = builder
-                    .build()
-                    .unwrap();
+                let initiator = builder.build().unwrap();
                 Some(SslOptions::Initiator { initiator, domain })
-            },
+            }
             (Some(_x @ "Y"), false) => {
                 let mut file = File::open(self.ssl_certificate.unwrap()).unwrap();
                 let mut buf = vec![];
                 file.read_to_end(&mut buf).unwrap();
                 let certificate = Certificate::from_pem(&buf).unwrap();
-                let identity = Identity::from_pkcs12(&certificate.to_der().unwrap(), self.ssl_certificate_password.as_ref().unwrap()).unwrap();
+                let identity = Identity::from_pkcs12(
+                    &certificate.to_der().unwrap(),
+                    self.ssl_certificate_password.as_ref().unwrap(),
+                )
+                .unwrap();
                 let mut builder = TlsAcceptor::builder(identity);
-                builder.min_protocol_version(self.ssl_min_protocol.as_ref().map(|r| protocol(r)).flatten());
-                builder.max_protocol_version(self.ssl_max_protocol.as_ref().map(|r| protocol(r)).flatten());
-                let acceptor = builder
-                    .build()
-                    .unwrap();
+                builder
+                    .min_protocol_version(self.ssl_min_protocol.as_ref().and_then(|r| protocol(r)));
+                builder
+                    .max_protocol_version(self.ssl_max_protocol.as_ref().and_then(|r| protocol(r)));
+                let acceptor = builder.build().unwrap();
                 Some(SslOptions::Acceptor { acceptor })
-            },
+            }
             _ => None,
         };
         builder.ssl_options(ssl_options);
@@ -631,6 +785,6 @@ fn protocol(protocol: &str) -> Option<Protocol> {
         "TLSv1.1" => Some(Protocol::Tlsv11),
         "TLSv1.2" => Some(Protocol::Tlsv12),
         "SSLv3" => Some(Protocol::Sslv3),
-        _ => None
+        _ => None,
     }
 }

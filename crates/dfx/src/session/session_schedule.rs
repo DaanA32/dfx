@@ -1,5 +1,5 @@
 use chrono::naive::Days;
-use chrono::{DateTime, Datelike, NaiveDateTime, NaiveTime, Utc, Weekday, Timelike, Duration};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, NaiveTime, Timelike, Utc, Weekday};
 use chrono_tz::Tz;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -24,7 +24,6 @@ pub(crate) enum SessionSchedule {
 }
 
 impl SessionSchedule {
-
     pub(crate) fn is_new_session(&self, old_time: DateTime<Utc>, test_time: DateTime<Utc>) -> bool {
         match self {
             SessionSchedule::NonStop => false,
@@ -33,7 +32,7 @@ impl SessionSchedule {
                     let next_end = self.next_end(old_time);
                     return old_time <= next_end && next_end < test_time;
                 }
-                return false;
+                false
             }
         }
     }
@@ -45,15 +44,15 @@ impl SessionSchedule {
             SessionSchedule::NonStop => unreachable!(),
             // #[cfg(test)]
             SessionSchedule::EvenMinutes => {
-                let mut end = old_time.clone();
+                let mut end = old_time;
                 if end.minute() % 2 == 1 {
-                    end = end + Duration::minutes(1);
+                    end += Duration::minutes(1);
                 }
-                end = end + Duration::minutes(2);
+                end += Duration::minutes(2);
                 end
-            },
+            }
             SessionSchedule::Weekly { end_day, .. } => {
-                let mut end = old_time.clone();
+                let mut end = old_time;
                 let d = old_time;
                 while &end.weekday() != end_day {
                     end = end + Days::new(1);
@@ -65,7 +64,7 @@ impl SessionSchedule {
                 end
             }
             SessionSchedule::Daily { .. } => {
-                let mut end = old_time.clone();
+                let mut end = old_time;
                 let d = old_time;
                 if d > end {
                     // d is later than end

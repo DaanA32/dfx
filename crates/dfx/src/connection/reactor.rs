@@ -4,23 +4,31 @@ use std::{
     time::Duration,
 };
 
-use dfx_base::message::{Message, MessageParseError};
-use dfx_base::session_id::SessionId;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
+use dfx_base::message::{Message, MessageParseError};
 use dfx_base::message_factory::MessageFactory;
+use dfx_base::session_id::SessionId;
 
 use crate::{
+    logging::{LogFactory, Logger},
+    message_store::MessageStoreFactory,
     parser::{Parser, ParserError},
     session::{
-        Application, ChannelResponder, ResponderEvent, ResponderResponse, ISession,
-        SessionSetting,
-    }, message_store::MessageStoreFactory, logging::{LogFactory, Logger},
+        Application, ChannelResponder, ISession, ResponderEvent, ResponderResponse, SessionSetting,
+    },
 };
 
 use super::{ConnectionError, Stream, StreamError};
 
 pub(crate) const BUF_SIZE: usize = 512;
-pub(crate) struct SocketReactor<App: Application, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory, Log> {
+pub(crate) struct SocketReactor<
+    App: Application,
+    StoreFactory,
+    DataDictionaryProvider,
+    LogFactory,
+    MessageFactory,
+    Log,
+> {
     session: Option<ISession<App, DataDictionaryProvider, Log, MessageFactory>>,
     parser: Parser,
     stream: Option<Stream>,
@@ -72,18 +80,22 @@ impl From<StreamError> for ReactorError {
 }
 
 impl<App, SF, DDP, LF, MF, Log> SocketReactor<App, SF, DDP, LF, MF, Log>
-where App: Application + Clone + 'static,
-      SF: MessageStoreFactory + Send + Clone + 'static,
-      DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory<Log = Log> + Send + Clone + 'static,
-      MF: MessageFactory + Send + Clone + 'static,
-      Log: Logger + Clone + 'static
+where
+    App: Application + Clone + 'static,
+    SF: MessageStoreFactory + Send + Clone + 'static,
+    DDP: DataDictionaryProvider + Send + Clone + 'static,
+    LF: LogFactory<Log = Log> + Send + Clone + 'static,
+    MF: MessageFactory + Send + Clone + 'static,
+    Log: Logger + Clone + 'static,
 {
     pub(crate) fn new(
         connection: Stream,
         settings: Vec<SessionSetting>,
         app: App,
-        store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF
+        store_factory: SF,
+        data_dictionary_provider: DDP,
+        log_factory: LF,
+        message_factory: MF,
     ) -> Self {
         let mut reactor = SocketReactor {
             session: None,
@@ -104,12 +116,15 @@ where App: Application + Clone + 'static,
             let session_setting = &reactor.settings[0];
             if session_setting.connection().is_initiator() {
                 eprintln!("Is initiator");
-                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
+                reactor.session = Some(
+                    reactor.create_session(session_setting.session_id().clone(), session_setting),
+                );
             }
-            if session_setting.connection().is_acceptor()
-            && !session_setting.is_dynamic(){
+            if session_setting.connection().is_acceptor() && !session_setting.is_dynamic() {
                 eprintln!("Is acceptor");
-                reactor.session = Some(reactor.create_session(session_setting.session_id().clone(), &session_setting));
+                reactor.session = Some(
+                    reactor.create_session(session_setting.session_id().clone(), session_setting),
+                );
             }
         }
         reactor.create_responder();
@@ -148,7 +163,7 @@ where App: Application + Clone + 'static,
     }
 
     fn event_loop(&mut self) -> Result<(), ReactorError> {
-        while let None = self.session {
+        while self.session.is_none() {
             self.read()?;
         }
 
@@ -188,7 +203,8 @@ where App: Application + Clone + 'static,
         self.session
             .as_mut()
             .unwrap()
-            .set_connected(&session_id).map_err(|_e| ReactorError::Disconnect)?;
+            .set_connected(&session_id)
+            .map_err(|_e| ReactorError::Disconnect)?;
         Ok(())
     }
 
@@ -221,10 +237,13 @@ where App: Application + Clone + 'static,
         if let Some(stream) = self.stream.as_mut() {
             match stream.read(&mut self.buffer) {
                 Ok(read) => Ok(read),
-                Err(ref e) if e.as_io_error().is_some() && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock => {
+                Err(ref e)
+                    if e.as_io_error().is_some()
+                        && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock =>
+                {
                     // println!("Would block {e:?}");
                     Ok(0)
-                },
+                }
                 Err(e) => Err(e.into()),
             }
         } else {
@@ -263,7 +282,11 @@ where App: Application + Clone + 'static,
         Ok(())
     }
 
-    fn create_session(&self, session_id: SessionId, settings: &SessionSetting) -> ISession<App, DDP, Log, MF> {
+    fn create_session(
+        &self,
+        session_id: SessionId,
+        settings: &SessionSetting,
+    ) -> ISession<App, DDP, Log, MF> {
         let log = self.log_factory.create(&session_id);
         ISession::from_settings(
             session_id,
@@ -272,7 +295,7 @@ where App: Application + Clone + 'static,
             self.data_dictionary_provider.clone(),
             log,
             self.message_factory.clone(),
-            settings.clone()
+            settings.clone(),
         )
     }
 

@@ -1,7 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    net::SocketAddr,
-};
+use std::{collections::BTreeMap, net::SocketAddr};
 
 mod builder;
 use builder::*;
@@ -198,91 +195,92 @@ impl TryFrom<&str> for SettingOption {
     }
 }
 
-impl Into<String> for SettingOption {
-    fn into(self) -> String {
-        let ref_str: &'static str = self.into();
+impl From<SettingOption> for String {
+    fn from(val: SettingOption) -> Self {
+        let ref_str: &'static str = val.into();
         ref_str.into()
     }
 }
 
-impl Into<&'static str> for SettingOption {
-
-    fn into(self) -> &'static str {
-        match self {
-            Self::IsDynamic => "IsDynamic",
-            Self::BeginString => "BeginString",
-            Self::SenderCompID => "SenderCompID",
-            Self::SenderSubID => "SenderSubID",
-            Self::SenderLocationID => "SenderLocationID",
-            Self::TargetCompID => "TargetCompID",
-            Self::TargetSubID => "TargetSubID",
-            Self::TargetLocationID => "TargetLocationID",
-            Self::SessionQualifier => "SessionQualifier",
-            Self::DefaultApplVerID => "DefaultApplVerID",
-            Self::ConnectionType => "ConnectionType",
-            Self::UseDataDictionary => "UseDataDictionary",
-            Self::NonStopSession => "NonStopSession",
-            Self::UseLocalTime => "UseLocalTime",
-            Self::TimeZone => "TimeZone",
-            Self::StartDay => "StartDay",
-            Self::EndDay => "EndDay",
-            Self::StartTime => "StartTime",
-            Self::EndTime => "EndTime",
-            Self::HeartBtInt => "HeartBtInt",
-            Self::SocketAcceptHost => "SocketAcceptHost",
-            Self::SocketAcceptPort => "SocketAcceptPort",
-            Self::SocketConnectHost => "SocketConnectHost",
-            Self::SocketConnectPort => "SocketConnectPort",
-            Self::ReconnectInterval => "ReconnectInterval",
-            Self::FileLogPath => "FileLogPath",
-            Self::DebugFileLogPath => "DebugFileLogPath",
-            Self::FileStorePath => "FileStorePath",
-            Self::RefreshOnLogon => "RefreshOnLogon",
-            Self::ResetOnLogon => "ResetOnLogon",
-            Self::ResetOnLogout => "ResetOnLogout",
-            Self::ResetOnDisconnect => "ResetOnDisconnect",
-            Self::ValidateFieldsOutOfOrder => "ValidateFieldsOutOfOrder",
-            Self::ValidateFieldsHaveValues => "ValidateFieldsHaveValues",
-            Self::ValidateUserDefinedFields => "ValidateUserDefinedFields",
-            Self::ValidateLengthAndChecksum => "ValidateLengthAndChecksum",
-            Self::AllowUnknownMsgFields => "AllowUnknownMsgFields",
-            Self::DataDictionary => "DataDictionary",
-            Self::TransportDataDictionary => "TransportDataDictionary",
-            Self::AppDataDictionary => "AppDataDictionary",
-            Self::PersistMessages => "PersistMessages",
-            Self::LogonTimeout => "LogonTimeout",
-            Self::LogoutTimeout => "LogoutTimeout",
-            Self::SendRedundantResendRequests => "SendRedundantResendRequests",
-            Self::ResendSessionLevelRejects => "ResendSessionLevelRejects",
-            Self::MillisecondsInTimeStamp => "MillisecondsInTimeStamp",
-            Self::TimeStampPrecision => "TimeStampPrecision",
-            Self::EnableLastMsgSeqNumProcessed => "EnableLastMsgSeqNumProcessed",
-            Self::MaxMessagesInResendRequest => "MaxMessagesInResendRequest",
-            Self::SendLogoutBeforeDisconnectFromTimeout => "SendLogoutBeforeDisconnectFromTimeout",
-            Self::SocketNodelay => "SocketNodelay",
-            Self::SocketSendBufferSize => "SocketSendBufferSize",
-            Self::SocketReceiveBufferSize => "SocketReceiveBufferSize",
-            Self::SocketSendTimeout => "SocketSendTimeout",
-            Self::SocketReceiveTimeout => "SocketReceiveTimeout",
-            Self::IgnorePossDupResendRequests => "IgnorePossDupResendRequests",
-            Self::RequiresOrigSendingTime => "RequiresOrigSendingTime",
-            Self::CheckLatency => "CheckLatency",
-            Self::MaxLatency => "MaxLatency",
+impl From<SettingOption> for &'static str {
+    fn from(val: SettingOption) -> Self {
+        match val {
+            SettingOption::IsDynamic => "IsDynamic",
+            SettingOption::BeginString => "BeginString",
+            SettingOption::SenderCompID => "SenderCompID",
+            SettingOption::SenderSubID => "SenderSubID",
+            SettingOption::SenderLocationID => "SenderLocationID",
+            SettingOption::TargetCompID => "TargetCompID",
+            SettingOption::TargetSubID => "TargetSubID",
+            SettingOption::TargetLocationID => "TargetLocationID",
+            SettingOption::SessionQualifier => "SessionQualifier",
+            SettingOption::DefaultApplVerID => "DefaultApplVerID",
+            SettingOption::ConnectionType => "ConnectionType",
+            SettingOption::UseDataDictionary => "UseDataDictionary",
+            SettingOption::NonStopSession => "NonStopSession",
+            SettingOption::UseLocalTime => "UseLocalTime",
+            SettingOption::TimeZone => "TimeZone",
+            SettingOption::StartDay => "StartDay",
+            SettingOption::EndDay => "EndDay",
+            SettingOption::StartTime => "StartTime",
+            SettingOption::EndTime => "EndTime",
+            SettingOption::HeartBtInt => "HeartBtInt",
+            SettingOption::SocketAcceptHost => "SocketAcceptHost",
+            SettingOption::SocketAcceptPort => "SocketAcceptPort",
+            SettingOption::SocketConnectHost => "SocketConnectHost",
+            SettingOption::SocketConnectPort => "SocketConnectPort",
+            SettingOption::ReconnectInterval => "ReconnectInterval",
+            SettingOption::FileLogPath => "FileLogPath",
+            SettingOption::DebugFileLogPath => "DebugFileLogPath",
+            SettingOption::FileStorePath => "FileStorePath",
+            SettingOption::RefreshOnLogon => "RefreshOnLogon",
+            SettingOption::ResetOnLogon => "ResetOnLogon",
+            SettingOption::ResetOnLogout => "ResetOnLogout",
+            SettingOption::ResetOnDisconnect => "ResetOnDisconnect",
+            SettingOption::ValidateFieldsOutOfOrder => "ValidateFieldsOutOfOrder",
+            SettingOption::ValidateFieldsHaveValues => "ValidateFieldsHaveValues",
+            SettingOption::ValidateUserDefinedFields => "ValidateUserDefinedFields",
+            SettingOption::ValidateLengthAndChecksum => "ValidateLengthAndChecksum",
+            SettingOption::AllowUnknownMsgFields => "AllowUnknownMsgFields",
+            SettingOption::DataDictionary => "DataDictionary",
+            SettingOption::TransportDataDictionary => "TransportDataDictionary",
+            SettingOption::AppDataDictionary => "AppDataDictionary",
+            SettingOption::PersistMessages => "PersistMessages",
+            SettingOption::LogonTimeout => "LogonTimeout",
+            SettingOption::LogoutTimeout => "LogoutTimeout",
+            SettingOption::SendRedundantResendRequests => "SendRedundantResendRequests",
+            SettingOption::ResendSessionLevelRejects => "ResendSessionLevelRejects",
+            SettingOption::MillisecondsInTimeStamp => "MillisecondsInTimeStamp",
+            SettingOption::TimeStampPrecision => "TimeStampPrecision",
+            SettingOption::EnableLastMsgSeqNumProcessed => "EnableLastMsgSeqNumProcessed",
+            SettingOption::MaxMessagesInResendRequest => "MaxMessagesInResendRequest",
+            SettingOption::SendLogoutBeforeDisconnectFromTimeout => {
+                "SendLogoutBeforeDisconnectFromTimeout"
+            }
+            SettingOption::SocketNodelay => "SocketNodelay",
+            SettingOption::SocketSendBufferSize => "SocketSendBufferSize",
+            SettingOption::SocketReceiveBufferSize => "SocketReceiveBufferSize",
+            SettingOption::SocketSendTimeout => "SocketSendTimeout",
+            SettingOption::SocketReceiveTimeout => "SocketReceiveTimeout",
+            SettingOption::IgnorePossDupResendRequests => "IgnorePossDupResendRequests",
+            SettingOption::RequiresOrigSendingTime => "RequiresOrigSendingTime",
+            SettingOption::CheckLatency => "CheckLatency",
+            SettingOption::MaxLatency => "MaxLatency",
             // TODO add feature ssl
-            Self::SSLEnable => "SSLEnable",
-            Self::SSLServerName => "SSLServerName",
-            Self::SSLMinProtocol => "SSLMinProtocol",
-            Self::SSLMaxProtocol => "SSLMaxProtocol",
-            Self::SSLUseSNI => "SSLUseSNI",
-            Self::SSLAcceptInvalidCerts => "SSLAcceptInvalidCerts",
-            Self::SSLAcceptInvalidHostnames => "SSLAcceptInvalidHostnames",
-            Self::SSLDisableBuiltInRoots => "SSLDisableBuiltInRoots",
+            SettingOption::SSLEnable => "SSLEnable",
+            SettingOption::SSLServerName => "SSLServerName",
+            SettingOption::SSLMinProtocol => "SSLMinProtocol",
+            SettingOption::SSLMaxProtocol => "SSLMaxProtocol",
+            SettingOption::SSLUseSNI => "SSLUseSNI",
+            SettingOption::SSLAcceptInvalidCerts => "SSLAcceptInvalidCerts",
+            SettingOption::SSLAcceptInvalidHostnames => "SSLAcceptInvalidHostnames",
+            SettingOption::SSLDisableBuiltInRoots => "SSLDisableBuiltInRoots",
             // Self::SSLValidateCertificates => "SSLValidateCertificates",
             // Self::SSLCheckCertificateRevocation => "SSLCheckCertificateRevocation",
-            Self::SSLCertificate => "SSLCertificate",
-            Self::SSLCertificatePassword => "SSLCertificatePassword",
-            Self::SSLRequireClientCertificate => "SSLRequireClientCertificate",
-            Self::SSLCACertificate => "SSLCACertificate",
+            SettingOption::SSLCertificate => "SSLCertificate",
+            SettingOption::SSLCertificatePassword => "SSLCertificatePassword",
+            SettingOption::SSLRequireClientCertificate => "SSLRequireClientCertificate",
+            SettingOption::SSLCACertificate => "SSLCACertificate",
         }
     }
 }
@@ -349,9 +347,7 @@ impl SessionSettings {
                     .trim_matches(delims)
                     .eq_ignore_ascii_case("session")
             {
-                if let Some(value) =
-                    last_setting.replace(DynamicSessionSettingBuilder::default())
-                {
+                if let Some(value) = last_setting.replace(DynamicSessionSettingBuilder::default()) {
                     if let Some(default) = default.as_ref() {
                         settings.push(value.merge(default).validate()?.build()?);
                     } else {
@@ -413,8 +409,8 @@ impl SessionSettings {
 
 #[cfg(test)]
 mod tests {
-    use dfx_base::session_id::SessionId;
     use crate::session::SessionSettingsError;
+    use dfx_base::session_id::SessionId;
 
     use super::SessionSettings;
 
@@ -440,7 +436,10 @@ TargetCompID=target1
 
         assert_eq!(settings.sessions[0].session_id().sender_comp_id(), "sender");
 
-        assert_eq!(settings.sessions[0].session_id().target_comp_id(), "target1");
+        assert_eq!(
+            settings.sessions[0].session_id().target_comp_id(),
+            "target1"
+        );
     }
 
     #[test]
@@ -473,8 +472,14 @@ TargetCompID=*
         assert_eq!(settings.sessions[0].session_id().sender_comp_id(), "sender");
         assert_eq!(settings.sessions[1].session_id().sender_comp_id(), "sender");
 
-        assert_eq!(settings.sessions[0].session_id().target_comp_id(), "target1");
-        assert_eq!(settings.sessions[1].session_id().target_comp_id(), "target2");
+        assert_eq!(
+            settings.sessions[0].session_id().target_comp_id(),
+            "target1"
+        );
+        assert_eq!(
+            settings.sessions[1].session_id().target_comp_id(),
+            "target2"
+        );
 
         let session_id = SessionId::new("", "sender", "", "", "target1", "", "");
         assert_eq!(

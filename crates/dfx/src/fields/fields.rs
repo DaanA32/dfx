@@ -18,10 +18,7 @@ impl MsgType {
     pub const BUSINESS_MESSAGE_REJECT: &'static str = "j";
 
     pub fn new(msg_type: &str) -> Self {
-        Self(Field::new(
-            Self::TAG,
-            msg_type
-        ))
+        Self(Field::new(Self::TAG, msg_type))
     }
 }
 
@@ -46,9 +43,9 @@ impl Deref for EncryptMethod {
         &self.0
     }
 }
-impl Into<Field> for EncryptMethod {
-    fn into(self) -> Field {
-        self.0
+impl From<EncryptMethod> for Field {
+    fn from(val: EncryptMethod) -> Self {
+        val.0
     }
 }
 
@@ -57,10 +54,7 @@ pub(crate) struct HeartBtInt(Field);
 impl HeartBtInt {
     pub const TAG: Tag = tags::HeartBtInt;
     pub fn new(val: u32) -> Self {
-        Self(Field::new(
-            HeartBtInt::TAG,
-            HeartBtInt::string_value(val),
-        ))
+        Self(Field::new(HeartBtInt::TAG, HeartBtInt::string_value(val)))
     }
     pub fn string_value(val: u32) -> String {
         format!("{}", val)
@@ -73,9 +67,9 @@ impl Deref for HeartBtInt {
         &self.0
     }
 }
-impl Into<Field> for HeartBtInt {
-    fn into(self) -> Field {
-        self.0
+impl From<HeartBtInt> for Field {
+    fn from(val: HeartBtInt) -> Self {
+        val.0
     }
 }
 
@@ -93,9 +87,9 @@ impl Deref for DefaultApplVerID {
         &self.0
     }
 }
-impl Into<Field> for DefaultApplVerID {
-    fn into(self) -> Field {
-        self.0
+impl From<DefaultApplVerID> for Field {
+    fn from(val: DefaultApplVerID) -> Self {
+        val.0
     }
 }
 
@@ -124,8 +118,8 @@ impl Deref for ResetSeqNumFlag {
         &self.0
     }
 }
-impl Into<Field> for ResetSeqNumFlag {
-    fn into(self) -> Field {
-        self.0
+impl From<ResetSeqNumFlag> for Field {
+    fn from(val: ResetSeqNumFlag) -> Self {
+        val.0
     }
 }

@@ -1,7 +1,19 @@
 use std::println;
 
-use base64::{engine::{general_purpose, self}, Engine, DecodeError, alphabet};
-use dfx::{session::{Application, SessionSettings}, connection::SocketInitiator, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message_factory::DefaultMessageFactory, tags::{self}};
+use base64::{
+    alphabet,
+    engine::{self, general_purpose},
+    DecodeError, Engine,
+};
+use dfx::{
+    connection::SocketInitiator,
+    data_dictionary_provider::DefaultDataDictionaryProvider,
+    logging::PrintlnLogFactory,
+    message_factory::DefaultMessageFactory,
+    message_store::DefaultStoreFactory,
+    session::{Application, SessionSettings},
+    tags::{self},
+};
 use hmac_sha256::HMAC;
 
 #[derive(Default, Clone, Debug)]
@@ -12,26 +24,36 @@ struct CoinbaseApp {
 
 impl CoinbaseApp {
     pub fn new(password: &str, secret: &str) -> Result<Self, DecodeError> {
-        let engine = engine::GeneralPurpose::new(
-             &alphabet::URL_SAFE,
-             general_purpose::PAD);
-        let secret = engine.decode(&secret.replace("+", "-").replace("/", "_"))?;
-        Ok(CoinbaseApp { password: password.into(), secret })
+        let engine = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::PAD);
+        let secret = engine.decode(secret.replace("+", "-").replace("/", "_"))?;
+        Ok(CoinbaseApp {
+            password: password.into(),
+            secret,
+        })
     }
 }
 
 impl Application for CoinbaseApp {
-    fn on_create(&mut self, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::session::DoNotAccept> {
+    fn on_create(
+        &mut self,
+        session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), dfx::session::DoNotAccept> {
         println!("Create {}", session_id);
         Ok(())
     }
 
-    fn on_logon(&mut self, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::session::LogonReject> {
+    fn on_logon(
+        &mut self,
+        session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), dfx::session::LogonReject> {
         println!("Logon {}", session_id);
         Ok(())
     }
 
-    fn on_logout(&mut self, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::session::ApplicationError> {
+    fn on_logout(
+        &mut self,
+        session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), dfx::session::ApplicationError> {
         println!("Logout {}", session_id);
         Ok(())
     }
@@ -50,14 +72,21 @@ impl Application for CoinbaseApp {
                 let msg_seq_num = message.header().get_string(tags::MsgSeqNum)?;
                 let sender_comp_id = _session_id.sender_comp_id();
                 let target_comp_id = _session_id.target_comp_id();
-                let prehash = prehash(&sending_time, &msg_type, &msg_seq_num, sender_comp_id, target_comp_id, &self.password);
+                let prehash = prehash(
+                    &sending_time,
+                    &msg_type,
+                    &msg_seq_num,
+                    sender_comp_id,
+                    target_comp_id,
+                    &self.password,
+                );
                 let signature = sign(prehash, &self.secret);
-                message.set_tag_value(tags::RawDataLength, signature.as_bytes().len());
+                message.set_tag_value(tags::RawDataLength, signature.len());
                 message.set_tag_value(tags::RawData, signature);
                 message.set_tag_value(8013, "S");
                 message.set_tag_value(9406, "N");
                 Ok(message)
-            },
+            }
             _ => Ok(message),
         }
     }
@@ -92,11 +121,21 @@ fn sign(prehash: String, key: &[u8]) -> String {
     let mut hmac = HMAC::new(key);
     hmac.update(prehash.as_bytes());
     let bytes = hmac.finalize();
-    general_purpose::STANDARD.encode(&bytes)
+    general_purpose::STANDARD.encode(bytes)
 }
 
-fn prehash(sending_time: &str, msg_type: &str, msg_seq_num: &str, sender_comp_id: &str, target_comp_id: &str, password: &str) -> String {
-    format!("{}\x01{}\x01{}\x01{}\x01{}\x01{}", sending_time, msg_type, msg_seq_num, sender_comp_id, target_comp_id, password)
+fn prehash(
+    sending_time: &str,
+    msg_type: &str,
+    msg_seq_num: &str,
+    sender_comp_id: &str,
+    target_comp_id: &str,
+    password: &str,
+) -> String {
+    format!(
+        "{}\x01{}\x01{}\x01{}\x01{}\x01{}",
+        sending_time, msg_type, msg_seq_num, sender_comp_id, target_comp_id, password
+    )
 }
 
 fn main() {

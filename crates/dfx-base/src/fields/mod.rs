@@ -12,5 +12,5 @@ pub mod converters;
 pub enum ConversionError {
     EncodingError,
     IntParseErr,
-    InvalidTag { tag: Tag, expected: Tag }
+    InvalidTag { tag: Tag, expected: Tag },
 }

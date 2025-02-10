@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use dfx_base::data_dictionary::{DataDictionary, DDField, DDMap, DDGroup};
+use dfx_base::data_dictionary::{DDField, DDGroup, DDMap, DataDictionary};
 use heck::{ToPascalCase, ToSnakeCase};
 use indoc::indoc;
 
@@ -15,12 +15,21 @@ fn field_type(field_type: &std::sync::Arc<str>) -> &'static str {
         "UTCTIMEONLY" => "Time",
         "BOOLEAN" => "bool",
         //String
-        "COUNTRY"             | "CURRENCY"            | "DATA"              |
-        "DAYOFMONTH"          | "EXCHANGE"            | "LANGUAGE"          |
-        "LOCALMKTDATE"        | "MONTHYEAR"           | "MULTIPLECHARVALUE" |
-        "MULTIPLESTRINGVALUE" | "MULTIPLEVALUESTRING" | "STRING"            |
-        "TZTIMEONLY"          | "XMLDATA"                                     => "&str",
-        v => panic!("unknown type {v}")
+        "COUNTRY"
+        | "CURRENCY"
+        | "DATA"
+        | "DAYOFMONTH"
+        | "EXCHANGE"
+        | "LANGUAGE"
+        | "LOCALMKTDATE"
+        | "MONTHYEAR"
+        | "MULTIPLECHARVALUE"
+        | "MULTIPLESTRINGVALUE"
+        | "MULTIPLEVALUESTRING"
+        | "STRING"
+        | "TZTIMEONLY"
+        | "XMLDATA" => "&str",
+        v => panic!("unknown type {v}"),
     }
 }
 
@@ -103,7 +112,7 @@ fn generate_field(field: &DDField) -> String {
 
 fn generate_message_field(field: &DDField) -> String {
     format!(
-    r#"
+        r#"
     pub fn {field_name}<'b: 'a>(&'b self) -> Option<{field_type}<'b>> {{
         self.inner.get_field({field_type}::tag()).map(|v| v.try_into().ok()).flatten()
     }}
@@ -118,7 +127,7 @@ fn generate_message_field(field: &DDField) -> String {
 
 fn generate_message_group(group: &DDGroup) -> String {
     format!(
-    r#"
+        r#"
     pub fn {field_name}(&self) -> Option<{field_type}> {{
         todo!()
     }}
@@ -133,32 +142,39 @@ fn generate_message_group(group: &DDGroup) -> String {
 
 fn generate_groups(message: &DDMap) -> String {
     let mut s = String::new();
-    for (_tag, group) in message.groups() {
-        s.push_str(format!(r#"
+    for group in message.groups().values() {
+        s.push_str(
+            format!(
+                r#"
 pub struct {group_name} {{
 
 }}
 "#,
-        group_name = group.name().to_pascal_case(),
-        ).as_str());
+                group_name = group.name().to_pascal_case(),
+            )
+            .as_str(),
+        );
     }
     s
 }
 
 fn generate_message_fields_groups(message: &DDMap) -> String {
     let mut s = String::new();
-    if message.fields().len() == 0 && message.groups().len() == 0  {
-        s.push_str(format!(r#"
-pub fn value(&self) -> &dfx_base::field_map::FieldMap {{
+    if message.fields().is_empty() && message.groups().is_empty() {
+        s.push_str(
+            r#"
+pub fn value(&self) -> &dfx_base::field_map::FieldMap {
     &self.inner
-}}
-"#,
-        ).as_str());
+}
+"#
+            .to_string()
+            .as_str(),
+        );
     } else {
-        for (_tag, field) in message.fields() {
+        for field in message.fields().values() {
             s.push_str(generate_message_field(field).as_str());
         }
-        for (_tag, group) in message.groups() {
+        for group in message.groups().values() {
             s.push_str(generate_message_group(group).as_str());
         }
     }
@@ -199,8 +215,12 @@ fn generate_message_factory(version: &str, data_dictionary: &DataDictionary) -> 
 
 fn generate_message_factory_create_group(_data_dictionary: &DataDictionary) -> String {
     let mut function = String::from("");
-    function.push_str(format!(r#"// TODO function
-        todo!("{{begin_string}} {{msg_type}} {{group_counter_tag}}")"#).as_str());
+    function.push_str(
+        r#"// TODO function
+        todo!("{begin_string} {msg_type} {group_counter_tag}")"#
+            .to_string()
+            .as_str(),
+    );
     // TODO
     function
 }
@@ -228,7 +248,11 @@ fn generate_message(message: &DDMap, version: &str) -> String {
             {groups}
             "#
         ),
-        import_fields = if message.fields().len() == 0 && message.groups().len() == 0  { format!("") } else { format!("use crate::{version}::fields::*;") },
+        import_fields = if message.fields().is_empty() && message.groups().is_empty() {
+            String::new()
+        } else {
+            format!("use crate::{version}::fields::*;")
+        },
         message_name = message.name().to_pascal_case(),
         functions = generate_message_fields_groups(message),
         groups = generate_groups(message)
@@ -239,7 +263,8 @@ fn generate_message(message: &DDMap, version: &str) -> String {
 fn codegen(filename: &str) {
     // let out_dir = std::env::var_os("out_dir").unwrap();
     let out_dir = "src/";
-    let data_dictionary = DataDictionary::from_file(filename).expect("Unable to read filename {filename}");
+    let data_dictionary =
+        DataDictionary::from_file(filename).expect("Unable to read filename {filename}");
 
     let version = data_dictionary.version().unwrap();
     let _version_mod_name = version.to_ascii_lowercase().replace(".", "");
@@ -291,7 +316,6 @@ fn codegen(filename: &str) {
     // }
     // std::fs::write(&module_path, module).unwrap();
 }
-
 
 fn main() {
     println!("cargo:rerun-if-changed=crate/dfx-spec/build.rs");

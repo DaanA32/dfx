@@ -2,7 +2,11 @@
 #![allow(unused)]
 use dfx::{
     connection::SocketInitiator,
-    session::{Session, SessionSettings}, message_store::DefaultStoreFactory, data_dictionary_provider::DefaultDataDictionaryProvider, logging::PrintlnLogFactory, message::DefaultMessageFactory,
+    data_dictionary_provider::DefaultDataDictionaryProvider,
+    logging::PrintlnLogFactory,
+    message::DefaultMessageFactory,
+    message_store::DefaultStoreFactory,
+    session::{Session, SessionSettings},
 };
 
 mod common;

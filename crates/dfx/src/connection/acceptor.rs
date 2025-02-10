@@ -1,3 +1,10 @@
+use crate::{
+    logging::{LogFactory, Logger},
+    message_store::MessageStoreFactory,
+    session::{Application, SessionSetting, SessionSettings},
+};
+use dfx_base::data_dictionary_provider::DataDictionaryProvider;
+use dfx_base::message_factory::MessageFactory;
 use std::{
     fmt::Display,
     net::{SocketAddr, TcpListener},
@@ -5,17 +12,16 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use dfx_base::data_dictionary_provider::DataDictionaryProvider;
-use dfx_base::message_factory::MessageFactory;
-use crate::{
-    session::{Application, SessionSetting, SessionSettings},
-    message_store::MessageStoreFactory,
-    logging::{LogFactory, Logger},
-};
 
 use super::{ConnectionError, SocketReactor, StreamFactory};
 
-pub(crate) struct SocketAcceptorThread<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory> {
+pub(crate) struct SocketAcceptorThread<
+    App,
+    StoreFactory,
+    DataDictionaryProvider,
+    LogFactory,
+    MessageFactory,
+> {
     app: App,
     store_factory: StoreFactory,
     data_dictionary_provider: DataDictionaryProvider,
@@ -65,14 +71,22 @@ pub struct SocketAcceptor<App, StoreFactory, DataDictionaryProvider, LogFactory,
 }
 
 impl<App, SF, DDP, LF, MF, Log> SocketAcceptor<App, SF, DDP, LF, MF>
-where App: Application + Sync + Clone + 'static,
-      SF: MessageStoreFactory + Send + Clone + 'static,
-      DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory<Log = Log> + Send + Clone + 'static,
-      MF: MessageFactory + Send + Clone + 'static,
-      Log: Logger + Clone + 'static,
+where
+    App: Application + Sync + Clone + 'static,
+    SF: MessageStoreFactory + Send + Clone + 'static,
+    DDP: DataDictionaryProvider + Send + Clone + 'static,
+    LF: LogFactory<Log = Log> + Send + Clone + 'static,
+    MF: MessageFactory + Send + Clone + 'static,
+    Log: Logger + Clone + 'static,
 {
-    pub fn new(session_settings: &SessionSettings, app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF) -> Self {
+    pub fn new(
+        session_settings: &SessionSettings,
+        app: App,
+        store_factory: SF,
+        data_dictionary_provider: DDP,
+        log_factory: LF,
+        message_factory: MF,
+    ) -> Self {
         SocketAcceptor {
             app,
             store_factory,
@@ -114,11 +128,8 @@ where App: Application + Sync + Clone + 'static,
     }
 
     /// List available endpoints, useful for random port allocation.
-    pub fn endpoints(&self) -> Vec<SocketAddr>{
-        self.thread
-            .iter()
-            .filter_map(|t| t.endpoint())
-            .collect()
+    pub fn endpoints(&self) -> Vec<SocketAddr> {
+        self.thread.iter().filter_map(|t| t.endpoint()).collect()
     }
 
     /// Stops the engine, and waits for the threads to finish
@@ -132,7 +143,7 @@ where App: Application + Sync + Clone + 'static,
 #[derive(Debug)]
 pub(crate) struct ThreadState {
     endpoint: Arc<Mutex<Option<SocketAddr>>>,
-    thread: JoinHandle<()>
+    thread: JoinHandle<()>,
 }
 
 impl ThreadState {
@@ -149,14 +160,23 @@ impl ThreadState {
 }
 
 impl<App, SF, DDP, LF, MF, Log> SocketAcceptorThread<App, SF, DDP, LF, MF>
-where App: Application + Sync + Clone + 'static,
-      SF: MessageStoreFactory + Send + Clone + 'static,
-      DDP: DataDictionaryProvider + Send + Clone + 'static,
-      LF: LogFactory<Log = Log> + Send + Clone + 'static,
-      MF: MessageFactory + Send + Clone + 'static,
-      Log: Logger + Clone + 'static,
+where
+    App: Application + Sync + Clone + 'static,
+    SF: MessageStoreFactory + Send + Clone + 'static,
+    DDP: DataDictionaryProvider + Send + Clone + 'static,
+    LF: LogFactory<Log = Log> + Send + Clone + 'static,
+    MF: MessageFactory + Send + Clone + 'static,
+    Log: Logger + Clone + 'static,
 {
-    pub(crate) fn new(app: App, store_factory: SF, data_dictionary_provider: DDP, log_factory: LF, message_factory: MF, addr: SocketAddr, session_settings: Vec<SessionSetting>) -> Self {
+    pub(crate) fn new(
+        app: App,
+        store_factory: SF,
+        data_dictionary_provider: DDP,
+        log_factory: LF,
+        message_factory: MF,
+        addr: SocketAddr,
+        session_settings: Vec<SessionSetting>,
+    ) -> Self {
         SocketAcceptorThread {
             app,
             store_factory,
@@ -180,17 +200,20 @@ where App: Application + Sync + Clone + 'static,
                 Err(e) => println!("{e}"),
             })
             .expect("socket-acceptor-thread started");
-        ThreadState {
-            endpoint,
-            thread,
-        }
+        ThreadState { endpoint, thread }
     }
 
-    fn event_loop(&self, running: Arc<AtomicBool>, endpoint: Arc<Mutex<Option<SocketAddr>>>) -> Result<(), AcceptorError> {
+    fn event_loop(
+        &self,
+        running: Arc<AtomicBool>,
+        endpoint: Arc<Mutex<Option<SocketAddr>>>,
+    ) -> Result<(), AcceptorError> {
         let listener = self.bind()?;
         let addr = listener.local_addr().unwrap();
         match endpoint.lock() {
-            Ok(mut guard) => { guard.replace(addr); },
+            Ok(mut guard) => {
+                guard.replace(addr);
+            }
             Err(_) => todo!(),
         }
         let mut threads = Vec::new();
@@ -218,7 +241,15 @@ where App: Application + Sync + Clone + 'static,
                     let t = thread::Builder::new()
                         .name(format!("socket-acceptor-connection-{n}"))
                         .spawn(move || {
-                            let reactor = SocketReactor::new(stream, session_settings, app, store_factory, data_dictionary_provider, log_factory, message_factory);
+                            let reactor = SocketReactor::new(
+                                stream,
+                                session_settings,
+                                app,
+                                store_factory,
+                                data_dictionary_provider,
+                                log_factory,
+                                message_factory,
+                            );
                             reactor.start()
                         })
                         .unwrap();

@@ -7,7 +7,11 @@ use std::{
 
 use dfx::{
     connection::SocketAcceptor,
-    session::{Session, SessionSettings}, message_store::{DefaultStoreFactory, FileStoreFactory}, data_dictionary_provider::DefaultDataDictionaryProvider, logging::{PrintlnLogFactory, FileLogFactory}, message::DefaultMessageFactory,
+    data_dictionary_provider::DefaultDataDictionaryProvider,
+    logging::{FileLogFactory, PrintlnLogFactory},
+    message::DefaultMessageFactory,
+    message_store::{DefaultStoreFactory, FileStoreFactory},
+    session::{Session, SessionSettings},
 };
 
 #[cfg(feature = "log")]
@@ -34,7 +38,8 @@ pub fn test_accept() {
     let steps = runner::steps("tests/definitions/server/accept_logon.def");
     acceptor.start();
 
-    let runner_thread = runner::create_thread(steps, 40000, "tests/definitions/server/accept_logon.def");
+    let runner_thread =
+        runner::create_thread(steps, 40000, "tests/definitions/server/accept_logon.def");
     let start = Instant::now();
     while !runner_thread.is_finished() {
         if Instant::now() - start > Duration::from_secs(30) {
@@ -62,7 +67,8 @@ pub fn test_accept() {
     let steps = runner::steps("tests/definitions/server/accept_logon.def");
     acceptor.start();
 
-    let runner_thread = runner::create_thread(steps, 40000, "tests/definitions/server/accept_logon.def");
+    let runner_thread =
+        runner::create_thread(steps, 40000, "tests/definitions/server/accept_logon.def");
     let start = Instant::now();
     while !runner_thread.is_finished() {
         if Instant::now() - start > Duration::from_secs(30) {

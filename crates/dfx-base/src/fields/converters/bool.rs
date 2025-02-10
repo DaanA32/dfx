@@ -21,9 +21,9 @@ impl<'a> TryFromFieldValue<&'a FieldValue> for bool {
 impl IntoFieldValue<FieldValue> for bool {
     fn into_field_value(&self) -> FieldValue {
         if *self {
-            vec!['Y' as u8].into()
+            vec![b'Y'].into()
         } else {
-            vec!['N' as u8].into()
+            vec![b'N'].into()
         }
     }
 }

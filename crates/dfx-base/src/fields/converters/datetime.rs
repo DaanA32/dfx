@@ -56,12 +56,14 @@ impl std::convert::TryFrom<String> for DateTimeFormat {
             "Microseconds" => Ok(Self::Microseconds),
             "Milliseconds" => Ok(Self::Milliseconds),
             "Seconds" => Ok(Self::Seconds),
-            _ => Err("Valid format is ... TODO")
+            _ => Err("Valid format is ... TODO"),
         }
     }
 }
 
-use chrono::{DateTime as ChronoDateTime, TimeZone, Utc, NaiveDateTime, NaiveDate, NaiveTime, Local};
+use chrono::{
+    DateTime as ChronoDateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc,
+};
 
 use crate::field_map::FieldValue;
 use crate::fields::converters::TryFromFieldValue;

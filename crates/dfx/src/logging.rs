@@ -1,8 +1,12 @@
-use std::{fs::{OpenOptions, File}, io::Write, writeln};
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    writeln,
+};
 
 use dfx_base::session_id::SessionId;
 
-use crate::session::{SessionSettings, LoggingOptions};
+use crate::session::{LoggingOptions, SessionSettings};
 
 pub trait Logger: Send + std::fmt::Debug {
     fn on_incoming(&self, incoming: &str);
@@ -56,6 +60,12 @@ impl PrintLnLogger {
         }
     }
 }
+impl Default for PrintlnLogFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PrintlnLogFactory {
     pub fn new() -> Self {
         PrintlnLogFactory
@@ -77,15 +87,26 @@ pub struct FileLogger {
 
 impl FileLogger {
     pub fn new(session_id: &SessionId, options: &LoggingOptions) -> std::io::Result<Self> {
-        let log_path = options.file_log_path().map(|f| f.as_str()).unwrap_or_else(|| ".");
+        let log_path = options
+            .file_log_path()
+            .map(|f| f.as_str())
+            .unwrap_or_else(|| ".");
         let prefix = session_id.prefix();
         let messages_file_name = format!("{log_path}/{prefix}.messages");
         let event_file_name = format!("{log_path}/{prefix}.event");
-        let messages_file = OpenOptions::new().read(true).write(true).create(true).open(messages_file_name)?;
-        let event_file = OpenOptions::new().read(true).write(true).create(true).open(event_file_name)?;
+        let messages_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(messages_file_name)?;
+        let event_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(event_file_name)?;
         Ok(FileLogger {
             messages_file,
-            event_file
+            event_file,
         })
     }
 }
@@ -112,12 +133,12 @@ impl Logger for FileLogger {
 
 #[derive(Debug, Clone)]
 pub struct FileLogFactory {
-    settings: SessionSettings
+    settings: SessionSettings,
 }
 impl FileLogFactory {
     pub fn new(settings: &SessionSettings) -> Self {
         FileLogFactory {
-            settings: settings.clone()
+            settings: settings.clone(),
         }
     }
     pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = FileLogger>> {
@@ -128,8 +149,7 @@ impl FileLogFactory {
 impl LogFactory for FileLogFactory {
     type Log = FileLogger;
     fn create(&self, session_id: &SessionId) -> Self::Log {
-        let path = self.settings.for_session_id(session_id)
-            .unwrap().logging();
+        let path = self.settings.for_session_id(session_id).unwrap().logging();
         let logger = FileLogger::new(session_id, path);
         logger.unwrap()
     }
@@ -144,7 +164,7 @@ pub struct MacroLogger {
 impl MacroLogger {
     pub fn new(session_id: &SessionId, _options: &LoggingOptions) -> Self {
         MacroLogger {
-            session_id: session_id.clone()
+            session_id: session_id.clone(),
         }
     }
 }
@@ -171,13 +191,13 @@ impl Logger for MacroLogger {
 #[derive(Debug, Clone)]
 #[cfg(feature = "log")]
 pub struct MacroLogFactory {
-    settings: SessionSettings
+    settings: SessionSettings,
 }
 #[cfg(feature = "log")]
 impl MacroLogFactory {
     pub fn new(settings: &SessionSettings) -> Self {
         MacroLogFactory {
-            settings: settings.clone()
+            settings: settings.clone(),
         }
     }
     pub fn boxed(settings: &SessionSettings) -> Box<dyn LogFactory<Log = MacroLogger>> {
@@ -189,9 +209,8 @@ impl MacroLogFactory {
 impl LogFactory for MacroLogFactory {
     type Log = MacroLogger;
     fn create(&self, session_id: &SessionId) -> Self::Log {
-        let path = self.settings.for_session_id(session_id)
-            .unwrap().logging();
-        let logger = MacroLogger::new(session_id, path);
-        logger
+        let path = self.settings.for_session_id(session_id).unwrap().logging();
+
+        MacroLogger::new(session_id, path)
     }
 }

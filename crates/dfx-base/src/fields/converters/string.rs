@@ -55,7 +55,6 @@ impl IntoFieldValue<FieldValue> for &String {
     }
 }
 
-
 impl<'a> TryFromFieldValue<&'a FieldValue> for char {
     type Error = ConversionError;
 
@@ -68,9 +67,8 @@ impl<'a> TryFromFieldValue<&'a FieldValue> for char {
     }
 }
 
-
 impl IntoFieldValue<FieldValue> for char {
     fn into_field_value(&self) -> FieldValue {
-        vec!(*self as u8).into()
+        vec![*self as u8].into()
     }
 }

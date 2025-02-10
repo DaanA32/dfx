@@ -1,8 +1,14 @@
-use std::{collections::HashSet, sync::{Mutex, Arc}};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use dfx::{
     message::Message,
-    session::{Application, ApplicationError, ApplicationExt, Session, DoNotAccept, LogonReject, FromAppError},
+    session::{
+        Application, ApplicationError, ApplicationExt, DoNotAccept, FromAppError, LogonReject,
+        Session,
+    },
     tags,
 };
 
@@ -28,7 +34,7 @@ impl TestApplication {
                     println!("Did not contain {}", cl_ord_id);
                     false
                 }
-            },
+            }
             Err(e) => panic!("Poisened {e:?}"),
         }
     }
@@ -36,24 +42,27 @@ impl TestApplication {
         match self.ids_seen.lock() {
             Ok(mut seen) => {
                 seen.insert(cl_ord_id);
-            },
+            }
             Err(e) => panic!("Poisened {e:?}"),
         }
     }
     pub fn clear(&self) {
         match self.ids_seen.lock() {
-            Ok(mut seen) => {
-                seen.clear()
-            },
+            Ok(mut seen) => seen.clear(),
             Err(e) => panic!("Poisened {e:?}"),
         }
     }
     fn echo(&self, message: &Message, session_id: &dfx::session_id::SessionId) {
         Session::send_to_session(session_id, message.clone()).unwrap();
     }
-    fn handle_nos(&self, message: &Message, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::field_map::FieldMapError> {
+    fn handle_nos(
+        &self,
+        message: &Message,
+        session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), dfx::field_map::FieldMapError> {
         println!("handle_nos");
-        let poss_resend = message.header().get_field(tags::PossResend).is_some() && message.header().get_bool(tags::PossResend);
+        let poss_resend = message.header().get_field(tags::PossResend).is_some()
+            && message.header().get_bool(tags::PossResend);
 
         let cl_ord_id = message.get_string(tags::ClOrdID)?;
         if poss_resend && self.seen(&cl_ord_id) {
@@ -63,7 +72,11 @@ impl TestApplication {
         }
         Ok(())
     }
-    fn handle_news(&self, message: &Message, session_id: &dfx::session_id::SessionId) -> Result<(), dfx::field_map::FieldMapError> {
+    fn handle_news(
+        &self,
+        message: &Message,
+        session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), dfx::field_map::FieldMapError> {
         println!("handle_news");
         if message.is_field_set(tags::Headline) && message.get_string(tags::Headline)? == "STOPME" {
             if let Some(event) = self.stop_me_event {
@@ -86,7 +99,10 @@ impl Application for TestApplication {
         Ok(())
     }
 
-    fn on_logout(&mut self, _session_id: &dfx::session_id::SessionId) -> Result<(), ApplicationError> {
+    fn on_logout(
+        &mut self,
+        _session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), ApplicationError> {
         println!("TestApplication Logout: {}", _session_id);
         Ok(())
     }
@@ -131,10 +147,15 @@ impl Application for TestApplication {
             "D" => self.handle_nos(message, session_id)?,
             "d" => self.echo(message, session_id),
             "B" => self.handle_news(message, session_id)?,
-            "AE" => {},
-            "AD" => {},
+            "AE" => {}
+            "AD" => {}
             "R" => self.echo(message, session_id),
-            _ => return Err(FromAppError::UnknownMessageType { message: message.clone(), msg_type }),
+            _ => {
+                return Err(FromAppError::UnknownMessageType {
+                    message: message.clone(),
+                    msg_type,
+                })
+            }
         }
         Ok(())
     }
@@ -173,7 +194,10 @@ impl Application for SendTestApplication {
         Ok(())
     }
 
-    fn on_logout(&mut self, _session_id: &dfx::session_id::SessionId) -> Result<(), ApplicationError> {
+    fn on_logout(
+        &mut self,
+        _session_id: &dfx::session_id::SessionId,
+    ) -> Result<(), ApplicationError> {
         println!("TestApplication Logout: {}", _session_id);
         Ok(())
     }
