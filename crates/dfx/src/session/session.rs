@@ -16,7 +16,7 @@ use dfx_base::fix_values::BusinessRejectReason;
 use dfx_base::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
 
-use crate::fields::*;
+use crate::fields::{DefaultApplVerID, EncryptMethod, HeartBtInt, MsgType, ResetSeqNumFlag};
 use crate::logging::LogFactory;
 use crate::logging::Logger;
 use dfx_base::data_dictionary::DataDictionary;
@@ -395,12 +395,12 @@ where
             if self.send_logout_before_timeout_disconnect {
                 self.generate_logout(None, None);
             }
-            self.disconnect("Timed out waiting for heartbeat")
+            self.disconnect("Timed out waiting for heartbeat");
         } else if self.state.need_test_request() {
             self.generate_test_request("TEST");
             self.state
                 .set_test_request_counter(self.state.test_request_counter() + 1);
-            self.log.on_event("Sent test request TEST")
+            self.log.on_event("Sent test request TEST");
         } else if self.state.need_heartbeat() {
             self.generate_heartbeat();
         }
@@ -413,8 +413,7 @@ where
     fn is_new_session(&self) -> bool {
         self.state
             .creation_time()
-            .map(|ct| self.schedule.is_new_session(ct, Utc::now()))
-            .unwrap_or(false)
+            .is_some_and(|ct| self.schedule.is_new_session(ct, Utc::now()))
     }
 
     fn is_logged_on(&self) -> bool {
@@ -426,7 +425,7 @@ where
     }
 
     fn refresh(&mut self) {
-        self.state.refresh()
+        self.state.refresh();
     }
 
     fn refresh_on_logon(&self) -> bool {
@@ -435,7 +434,7 @@ where
 
     fn reset(&mut self, logged_reason: Option<&str>, logout_message: Option<&str>) {
         if self.is_logged_on() {
-            self.generate_logout(logout_message.map(|v| v.into()), None);
+            self.generate_logout(logout_message.map(std::convert::Into::into), None);
         }
         self.disconnect("Resetting...");
         self.state.reset(logged_reason);
@@ -508,7 +507,7 @@ where
                     .set_tag_value(tags::LastMsgSeqNumProcessed, value);
             } else {
                 self.log
-                    .on_event(format!("Error: No message sequence number: {}", other).as_str());
+                    .on_event(format!("Error: No message sequence number: {other}").as_str());
             }
         }
 
@@ -585,7 +584,7 @@ where
                     .set_tag_value(tags::LastMsgSeqNumProcessed, value);
             } else {
                 self.log
-                    .on_event(format!("Error: No message sequence number: {}", message).as_str());
+                    .on_event(format!("Error: No message sequence number: {message}").as_str());
             }
         }
         self.send_raw(heartbeat, 0).unwrap()
@@ -659,7 +658,7 @@ where
         } else {
             self.application
                 .to_app(&mut message, &self.session_id)
-                .map(|_| message)
+                .map(|()| message)
         };
 
         match message {
@@ -741,7 +740,7 @@ where
                 .set_tag_value(tags::LastMsgSeqNumProcessed, &last_seq_num);
         }
 
-        self.insert_sending_time(message)
+        self.insert_sending_time(message);
     }
 
     fn insert_orig_sending_time(&self, message: &mut Message, sending_time: NaiveDateTime) {
@@ -803,7 +802,7 @@ where
 
         if self.is_new_session() {
             self.state
-                .reset(Some("New session (detected in next::msg(message))"))
+                .reset(Some("New session (detected in next::msg(message))"));
         }
 
         let result = self.next_msg_handler(msg);
@@ -870,7 +869,7 @@ where
                 }
                 SessionHandleMessageError::UnknownMessageType { message, msg_type } => {
                     self.log
-                        .on_event(format!("Unsupported message type: {}", msg_type).as_str());
+                        .on_event(format!("Unsupported message type: {msg_type}").as_str());
                     self.generate_business_message_reject(
                         message,
                         BusinessRejectReason::UNKNOWN_MESSAGE_TYPE(),
@@ -880,7 +879,7 @@ where
             }
         }
 
-        self.next()
+        self.next();
     }
 
     fn next_msg_handler(&mut self, msg: Vec<u8>) -> Result<(), SessionHandleMessageError> {
@@ -988,9 +987,7 @@ where
         } else if MsgType::LOGOUT == msg_type {
             self.next_logout(message)
         } else if !self.is_logged_on() {
-            self.disconnect(
-                format!("Received msg type '{}' when not logged on", msg_type).as_str(),
-            );
+            self.disconnect(format!("Received msg type '{msg_type}' when not logged on").as_str());
             Ok(())
         } else if MsgType::HEARTBEAT == msg_type {
             self.next_heartbeat(message)
@@ -1094,7 +1091,7 @@ where
         if self.is_target_too_high(msg_seq_num) && !received_reset {
             self.do_target_too_high(logon, msg_seq_num)?;
         } else {
-            self.state.incr_next_target_msg_seq_num()
+            self.state.incr_next_target_msg_seq_num();
         }
 
         if self.is_logged_on() {
@@ -1283,11 +1280,11 @@ where
         }
     }
 
-    /// This will pass the message into the from_admin / from_app methods from the Application
+    /// This will pass the message into the `from_admin` / `from_app` methods from the Application
     fn verify(&mut self, message: Message) -> Result<Option<Message>, SessionHandleMessageError> {
         self.verify_opt(message, true, true)
     }
-    /// This will pass the message into the from_admin / from_app methods from the Application
+    /// This will pass the message into the `from_admin` / `from_app` methods from the Application
     fn verify_opt(
         &mut self,
         message: Message,
@@ -1371,9 +1368,9 @@ where
         self.state.set_test_request_counter(0);
 
         if Message::is_admin_msg_type(msg_type.as_bytes()) {
-            self.application.from_admin(&message, &self.session_id)?
+            self.application.from_admin(&message, &self.session_id)?;
         } else {
-            self.application.from_app(&message, &self.session_id)?
+            self.application.from_app(&message, &self.session_id)?;
         }
         Ok(Some(message))
     }
@@ -1457,7 +1454,7 @@ where
         let timespan = Utc::now() - sending_time;
 
         // TODO change to <=
-        timespan.num_seconds().abs() < self.max_latency as i64
+        timespan.num_seconds().abs() < i64::from(self.max_latency)
     }
 
     fn generate_resend_request_range(
@@ -1470,26 +1467,18 @@ where
             .msg_factory
             .create(&begin_string, MsgType::RESEND_REQUEST)?;
 
-        resend_request.set_tag_value(tags::BeginSeqNo, format!("{}", start_seq_num).as_str());
-        resend_request.set_tag_value(tags::EndSeqNo, format!("{}", end_seq_num).as_str());
+        resend_request.set_tag_value(tags::BeginSeqNo, format!("{start_seq_num}").as_str());
+        resend_request.set_tag_value(tags::EndSeqNo, format!("{end_seq_num}").as_str());
 
         self.initialize_header(&mut resend_request, None);
         if self.send_raw(resend_request, 0)? {
             self.log.on_event(
-                format!(
-                    "Sent ResendRequest FROM: {} TO: {}",
-                    start_seq_num, end_seq_num
-                )
-                .as_str(),
+                format!("Sent ResendRequest FROM: {start_seq_num} TO: {end_seq_num}").as_str(),
             );
             Ok(true)
         } else {
             self.log.on_event(
-                format!(
-                    "Error sending ResendRequest ({},{})",
-                    start_seq_num, end_seq_num
-                )
-                .as_str(),
+                format!("Error sending ResendRequest ({start_seq_num},{end_seq_num})").as_str(),
             );
             Ok(false)
         }
@@ -1515,14 +1504,14 @@ where
         let msg_type = if message.header().is_field_set(tags::MsgType) {
             message.header().get_string(tags::MsgType)?
         } else {
-            "".into()
+            String::new()
         };
 
         let mut msg_seq_num = 0;
         if message.header().is_field_set(tags::MsgSeqNum) {
             if let Ok(seq_num) = message.header().get_int(tags::MsgSeqNum) {
                 msg_seq_num = seq_num;
-                reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num).as_str());
+                reject.set_tag_value(tags::RefSeqNum, format!("{msg_seq_num}").as_str());
             }
         }
 
@@ -1681,10 +1670,10 @@ where
         include_field_info: bool,
     ) {
         if self.session_id.begin_string() >= BeginString::FIX42 {
-            reject.set_tag_value(tags::RefTagID, format!("{}", field).as_str());
+            reject.set_tag_value(tags::RefTagID, format!("{field}").as_str());
             reject.set_tag_value(tags::Text, reason);
         } else if include_field_info {
-            reject.set_tag_value(tags::Text, format!("{} ({})", reason, field).as_str());
+            reject.set_tag_value(tags::Text, format!("{reason} ({field})").as_str());
         } else {
             reject.set_tag_value(tags::Text, reason);
         }
@@ -1714,33 +1703,30 @@ where
 
         sequence_reset
             .header_mut()
-            .set_tag_value(tags::MsgSeqNum, begin_seq_no as i64);
-        sequence_reset.set_tag_value(tags::NewSeqNo, new_seq_no as i64);
+            .set_tag_value(tags::MsgSeqNum, i64::from(begin_seq_no));
+        sequence_reset.set_tag_value(tags::NewSeqNo, i64::from(new_seq_no));
         sequence_reset.set_tag_value(tags::GapFillFlag, true);
         if
         /* resend_request.is_some() && */
         self.enable_last_msg_seq_num_processed {
             let seq_num: Option<Result<i64, _>> = received_message
                 .get_field(tags::MsgSeqNum)
-                .map(|v| v.as_value());
+                .map(dfx_base::field_map::Field::as_value);
             if let Some(result) = seq_num {
                 sequence_reset
                     .header_mut()
                     .set_tag_value(tags::LastMsgSeqNumProcessed, result?);
             } else {
                 self.log().on_event(
-                    format!(
-                        "Error: Received message without MsgSeqNum: {}",
-                        received_message
-                    )
-                    .as_str(),
+                    format!("Error: Received message without MsgSeqNum: {received_message}")
+                        .as_str(),
                 );
             }
         }
 
         self.send_raw(sequence_reset, begin_seq_no)?;
         self.log()
-            .on_event(format!("Sent SequenceReset TO: {}", begin_seq_no).as_str());
+            .on_event(format!("Sent SequenceReset TO: {begin_seq_no}").as_str());
         Ok(())
     }
 
@@ -1789,7 +1775,7 @@ where
         };
 
         self.initialize_header(&mut reject, None);
-        reject.set_tag_value(tags::RefSeqNum, format!("{}", msg_seq_num));
+        reject.set_tag_value(tags::RefSeqNum, format!("{msg_seq_num}"));
         self.state.incr_next_target_msg_seq_num();
 
         reject.set_tag_value(tags::Text, reason);

@@ -33,7 +33,7 @@ impl EncryptMethod {
         ))
     }
     pub fn string_value(val: u32) -> String {
-        format!("{}", val)
+        format!("{val}")
     }
     pub const NONE: u32 = 0;
 }
@@ -57,7 +57,7 @@ impl HeartBtInt {
         Self(Field::new(HeartBtInt::TAG, HeartBtInt::string_value(val)))
     }
     pub fn string_value(val: u32) -> String {
-        format!("{}", val)
+        format!("{val}")
     }
     pub const NONE: u32 = 0;
 }

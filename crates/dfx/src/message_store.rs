@@ -105,9 +105,11 @@ impl Default for MemoryStoreFactory {
 }
 
 impl MemoryStoreFactory {
+    #[must_use]
     pub fn new() -> Self {
         MemoryStoreFactory
     }
+    #[must_use]
     pub fn boxed() -> Box<dyn MessageStoreFactory> {
         Box::new(MemoryStoreFactory)
     }
@@ -303,7 +305,7 @@ impl FileStore {
             .append(true)
             .create(true)
             .open(&self.header_file_name)?;
-        writeln!(header_file, "{},{},{}", msg_seq_num, offset, size)?;
+        writeln!(header_file, "{msg_seq_num},{offset},{size}")?;
 
         self.offsets.insert(
             msg_seq_num,
@@ -400,7 +402,7 @@ impl MessageStore for FileStore {
     }
 
     fn set(&mut self, msg_seq_num: u32, message_string: &str) {
-        self.set(msg_seq_num, message_string).unwrap()
+        self.set(msg_seq_num, message_string).unwrap();
     }
 
     fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
@@ -414,11 +416,13 @@ pub struct FileStoreFactory {
 }
 
 impl FileStoreFactory {
+    #[must_use]
     pub fn new(settings: &SessionSettings) -> Self {
         FileStoreFactory {
             settings: settings.clone(),
         }
     }
+    #[must_use]
     pub fn boxed(settings: SessionSettings) -> Box<dyn MessageStoreFactory> {
         Box::new(FileStoreFactory { settings })
     }
@@ -447,11 +451,13 @@ pub struct DefaultStoreFactory {
 }
 
 impl DefaultStoreFactory {
+    #[must_use]
     pub fn new(settings: &SessionSettings) -> Self {
         DefaultStoreFactory {
             settings: settings.clone(),
         }
     }
+    #[must_use]
     pub fn boxed(settings: &SessionSettings) -> Box<dyn MessageStoreFactory> {
         Box::new(DefaultStoreFactory::new(settings))
     }

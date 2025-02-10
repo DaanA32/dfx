@@ -43,14 +43,7 @@ impl SessionId {
         let target_sub_id = target_sub_id.into();
         let target_location_id = target_location_id.into();
         let id = format!(
-            "{}:{}{}{}->{}{}{}",
-            begin_string,
-            sender_comp_id,
-            sender_sub_id,
-            sender_location_id,
-            target_comp_id,
-            target_sub_id,
-            target_location_id
+            "{begin_string}:{sender_comp_id}{sender_sub_id}{sender_location_id}->{target_comp_id}{target_sub_id}{target_location_id}"
         );
         let is_fixt = begin_string.starts_with("FIXT");
         SessionId {
@@ -67,46 +60,57 @@ impl SessionId {
         }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.sender_comp_id.len() + self.target_comp_id.len() == 0
     }
 
+    #[must_use]
     pub fn id(&self) -> &str {
         self.id.as_ref()
     }
 
+    #[must_use]
     pub fn begin_string(&self) -> &str {
         self.begin_string.as_ref()
     }
 
+    #[must_use]
     pub fn sender_comp_id(&self) -> &str {
         self.sender_comp_id.as_ref()
     }
 
+    #[must_use]
     pub fn sender_sub_id(&self) -> &str {
         self.sender_sub_id.as_ref()
     }
 
+    #[must_use]
     pub fn sender_location_id(&self) -> &str {
         self.sender_location_id.as_ref()
     }
 
+    #[must_use]
     pub fn target_comp_id(&self) -> &str {
         self.target_comp_id.as_ref()
     }
 
+    #[must_use]
     pub fn target_sub_id(&self) -> &str {
         self.target_sub_id.as_ref()
     }
 
+    #[must_use]
     pub fn target_location_id(&self) -> &str {
         self.target_location_id.as_ref()
     }
 
+    #[must_use]
     pub fn is_fixt(&self) -> bool {
         self.is_fixt
     }
 
+    #[must_use]
     pub fn prefix(&self) -> String {
         format!(
             "{}-{}{}{}{}{}-{}{}{}{}{}",

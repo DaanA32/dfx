@@ -31,7 +31,7 @@ impl ChannelResponder {
 impl Responder for ChannelResponder {
     fn send(&mut self, message: String) -> bool {
         match self.tx.send(ResponderEvent::Send(message)) {
-            Ok(_) => match self.rx.recv_timeout(Duration::from_millis(10)) {
+            Ok(()) => match self.rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(response) => match response {
                     ResponderResponse::Sent(sent) => sent,
                 },
@@ -42,6 +42,6 @@ impl Responder for ChannelResponder {
     }
 
     fn disconnect(&mut self) {
-        self.tx.send(ResponderEvent::Disconnect).unwrap()
+        self.tx.send(ResponderEvent::Disconnect).unwrap();
     }
 }

@@ -84,7 +84,7 @@ where
     pub fn stop(mut self) {
         self.running
             .store(false, std::sync::atomic::Ordering::Relaxed);
-        self.join()
+        self.join();
     }
 }
 
@@ -158,7 +158,7 @@ where
         thread::Builder::new()
             .name("socket-initiator-thread".into())
             .spawn(move || {
-                let timeout = self.session_settings.reconnect_interval().unwrap_or(30) as u64;
+                let timeout = u64::from(self.session_settings.reconnect_interval().unwrap_or(30));
                 // loop here for session reconnect!
                 while running.load(std::sync::atomic::Ordering::Relaxed) {
                     if self
@@ -176,7 +176,7 @@ where
                             }
                         }
                     }
-                    thread::sleep(Duration::from_millis(timeout))
+                    thread::sleep(Duration::from_millis(timeout));
                 }
             })
             .expect("socket-acceptor-thread started")

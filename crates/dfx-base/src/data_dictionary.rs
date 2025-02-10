@@ -42,6 +42,7 @@ pub struct TagException {
 }
 
 impl TagException {
+    #[must_use]
     pub fn other(msg: String, tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -50,6 +51,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn tag_out_of_order(tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -58,6 +60,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn invalid_tag_number(tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -66,6 +69,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn required_tag_missing(tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -74,6 +78,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn tag_not_defined_for_message(tag: Tag, msg_type: String) -> TagException {
         Self {
             field: tag,
@@ -82,6 +87,7 @@ impl TagException {
             msg_type: Some(msg_type),
         }
     }
+    #[must_use]
     pub fn no_tag_value(tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -90,6 +96,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn incorrect_tag_value(tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -98,6 +105,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn repeated_tag(tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -106,6 +114,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn incorrect_data_format(tag: Tag, inner: String) -> TagException {
         Self {
             field: tag,
@@ -114,6 +123,7 @@ impl TagException {
             msg_type: None,
         }
     } //TODO inner
+    #[must_use]
     pub fn invalid_message_type() -> TagException {
         Self {
             field: tags::MsgType,
@@ -122,6 +132,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn repeating_group_count_mismatch(tag: Tag) -> TagException {
         Self {
             field: tag,
@@ -131,6 +142,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn group_delimiter_tag_exception(counter_tag: Tag, delimiter_tag: Tag) -> TagException {
         Self {
             field: counter_tag,
@@ -141,6 +153,7 @@ impl TagException {
             msg_type: None,
         }
     }
+    #[must_use]
     pub fn repeated_tag_without_group_delimiter_tag_exception(
         counter_tag: Tag,
         trouble_tag: Tag,
@@ -148,18 +161,22 @@ impl TagException {
         Self { field: counter_tag, session_reject_reason: SessionRejectReason::OTHER(format!("Group {counter_tag} contains a repeat occurrence of tag {trouble_tag} in a single group, which is illegal.")), inner: None, msg_type: None }
     }
 
+    #[must_use]
     pub fn msg_type(&self) -> Option<&String> {
         self.msg_type.as_ref()
     }
 
+    #[must_use]
     pub fn inner(&self) -> Option<&String> {
         self.inner.as_ref()
     }
 
+    #[must_use]
     pub fn session_reject_reason(&self) -> &SessionRejectReason {
         &self.session_reject_reason
     }
 
+    #[must_use]
     pub fn field(&self) -> Tag {
         self.field
     }
@@ -259,21 +276,26 @@ impl DataDictionary {
         Ok(dd)
     }
 
+    #[must_use]
     pub fn version(&self) -> Option<&Arc<str>> {
         self.version.as_ref()
     }
 
+    #[must_use]
     pub fn header(&self) -> &DDMap {
         &self.header
     }
 
+    #[must_use]
     pub fn trailer(&self) -> &DDMap {
         &self.trailer
     }
 
+    #[must_use]
     pub fn is_header_field(&self, tag: Tag) -> bool {
         self.header.is_field(tag)
     }
+    #[must_use]
     pub fn is_trailer_field(&self, tag: Tag) -> bool {
         self.trailer.is_field(tag)
     }
@@ -296,9 +318,8 @@ impl DataDictionary {
             }
         }
 
-        let check_order_session = session_data_dictionary
-            .map(|d| d.check_fields_out_of_order())
-            .unwrap_or(false);
+        let check_order_session =
+            session_data_dictionary.is_some_and(DataDictionary::check_fields_out_of_order);
         let check_order_app = app_data_dictionary.check_fields_out_of_order();
         if check_order_session || check_order_app {
             message.has_valid_structure()?;
@@ -609,10 +630,12 @@ impl DataDictionary {
         }
     }
 
+    #[must_use]
     pub fn get_map_for_message(&self, msg_type: &str) -> Option<&DDMap> {
         self.messages.get(msg_type)
     }
 
+    #[must_use]
     pub fn get_field_by_name(&self, field_name: &str) -> Option<&Field> {
         self.fields_by_name.get(field_name)
     }
@@ -625,14 +648,17 @@ impl DataDictionary {
         self.length_fields.contains(&tag)
     }
 
+    #[must_use]
     pub fn fields_by_name(&self) -> &BTreeMap<Arc<str>, Field> {
         &self.fields_by_name
     }
 
+    #[must_use]
     pub fn messages(&self) -> &BTreeMap<Arc<str>, DDMap> {
         &self.messages
     }
 
+    #[must_use]
     pub fn check_fields_have_values(&self) -> bool {
         self.check_fields_have_values
     }
@@ -653,6 +679,7 @@ impl DataDictionary {
         self.check_fields_out_of_order = check_fields_out_of_order;
     }
 
+    #[must_use]
     pub fn check_user_defined_fields(&self) -> bool {
         self.check_user_defined_fields
     }
@@ -665,6 +692,7 @@ impl DataDictionary {
         self.check_user_defined_fields = check_user_defined_fields;
     }
 
+    #[must_use]
     pub fn allow_unknown_message_fields(&self) -> bool {
         self.allow_unknown_message_fields
     }
@@ -688,6 +716,7 @@ pub struct DDMap {
     admin: bool,
 }
 impl DDMap {
+    #[must_use]
     pub fn new(name: Arc<str>) -> Self {
         DDMap {
             fields: BTreeMap::default(),
@@ -698,6 +727,7 @@ impl DDMap {
             admin: false,
         }
     }
+    #[must_use]
     pub fn new_with_values(name: Arc<str>, msg_type: Arc<str>, admin: bool) -> Self {
         DDMap {
             fields: BTreeMap::default(),
@@ -711,21 +741,26 @@ impl DDMap {
     pub fn add_field(&mut self, field: Field) {
         self.fields.insert(field.tag(), field);
     }
+    #[must_use]
     pub fn is_field(&self, tag: Tag) -> bool {
         self.fields.contains_key(&tag)
     }
+    #[must_use]
     pub fn get_field(&self, tag: Tag) -> Option<&Field> {
         self.fields.get(&tag)
     }
     pub fn add_group(&mut self, group: ArcGroup) {
         self.groups.insert(group.delim(), group);
     }
+    #[must_use]
     pub fn is_group(&self, tag: Tag) -> bool {
         self.groups.contains_key(&tag)
     }
+    #[must_use]
     pub fn get_group(&self, tag: Tag) -> Option<&ArcGroup> {
         self.groups.get(&tag)
     }
+    #[must_use]
     pub fn required_fields(&self) -> &BTreeSet<Tag> {
         &self.required_fields
     }
@@ -735,20 +770,25 @@ impl DDMap {
     pub fn add_required_field(&mut self, tag: Tag) {
         self.required_fields.insert(tag);
     }
+    #[must_use]
     pub fn name(&self) -> &Arc<str> {
         &self.name
     }
+    #[must_use]
     pub fn fields(&self) -> &BTreeMap<Tag, Field> {
         &self.fields
     }
+    #[must_use]
     pub fn groups(&self) -> &BTreeMap<Tag, ArcGroup> {
         &self.groups
     }
 
+    #[must_use]
     pub fn admin(&self) -> bool {
         self.admin
     }
 
+    #[must_use]
     pub fn msg_type(&self) -> &str {
         self.msg_type.as_ref()
     }
@@ -767,10 +807,10 @@ impl AsDDMap for DDMap {
 }
 impl<D: DerefMut<Target = DDMap>> AsDDMap for D {
     fn as_map(&self) -> &DDMap {
-        self.deref()
+        self
     }
     fn as_map_mut(&mut self) -> &mut DDMap {
-        self.deref_mut()
+        self
     }
 }
 
@@ -788,10 +828,12 @@ pub struct DDField {
     is_multiple_value_field_with_enums: bool,
 }
 impl DDField {
+    #[must_use]
     pub fn from_xml_str(xml_str: &str) -> Self {
         todo!("DataDictionary::from_xml_str({xml_str})")
     }
 
+    #[must_use]
     pub fn new(
         tag: Tag,
         name: Arc<str>,
@@ -812,25 +854,32 @@ impl DDField {
             is_multiple_value_field_with_enums,
         }
     }
+    #[must_use]
     pub fn tag(&self) -> Tag {
         self.tag
     }
+    #[must_use]
     pub fn name(&self) -> &Arc<str> {
         &self.name
     }
+    #[must_use]
     pub fn has_enums(&self) -> bool {
         !self.enum_dictionary.is_empty()
     }
+    #[must_use]
     pub fn enums(&self) -> &BTreeMap<Arc<str>, Arc<str>> {
         &self.enum_dictionary
     }
+    #[must_use]
     pub fn field_type(&self) -> &Arc<str> {
         &self.field_type
     }
+    #[must_use]
     pub fn is_length_field(&self) -> bool {
         self.field_type.as_ref() == "LENGTH" && self.name.as_ref() != "BodyLength"
     }
 
+    #[must_use]
     pub fn is_multiple_value_field_with_enums(&self) -> bool {
         self.is_multiple_value_field_with_enums
     }
@@ -851,6 +900,7 @@ impl Default for DDGroup {
 }
 
 impl DDGroup {
+    #[must_use]
     pub fn new() -> Self {
         DDGroup {
             num_fld: Tag::default(),
@@ -860,15 +910,19 @@ impl DDGroup {
             map: DDMap::new("group".into()),
         }
     }
+    #[must_use]
     pub fn name(&self) -> &Arc<str> {
         &self.name
     }
+    #[must_use]
     pub fn num_fld(&self) -> Tag {
         self.num_fld
     }
+    #[must_use]
     pub fn delim(&self) -> Tag {
         self.delim
     }
+    #[must_use]
     pub fn required(&self) -> bool {
         self.required
     }
@@ -913,6 +967,7 @@ use std::sync::Arc;
 use xmltree::Element;
 
 impl DataDictionary {
+    #[must_use]
     pub fn new() -> DataDictionary {
         DataDictionary {
             version: None,
@@ -998,7 +1053,7 @@ fn get_version_info(doc: &Element) -> Result<(Arc<str>, Arc<str>, Arc<str>), Dat
             version_type: version_type.clone().into(),
         });
     }
-    let version = format!("{}.{}.{}", version_type, major_version, minor_version);
+    let version = format!("{version_type}.{major_version}.{minor_version}");
     Ok((major_version.into(), minor_version.into(), version.into()))
 }
 
@@ -1184,12 +1239,11 @@ fn parse_trailer(
 }
 
 fn verify_child_node(child_node: &Element, parent_node: &Element) {
-    if child_node.attributes.is_empty() {
-        panic!(
-            "Malformed data dictionary: Found text-only node containing '{}'",
-            child_node.get_text().unwrap_or_default().trim()
-        );
-    }
+    assert!(
+        !child_node.attributes.is_empty(),
+        "Malformed data dictionary: Found text-only node containing '{}'",
+        child_node.get_text().unwrap_or_default().trim()
+    );
     if !child_node.attributes.contains_key("name") {
         let message_type_name = parent_node
             .attributes
@@ -1235,7 +1289,7 @@ fn parse_msg_element_inner(
         return Ok(());
     }
 
-    for child_node in node.children.iter() {
+    for child_node in &node.children {
         if let Some(child_node) = child_node.as_element() {
             verify_child_node(child_node, node);
 
@@ -1251,15 +1305,12 @@ fn parse_msg_element_inner(
 
             match child_node.name.as_str() {
                 "field" | "group" => {
-                    if !fields_by_name.contains_key(&name_attribute) {
-                        panic!(
-                            "Field '{}' is not defined in <fields> section.",
-                            name_attribute
+                    assert!(fields_by_name.contains_key(&name_attribute),
+                            "Field '{name_attribute}' is not defined in <fields> section."
                         );
-                    }
                     let dd_field = fields_by_name.get(&name_attribute)
                         .ok_or(DataDictionaryError::Missing { entry_type: "field".into(), name: name_attribute.clone() })?.clone();
-                    let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false)
+                    let required = child_node.attributes.get("required").is_some_and(|v| v == "Y")
                         && component_required.unwrap_or(true);
 
                     if required {
@@ -1299,7 +1350,7 @@ fn parse_msg_element_inner(
                         .ok_or(DataDictionaryError::Missing { entry_type: "component".into(), name: name_attribute.clone() })?
                         .clone();
 
-                    let required = child_node.attributes.get("required").map(|v| v == "Y").unwrap_or(false);
+                    let required = child_node.attributes.get("required").is_some_and(|v| v == "Y");
                     parse_msg_element_inner(&component_node, dd_map, fields_by_name, components_by_name, Some(required))?;
                 }
                 _ => panic!(
@@ -1321,14 +1372,14 @@ mod tests {
     #[test]
     pub fn fix40() {
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX40.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
     #[test]
     pub fn fix41() {
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX41.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
@@ -1336,7 +1387,7 @@ mod tests {
     pub fn fix42() {
         //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX42.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
@@ -1344,7 +1395,7 @@ mod tests {
     pub fn fix43() {
         //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX43.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
         if let Ok(dd) = result {
             let newordersingle = dd.messages().get("D");
@@ -1353,8 +1404,8 @@ mod tests {
             assert!(handlinst.is_some());
             if let (Some(newordersingle), Some(handlinst)) = (newordersingle, handlinst) {
                 let handlinst_in_message = newordersingle.fields.contains_key(&handlinst.tag);
-                println!("{:?}", handlinst_in_message);
-                assert!(handlinst_in_message)
+                println!("{handlinst_in_message:?}");
+                assert!(handlinst_in_message);
             }
         }
     }
@@ -1362,7 +1413,7 @@ mod tests {
     #[test]
     pub fn fix44() {
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX44.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
@@ -1370,7 +1421,7 @@ mod tests {
     pub fn fix50() {
         //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX50.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
@@ -1378,7 +1429,7 @@ mod tests {
     pub fn fix50sp1() {
         //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX50SP1.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
@@ -1386,7 +1437,7 @@ mod tests {
     pub fn fix50sp2() {
         //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIX50SP2.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
@@ -1394,7 +1445,7 @@ mod tests {
     pub fn fixt11() {
         //let result = DataDictionary::load("../../../spec/FIX43.xml");
         let result = DataDictionary::load_from_string(include_str!("../../../spec/FIXT11.xml"));
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 }

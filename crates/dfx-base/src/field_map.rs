@@ -53,6 +53,7 @@ pub struct Group {
     field_order: Option<FieldOrder>,
 }
 impl Group {
+    #[must_use]
     pub fn new(field: Tag, delim: Tag) -> Self {
         Group {
             delim,
@@ -61,12 +62,15 @@ impl Group {
             field_order: None,
         }
     }
+    #[must_use]
     pub fn delim(&self) -> Tag {
         self.delim
     }
+    #[must_use]
     pub fn field(&self) -> Tag {
         self.field
     }
+    #[must_use]
     pub fn calculate_string(&self) -> String {
         if let Some(order) = &self.field_order {
             todo!("calculate order: {:?}", order)
@@ -100,12 +104,15 @@ impl Field {
     pub fn new<'a, T: IntoFieldValue<FieldValue>>(tag: Tag, value: T) -> Self {
         Field(tag, value.into_field_value())
     }
+    #[must_use]
     pub fn from_bytes(tag: Tag, value: std::sync::Arc<[u8]>) -> Self {
         Field(tag, value)
     }
+    #[must_use]
     pub fn tag(&self) -> Tag {
         self.0
     }
+    #[must_use]
     pub fn value(&self) -> &FieldValue {
         &self.1
     }
@@ -153,6 +160,7 @@ impl FixLength for &Field {
 }
 
 impl FieldMap {
+    #[must_use]
     pub fn from_field_order(_field_order: FieldOrder) -> Self {
         let fields = Default::default();
         let groups = Default::default();
@@ -165,6 +173,7 @@ impl FieldMap {
         }
     }
 
+    #[must_use]
     pub fn from_field_map(src: &FieldMap) -> Self {
         src.clone()
     }
@@ -199,6 +208,7 @@ impl FieldMap {
         self.set_field_base(field.into(), None);
     }
 
+    #[must_use]
     pub fn get_field(&self, tag: Tag) -> Option<&Field> {
         self.fields.get(&tag)
     }
@@ -216,9 +226,11 @@ impl FieldMap {
             Some(value) => Ok(value.string_value()?),
         }
     }
+    #[must_use]
     pub fn get_string_unchecked(&self, tag: Tag) -> String {
         self.fields[&tag].string_value().unwrap() // explicit_unchecked
     }
+    #[must_use]
     pub fn get_bool(&self, tag: Tag) -> bool {
         self.fields[&tag].string_value().ok() == Some("Y".into())
     }
@@ -230,6 +242,7 @@ impl FieldMap {
     pub fn get_field_mut(&mut self, tag: Tag) -> Option<&mut Field> {
         self.fields.get_mut(&tag)
     }
+    #[must_use]
     pub fn is_field_set(&self, tag: Tag) -> bool {
         self.fields.contains_key(&tag)
     }
@@ -251,7 +264,7 @@ impl FieldMap {
             let groupsize = self.groups[&group.field()].len();
             let counttag = group.field();
             // count = new IntField(couttag, groupsize);
-            let count = Field::new(counttag, format!("{}", groupsize));
+            let count = Field::new(counttag, format!("{groupsize}"));
 
             self.set_field_base(count, Some(true));
         }
@@ -353,10 +366,12 @@ impl FieldMap {
         Ok(self.groups[&field].len())
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.fields.len() == 0 && self.groups.len() == 0
     }
 
+    #[must_use]
     pub fn checksum(&self) -> Total {
         let mut total = Total::default();
         for field in self.fields.values() {
@@ -379,6 +394,7 @@ impl FieldMap {
         total
     }
 
+    #[must_use]
     pub fn len(&self) -> Length {
         let mut total = 0;
         for field in self.fields.values() {
@@ -408,6 +424,7 @@ impl FieldMap {
         total
     }
 
+    #[must_use]
     pub fn repeated_tags(&self) -> &Vec<Field> {
         &self.repeated_tags
     }
@@ -425,6 +442,7 @@ impl FieldMap {
         self.groups.clear();
     }
 
+    #[must_use]
     pub fn calculate_string(&self, prefields: Option<FieldOrder>) -> String {
         let group_counter_tags: BTreeSet<&Tag> = self.group_tags().collect();
         let prefields = prefields.unwrap_or_default();

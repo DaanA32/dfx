@@ -9,11 +9,11 @@ impl Parser {
     }
 
     pub fn add_to_stream(&mut self, read: &[u8]) {
-        self.buffer.extend_from_slice(read)
+        self.buffer.extend_from_slice(read);
     }
 
     pub fn clear(&mut self) {
-        self.buffer.clear()
+        self.buffer.clear();
     }
 }
 
@@ -107,6 +107,7 @@ pub fn read_fix(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
 
 /// Returns `Option<(pos, len)>` if it can find the length in the fix message otherwise returns `None`.
 ///
+#[must_use]
 pub fn extract_length(buffer: &[u8]) -> Option<(usize, usize)> {
     let start = buffer.find("\x019=".as_bytes())? + 3;
     let end = buffer[start..].find('\x01')? + start;
@@ -120,6 +121,7 @@ pub fn extract_length(buffer: &[u8]) -> Option<(usize, usize)> {
     }
 }
 
+#[must_use]
 pub fn read_version(buffer: &[u8]) -> Option<&str> {
     let pos: Option<usize> = buffer.find("8=".as_bytes());
     let pos = pos?;
@@ -131,6 +133,7 @@ pub fn read_version(buffer: &[u8]) -> Option<&str> {
     }
 }
 
+#[must_use]
 pub fn read_msg_type(buffer: &[u8]) -> Option<&str> {
     let pos: Option<usize> = buffer.find("\x0135=".as_bytes());
     let pos = pos? + 4;

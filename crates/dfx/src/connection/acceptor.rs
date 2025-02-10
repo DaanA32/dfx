@@ -40,11 +40,10 @@ pub(crate) enum AcceptorError {
 impl Display for AcceptorError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AcceptorError::BindError(err, socket) => fmt.write_fmt(format_args!(
-                "Failed to bind addr: {} error: {}",
-                socket, err
-            )),
-            AcceptorError::ConnectionError(err) => fmt.write_fmt(format_args!("{}", err)),
+            AcceptorError::BindError(err, socket) => {
+                fmt.write_fmt(format_args!("Failed to bind addr: {socket} error: {err}"))
+            }
+            AcceptorError::ConnectionError(err) => fmt.write_fmt(format_args!("{err}")),
         }
     }
 }
@@ -129,14 +128,17 @@ where
 
     /// List available endpoints, useful for random port allocation.
     pub fn endpoints(&self) -> Vec<SocketAddr> {
-        self.thread.iter().filter_map(|t| t.endpoint()).collect()
+        self.thread
+            .iter()
+            .filter_map(ThreadState::endpoint)
+            .collect()
     }
 
     /// Stops the engine, and waits for the threads to finish
     pub fn stop(&mut self) {
         self.running
             .store(false, std::sync::atomic::Ordering::Relaxed);
-        self.join()
+        self.join();
     }
 }
 

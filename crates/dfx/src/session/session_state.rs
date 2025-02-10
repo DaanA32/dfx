@@ -53,7 +53,7 @@ impl<Log: Logger> SessionState<Log> {
             logout_reason: None,
             test_request_counter: 0,
             heartbeat_int,
-            heartbeat_int_ms: (heartbeat_int as u64) * 1000,
+            heartbeat_int_ms: u64::from(heartbeat_int) * 1000,
             last_received_time_dt: Instant::now(),
             last_sent_time_dt: Instant::now(),
             logon_timeout: 10,
@@ -70,7 +70,7 @@ impl<Log: Logger> SessionState<Log> {
     pub(crate) fn reset(&mut self, reason: Option<&str>) {
         self.msg_store.reset();
         let event = match reason {
-            Some(reason) => format!("Session reset: {}", reason),
+            Some(reason) => format!("Session reset: {reason}"),
             _ => "Session reset".into(),
         };
         self.logger.on_event(event.as_str());
@@ -129,8 +129,7 @@ impl<Log: Logger> SessionState<Log> {
     pub(crate) fn resend_requested(&self) -> bool {
         self.resend_range
             .as_ref()
-            .map(|range| !(range.begin_seq_num == 0 && range.end_seq_num == 0))
-            .unwrap_or(false)
+            .is_some_and(|range| !(range.begin_seq_num == 0 && range.end_seq_num == 0))
     }
 
     /// Get the session state's is enabled.
@@ -467,7 +466,7 @@ impl<Log: Logger> SessionState<Log> {
     }
 
     pub(crate) fn refresh(&mut self) {
-        self.msg_store.refresh()
+        self.msg_store.refresh();
     }
 
     pub(crate) fn next_sender_msg_seq_num(&self) -> u32 {
@@ -475,11 +474,11 @@ impl<Log: Logger> SessionState<Log> {
     }
 
     pub(crate) fn set_next_sender_msg_seq_num(&mut self, seq_num: u32) {
-        self.msg_store.set_next_sender_msg_seq_num(seq_num)
+        self.msg_store.set_next_sender_msg_seq_num(seq_num);
     }
 
     pub(crate) fn incr_next_sender_msg_seq_num(&mut self) {
-        self.msg_store.incr_next_sender_msg_seq_num()
+        self.msg_store.incr_next_sender_msg_seq_num();
     }
 
     pub(crate) fn next_target_msg_seq_num(&self) -> u32 {
@@ -487,19 +486,19 @@ impl<Log: Logger> SessionState<Log> {
     }
 
     pub(crate) fn set_next_target_msg_seq_num(&mut self, seq_num: u32) {
-        self.msg_store.set_next_target_msg_seq_num(seq_num)
+        self.msg_store.set_next_target_msg_seq_num(seq_num);
     }
 
     pub(crate) fn incr_next_target_msg_seq_num(&mut self) {
-        self.msg_store.incr_next_target_msg_seq_num()
+        self.msg_store.incr_next_target_msg_seq_num();
     }
 
     pub(crate) fn clear_queue(&mut self) {
-        self.message_queue.clear()
+        self.message_queue.clear();
     }
 
     pub(crate) fn set(&mut self, msg_seq_num: u32, message_string: &str) {
-        self.msg_store.set(msg_seq_num, message_string)
+        self.msg_store.set(msg_seq_num, message_string);
     }
 
     pub(crate) fn queue(&mut self, msg_seq_num: u32, msg: Message) {
@@ -510,7 +509,7 @@ impl<Log: Logger> SessionState<Log> {
         self.msg_store
             .get(begin_seq_num, end_seq_num)
             .iter()
-            .map(|v| v.to_owned().to_owned())
+            .map(|v| v.to_owned().clone())
             .collect()
     }
 
@@ -574,5 +573,5 @@ pub(crate) fn need_test_request(
     test_request_counter: u32,
 ) -> bool {
     (now - last_received_time).as_millis()
-        >= (1.2 * ((test_request_counter as u128 + 1) * heartbeat_int_ms) as f64) as u128
+        >= (1.2 * ((u128::from(test_request_counter) + 1) * heartbeat_int_ms) as f64) as u128
 }

@@ -25,15 +25,14 @@ pub(crate) enum SessionSchedule {
 
 impl SessionSchedule {
     pub(crate) fn is_new_session(&self, old_time: DateTime<Utc>, test_time: DateTime<Utc>) -> bool {
-        match self {
-            SessionSchedule::NonStop => false,
-            _ => {
-                if old_time < test_time {
-                    let next_end = self.next_end(old_time);
-                    return old_time <= next_end && next_end < test_time;
-                }
-                false
+        if self == &SessionSchedule::NonStop {
+            false
+        } else {
+            if old_time < test_time {
+                let next_end = self.next_end(old_time);
+                return old_time <= next_end && next_end < test_time;
             }
+            false
         }
     }
 

@@ -31,6 +31,7 @@ pub enum MessageFactoryError {
 }
 
 impl MessageFactoryError {
+    #[must_use]
     pub fn message(&self) -> String {
         match self {
             MessageFactoryError::UnsupportedBeginString {
@@ -55,11 +56,13 @@ impl Default for DefaultMessageFactory {
 }
 
 impl DefaultMessageFactory {
+    #[must_use]
     pub fn new() -> Self {
         DefaultMessageFactory {
             factory_map: Default::default(),
         }
     }
+    #[must_use]
     pub fn boxed() -> Box<dyn MessageFactory> {
         Box::new(DefaultMessageFactory::new())
     }

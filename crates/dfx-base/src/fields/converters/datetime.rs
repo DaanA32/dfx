@@ -29,6 +29,7 @@ pub enum DateTimeFormat {
 }
 
 impl DateTimeFormat {
+    #[must_use]
     pub fn as_datetime_format(&self) -> &str {
         match self {
             DateTimeFormat::Nanoseconds => DATE_TIME_FORMAT_WITH_NANOSECONDS,
@@ -37,6 +38,7 @@ impl DateTimeFormat {
             DateTimeFormat::Seconds => DATE_TIME_FORMAT_WITHOUT_MILLISECONDS,
         }
     }
+    #[must_use]
     pub fn as_time_format(&self) -> &str {
         match self {
             DateTimeFormat::Nanoseconds => TIME_ONLY_FORMAT_WITH_NANOSECONDS,

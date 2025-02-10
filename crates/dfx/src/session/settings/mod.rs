@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, net::SocketAddr};
 
 mod builder;
-use builder::*;
+use builder::DynamicSessionSettingBuilder;
 mod setting;
 pub(crate) use setting::*;
 
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn settings_test_one_sessions() {
-        let data = r#"# Comment
+        let data = r"# Comment
 [DEFAULT]
 ConnectionType=acceptor
 BeginString=TEST
@@ -425,9 +425,9 @@ SocketAcceptHost=127.0.0.1
 SocketAcceptPort=5000
 [SESSION]
 TargetCompID=target1
-"#;
+";
         let settings = SessionSettings::from_string(data);
-        println!("{:?}", settings);
+        println!("{settings:?}");
         assert!(settings.is_ok());
         let settings = settings.unwrap();
         assert!(settings.sessions.len() == 1);
@@ -444,7 +444,7 @@ TargetCompID=target1
 
     #[test]
     fn settings_test_two_sessions() {
-        let data = r#"# Comment
+        let data = r"# Comment
 [DEFAULT]
 ConnectionType=acceptor
 BeginString=TEST
@@ -459,9 +459,9 @@ TargetCompID=target2
 [SESSION]
 SenderCompID=sender_any
 TargetCompID=*
-"#;
+";
         let settings = SessionSettings::from_string(data);
-        println!("{:?}", settings);
+        println!("{settings:?}");
         assert!(settings.is_ok());
         let settings = settings.unwrap();
         assert!(settings.sessions.len() == 3);
@@ -515,8 +515,8 @@ TargetCompID=*
 
     #[test]
     fn settings_test_no_default() {
-        let data = r#"# Comment
-"#;
+        let data = r"# Comment
+";
         let settings = SessionSettings::from_string(data);
         assert!(matches!(
             settings,
@@ -526,11 +526,11 @@ TargetCompID=*
 
     #[test]
     fn settings_test_double_default() {
-        let data = r#"# Comment
+        let data = r"# Comment
 [DEFAULT]
 [SESSION]
 [DEFAULT]
-"#;
+";
         let settings = SessionSettings::from_string(data);
         assert!(matches!(
             settings,
@@ -540,11 +540,11 @@ TargetCompID=*
 
     #[test]
     fn settings_test_double_default_alt() {
-        let data = r#"# Comment
+        let data = r"# Comment
 [DEFAULT]
 [DEFAULT]
 [SESSION]
-"#;
+";
         let settings = SessionSettings::from_string(data);
         assert!(matches!(
             settings,
@@ -554,10 +554,10 @@ TargetCompID=*
 
     #[test]
     fn settings_test_invalid_setting() {
-        let data = r#"# Comment
+        let data = r"# Comment
 [DEFAULT]
 asdfasd=Y
-"#;
+";
         let settings = SessionSettings::from_string(data);
         assert!(matches!(
             settings,

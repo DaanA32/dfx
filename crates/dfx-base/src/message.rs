@@ -24,6 +24,7 @@ use std::ops::DerefMut;
 pub struct Header(FieldMap);
 
 impl Header {
+    #[must_use]
     pub fn calculate_string(&self) -> String {
         self.0.calculate_string(Some(HEADER_FIELD_ORDER.to_vec()))
     }
@@ -49,6 +50,7 @@ impl DerefMut for Header {
 pub struct Trailer(FieldMap);
 
 impl Trailer {
+    #[must_use]
     pub fn calculate_string(&self) -> String {
         self.0.calculate_string(Some(TRAILER_FIELD_ORDER.to_vec()))
     }
@@ -114,12 +116,14 @@ impl Message {
         Ok(message)
     }
 
+    #[must_use]
     pub fn header(&self) -> &Header {
         &self.header
     }
     pub fn header_mut(&mut self) -> &mut Header {
         &mut self.header
     }
+    #[must_use]
     pub fn trailer(&self) -> &Trailer {
         &self.trailer
     }
@@ -137,6 +141,7 @@ impl Message {
         }
     }
 
+    #[must_use]
     pub fn is_header_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
         match tag {
             tags::BeginString => true,
@@ -172,6 +177,7 @@ impl Message {
         }
     }
 
+    #[must_use]
     pub fn is_trailer_field(tag: Tag, data_dictionary: Option<&DataDictionary>) -> bool {
         match tag {
             tags::SignatureLength => true,
@@ -211,7 +217,7 @@ impl Message {
                 start = false;
             } else if byte.is_ascii_digit() {
                 tag *= 10;
-                tag += byte as Tag - b'0' as Tag;
+                tag += Tag::from(byte) - Tag::from(b'0');
                 start = false;
             } else {
                 return Err(MessageParseError::InvalidTagNumber(
@@ -263,7 +269,7 @@ impl Message {
 
     /// Creates a Message from a FIX string.
     ///
-    /// msg_factory
+    /// `msg_factory`
     /// > If [None], any groups will be constructed as generic Group objects
     ///
     /// ignoreBody
@@ -294,7 +300,7 @@ impl Message {
             let f = Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
             match (session_dd, app_dd) {
                 (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
-                    size_hint = f.to_usize()
+                    size_hint = f.to_usize();
                 }
                 (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => size_hint = f.to_usize(),
                 _ => size_hint = None,
@@ -424,10 +430,10 @@ impl Message {
                         Message::extract_field(msgstr, &mut pos, session_dd, app_dd, size_hint)?;
                     match (session_dd, app_dd) {
                         (Some(session_dd), _) if session_dd.is_length_field(f.tag()) => {
-                            size_hint = f.to_usize()
+                            size_hint = f.to_usize();
                         }
                         (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => {
-                            size_hint = f.to_usize()
+                            size_hint = f.to_usize();
                         }
                         _ => size_hint = None,
                     };
@@ -474,34 +480,31 @@ impl Message {
                         );
                     }
 
-                    match group.as_mut() {
-                        Some(group) => {
-                            // f is just a field in our group entry.  Add it and iterate again.
-                            group.set_field_base(f.clone(), None);
+                    if let Some(group) = group.as_mut() {
+                        // f is just a field in our group entry.  Add it and iterate again.
+                        group.set_field_base(f.clone(), None);
 
-                            if group_dd.is_group(f.tag()) {
-                                // f is a counter for a nested group.  Recurse!
+                        if group_dd.is_group(f.tag()) {
+                            // f is a counter for a nested group.  Recurse!
 
-                                pos = Message::set_group(
-                                    f.clone(),
-                                    msgstr,
-                                    pos,
-                                    group,
-                                    group_dd.get_group(f.tag()),
-                                    session_dd,
-                                    app_dd,
-                                    msg_factory,
-                                )?;
-                            }
+                            pos = Message::set_group(
+                                f.clone(),
+                                msgstr,
+                                pos,
+                                group,
+                                group_dd.get_group(f.tag()),
+                                session_dd,
+                                app_dd,
+                                msg_factory,
+                            )?;
                         }
-                        None => {
-                            // This means we got into the group's fields without finding a delimiter tag.
-                            let _b = &msgstr[pos..];
-                            return Err(MessageParseError::GroupDelimiterTagException(
-                                grp_no_fld.tag(),
-                                grp_entry_delimiter_tag,
-                            ));
-                        }
+                    } else {
+                        // This means we got into the group's fields without finding a delimiter tag.
+                        let _b = &msgstr[pos..];
+                        return Err(MessageParseError::GroupDelimiterTagException(
+                            grp_no_fld.tag(),
+                            grp_entry_delimiter_tag,
+                        ));
                     }
                 }
 
@@ -538,7 +541,7 @@ impl Message {
     }
 
     fn checksum(&self) -> u32 {
-        (self.header.checksum() + self.body.checksum() + self.trailer.checksum()).0 as u32
+        u32::from((self.header.checksum() + self.body.checksum() + self.trailer.checksum()).0)
     }
 
     fn clear(&mut self) {
@@ -563,10 +566,12 @@ impl Message {
         )
     }
 
+    #[must_use]
     pub fn is_admin(&self) -> bool {
         matches!(self.header.get_field(tags::MsgType), Some(field) if Message::is_admin_msg_type(field.value()))
     }
 
+    #[must_use]
     pub fn is_admin_msg_type(msg_type: &[u8]) -> bool {
         msg_type.len() == 1 && "0A12345n".contains(msg_type[0] as char)
     }
@@ -605,7 +610,7 @@ impl Message {
             fix_values::BeginString::FIX50 => Ok(ApplVerID::FIX50),
             fix_values::BeginString::FIX50SP1 => Ok(ApplVerID::FIX50SP1),
             fix_values::BeginString::FIX50SP2 => Ok(ApplVerID::FIX50SP2),
-            _ => Err(format!("ApplVerID for {} not supported", begin_string)),
+            _ => Err(format!("ApplVerID for {begin_string} not supported")),
         }
     }
 
@@ -733,6 +738,7 @@ impl Message {
         }
     }
 
+    #[must_use]
     pub fn extract_contra_session_id(&self) -> SessionId {
         SessionId::new(
             self.header
@@ -811,6 +817,7 @@ impl From<ConversionError> for MessageParseError {
 }
 
 impl MessageParseError {
+    #[must_use]
     pub fn as_tag(&self) -> Option<Tag> {
         match self {
             Self::InvalidMessage(_) => None,
@@ -825,6 +832,7 @@ impl MessageParseError {
             Self::ConversionError(_) => todo!(),
         }
     }
+    #[must_use]
     pub fn as_session_reject(self) -> Option<SessionRejectReason> {
         match self {
             Self::InvalidMessage(reason) => Some(SessionRejectReason::OTHER(reason)),
@@ -856,7 +864,7 @@ mod tests {
     fn test_parse() {
         let dd = DataDictionary::from_file("../../spec/FIX44.xml")
             .expect("Able to read FIX44.xml file.");
-        println!("{:#?}", dd);
+        println!("{dd:#?}");
 
         let mut message = Message::default();
 
@@ -872,13 +880,13 @@ mod tests {
             None,
             false,
         );
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
 
         let actual = message.to_string_mut().replace(Message::SOH, "|");
 
-        println!("{:?}", expected);
-        println!("{:?}", actual);
+        println!("{expected:?}");
+        println!("{actual:?}");
         assert_eq!(expected, actual);
     }
 
@@ -901,19 +909,19 @@ mod tests {
             None,
             false,
         );
-        println!("{:?}", result);
+        println!("{result:?}");
         assert!(result.is_ok());
         assert!(message.is_admin());
 
         let actual = message.to_string_mut().replace(Message::SOH, "|");
 
-        println!("{:?}", expected);
-        println!("{:?}", actual);
+        println!("{expected:?}");
+        println!("{actual:?}");
         assert_eq!(expected, actual);
 
         let result = DataDictionary::validate(&message, Some(&dd), &dd, "FIX.4.4", "A");
-        println!("{:?}", message);
-        println!("{:?}", result);
+        println!("{message:?}");
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 
@@ -957,9 +965,9 @@ mod tests {
             None,
             false,
         );
-        println!("{:?}", result);
+        println!("{result:?}");
         let actual = message.to_string().replace(Message::SOH, "|");
-        println!("{}", actual);
+        println!("{actual}");
         assert!(result.is_ok());
         assert!(message.is_admin());
 
@@ -971,14 +979,14 @@ mod tests {
             .map(|c| if c == Message::SOH { '|' } else { c })
             .collect();
 
-        println!("{:?}", expected);
-        println!("{:?}", actual);
+        println!("{expected:?}");
+        println!("{actual:?}");
 
         assert_eq!(msgstr, actual);
 
         let result = DataDictionary::validate(&message, Some(&dd), &dd, "FIX.4.4", "A");
-        println!("{:?}", message);
-        println!("{:?}", result);
+        println!("{message:?}");
+        println!("{result:?}");
         assert!(result.is_ok());
     }
 }

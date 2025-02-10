@@ -25,7 +25,7 @@ struct CoinbaseApp {
 impl CoinbaseApp {
     pub fn new(password: &str, secret: &str) -> Result<Self, DecodeError> {
         let engine = engine::GeneralPurpose::new(&alphabet::URL_SAFE, general_purpose::PAD);
-        let secret = engine.decode(secret.replace("+", "-").replace("/", "_"))?;
+        let secret = engine.decode(secret.replace('+', "-").replace('/', "_"))?;
         Ok(CoinbaseApp {
             password: password.into(),
             secret,
@@ -38,7 +38,7 @@ impl Application for CoinbaseApp {
         &mut self,
         session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::session::DoNotAccept> {
-        println!("Create {}", session_id);
+        println!("Create {session_id}");
         Ok(())
     }
 
@@ -46,7 +46,7 @@ impl Application for CoinbaseApp {
         &mut self,
         session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::session::LogonReject> {
-        println!("Logon {}", session_id);
+        println!("Logon {session_id}");
         Ok(())
     }
 
@@ -54,7 +54,7 @@ impl Application for CoinbaseApp {
         &mut self,
         session_id: &dfx::session_id::SessionId,
     ) -> Result<(), dfx::session::ApplicationError> {
-        println!("Logout {}", session_id);
+        println!("Logout {session_id}");
         Ok(())
     }
 
@@ -133,8 +133,7 @@ fn prehash(
     password: &str,
 ) -> String {
     format!(
-        "{}\x01{}\x01{}\x01{}\x01{}\x01{}",
-        sending_time, msg_type, msg_seq_num, sender_comp_id, target_comp_id, password
+        "{sending_time}\x01{msg_type}\x01{msg_seq_num}\x01{sender_comp_id}\x01{target_comp_id}\x01{password}"
     )
 }
 
@@ -157,7 +156,7 @@ fn main() {
     let pass = pass_var.unwrap();
     let coinbase_app = CoinbaseApp::new(&pass, &key);
     if let Err(err) = coinbase_app {
-        println!("Failed to decode secret: {err:?}, {}", err);
+        println!("Failed to decode secret: {err:?}, {err}");
         return;
     }
     let app = coinbase_app.unwrap();
@@ -172,5 +171,5 @@ fn main() {
     );
 
     initiator.start();
-    initiator.join()
+    initiator.join();
 }

@@ -306,7 +306,7 @@ where
                     ResponderEvent::Send(message) => {
                         let stream = &mut self.stream.as_mut().unwrap();
                         match stream.write_all(message.as_bytes()) {
-                            Ok(_) => tx.send(ResponderResponse::Sent(true)).unwrap_or(()),
+                            Ok(()) => tx.send(ResponderResponse::Sent(true)).unwrap_or(()),
                             Err(_) => tx.send(ResponderResponse::Sent(false)).unwrap_or(()),
                         };
                         Ok(stream.flush()?)
