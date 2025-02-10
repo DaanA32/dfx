@@ -212,13 +212,13 @@ impl DynamicSessionSettingBuilder {
             SettingOption::SSLMaxProtocol => self.ssl_max_protocol = Some(value.into()),
             SettingOption::SSLUseSNI => self.ssl_use_sni = Some(value.into()),
             SettingOption::SSLAcceptInvalidCerts => {
-                self.ssl_accept_invalid_certs = Some(value.into())
+                self.ssl_accept_invalid_certs = Some(value.into());
             }
             SettingOption::SSLAcceptInvalidHostnames => {
-                self.ssl_accept_invalid_hostnames = Some(value.into())
+                self.ssl_accept_invalid_hostnames = Some(value.into());
             }
             SettingOption::SSLDisableBuiltInRoots => {
-                self.ssl_disable_built_in_roots = Some(value.into())
+                self.ssl_disable_built_in_roots = Some(value.into());
             }
             SettingOption::SSLCertificate => self.ssl_certificate = Some(value.into()),
             SettingOption::SSLCertificatePassword => {

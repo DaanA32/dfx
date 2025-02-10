@@ -483,7 +483,7 @@ impl MessageStoreFactory for DefaultStoreFactory {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_eq, path::Path};
+    use std::assert_eq;
 
     use dfx_base::session_id::SessionId;
 

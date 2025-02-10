@@ -432,7 +432,7 @@ impl Message {
                             size_hint = f.to_usize();
                         }
                         (_, Some(app_dd)) if app_dd.is_length_field(f.tag()) => {
-                            size_hint = f.to_usize()
+                            size_hint = f.to_usize();
                         }
                         _ => size_hint = None,
                     };
