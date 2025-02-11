@@ -663,7 +663,7 @@ where
 
         match message {
             Ok(mut message) => {
-                let message_string = message.to_string_mut();
+                let message_string = message.to_bytes_mut();
                 if 0 == seq_num {
                     self.persist(&message, &message_string);
                 }
@@ -675,10 +675,11 @@ where
             },
         }
     }
-    fn send(&mut self, message: String) -> bool {
+    fn send(&mut self, message: Vec<u8>) -> bool {
         self.state.set_last_sent_time_dt(Instant::now());
         if let Some(responder) = self.responder.as_mut() {
-            self.log.on_outgoing(message.as_str());
+            let msg_str = String::from_utf8_lossy(&message);
+            self.log.on_outgoing(&msg_str);
             responder.send(message)
         } else {
             false
@@ -1034,7 +1035,7 @@ where
         }
     }
 
-    fn persist(&mut self, message: &Message, message_string: &str) {
+    fn persist(&mut self, message: &Message, message_string: &[u8]) {
         if self.persist_messages {
             let msg_seq_num = message.header().get_int(tags::MsgSeqNum).unwrap();
             self.state.set(msg_seq_num, message_string);
@@ -1214,7 +1215,7 @@ where
                 for msg_str in self.state.get_messages(beg_seq_no, end_seq_no) {
                     let mut msg = Message::default();
                     msg.from_string(
-                        msg_str.as_bytes(),
+                        &msg_str,
                         true,
                         Some(&self.session_data_dictionary),
                         Some(&self.application_data_dictionary),
@@ -1223,7 +1224,7 @@ where
                     )
                     .map_err(|mp| {
                         SessionHandleMessageError::MessageParseError {
-                            message: msg_str.into_bytes(),
+                            message: msg_str,
                             parse_error: mp,
                         }
                     })?;
@@ -1248,7 +1249,7 @@ where
                                 self.generate_sequence_reset(&resend_request, begin, msg_seq_num)?;
                             }
 
-                            self.send(msg.to_string_mut());
+                            self.send(msg.to_bytes_mut());
                             begin = 0;
                         } else {
                             continue;

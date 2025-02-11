@@ -17,13 +17,13 @@ pub trait MessageStore: Send + std::fmt::Debug {
     fn set_next_target_msg_seq_num(&mut self, seq_num: u32);
     fn incr_next_target_msg_seq_num(&mut self);
 
-    fn set(&mut self, msg_seq_num: u32, message_string: &str);
-    fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String>;
+    fn set(&mut self, msg_seq_num: u32, message_string: &[u8]);
+    fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<Vec<u8>>;
 }
 
 #[derive(Debug)]
 pub(crate) struct MemoryStore {
-    messages: BTreeMap<u32, String>,
+    messages: BTreeMap<u32, Vec<u8>>,
     next_sender_msg_seq_num: u32,
     next_target_msg_seq_num: u32,
     creation_time: Option<DateTime<Utc>>,
@@ -78,11 +78,11 @@ impl MessageStore for MemoryStore {
         self.next_target_msg_seq_num += 1;
     }
 
-    fn set(&mut self, msg_seq_num: u32, message_string: &str) {
+    fn set(&mut self, msg_seq_num: u32, message_string: &[u8]) {
         self.messages.insert(msg_seq_num, message_string.into());
     }
 
-    fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
+    fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<Vec<u8>> {
         assert!(begin_seq_num <= end_seq_num);
         self.messages
             .range(begin_seq_num..=end_seq_num)
@@ -278,7 +278,7 @@ impl FileStore {
         Ok(())
     }
 
-    pub fn get(&self, start_seq_num: u32, end_seq_num: u32) -> io::Result<Vec<String>> {
+    pub fn get(&self, start_seq_num: u32, end_seq_num: u32) -> io::Result<Vec<Vec<u8>>> {
         let mut messages = Vec::with_capacity((end_seq_num - start_seq_num + 1) as usize);
         for i in start_seq_num..=end_seq_num {
             if let Some(msg_def) = self.offsets.get(&i) {
@@ -288,17 +288,17 @@ impl FileStore {
                     .unwrap()
                     .seek(SeekFrom::Start(msg_def.index))?;
                 self.msg_file.as_ref().unwrap().read_exact(&mut msg_bytes)?;
-                let msg = String::from_utf8_lossy(&msg_bytes).to_string();
+                let msg = msg_bytes;
                 messages.push(msg);
             }
         }
         Ok(messages)
     }
 
-    pub fn set(&mut self, msg_seq_num: u32, msg: &str) -> io::Result<()> {
+    pub fn set(&mut self, msg_seq_num: u32, msg: &[u8]) -> io::Result<()> {
         self.msg_file.as_mut().unwrap().seek(SeekFrom::End(0))?;
         let offset = self.msg_file.as_ref().unwrap().stream_position()?;
-        let msg_bytes = msg.as_bytes();
+        let msg_bytes = msg;
         let size = msg_bytes.len() as i32;
 
         let mut header_file = OpenOptions::new()
@@ -401,11 +401,11 @@ impl MessageStore for FileStore {
         self.incr_next_target_msg_seq_num().unwrap();
     }
 
-    fn set(&mut self, msg_seq_num: u32, message_string: &str) {
-        self.set(msg_seq_num, message_string).unwrap();
+    fn set(&mut self, msg_seq_num: u32, message_string: &[u8]) {
+        self.set(msg_seq_num, message_string).unwrap()
     }
 
-    fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
+    fn get(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<Vec<u8>> {
         self.get(begin_seq_num, end_seq_num).unwrap()
     }
 }
@@ -541,8 +541,8 @@ mod tests {
             let store = FileStore::new(&session_id, &path);
             assert!(store.is_ok());
             let mut store: Box<dyn MessageStore> = Box::new(store.unwrap());
-            store.set(2, "ONE");
-            store.set(3, "TWO");
+            store.set(2, b"ONE");
+            store.set(3, b"TWO");
         }
         {
             let store = FileStore::new(&session_id, &path);
@@ -550,8 +550,8 @@ mod tests {
             let store: Box<dyn MessageStore> = Box::new(store.unwrap());
             let messages = store.get(2, 3);
             assert_eq!(messages.len(), 2);
-            assert_eq!(messages[0], "ONE");
-            assert_eq!(messages[1], "TWO");
+            assert_eq!(messages[0], b"ONE");
+            assert_eq!(messages[1], b"TWO");
         }
     }
 }

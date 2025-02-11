@@ -497,19 +497,19 @@ impl<Log: Logger> SessionState<Log> {
         self.message_queue.clear();
     }
 
-    pub(crate) fn set(&mut self, msg_seq_num: u32, message_string: &str) {
-        self.msg_store.set(msg_seq_num, message_string);
+    pub(crate) fn set(&mut self, msg_seq_num: u32, message_string: &[u8]) {
+        self.msg_store.set(msg_seq_num, message_string)
     }
 
     pub(crate) fn queue(&mut self, msg_seq_num: u32, msg: Message) {
         self.message_queue.insert(msg_seq_num, msg);
     }
 
-    pub(crate) fn get_messages(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<String> {
+    pub(crate) fn get_messages(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<Vec<u8>> {
         self.msg_store
             .get(begin_seq_num, end_seq_num)
             .iter()
-            .map(|v| v.to_owned().clone())
+            .map(|v| v.to_owned().to_owned())
             .collect()
     }
 

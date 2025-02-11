@@ -3,12 +3,12 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 
 pub(crate) trait Responder: Send {
-    fn send(&mut self, message: String) -> bool;
+    fn send(&mut self, message: Vec<u8>) -> bool;
     fn disconnect(&mut self);
 }
 
 pub(crate) enum ResponderEvent {
-    Send(String),
+    Send(Vec<u8>),
     Disconnect,
 }
 pub(crate) enum ResponderResponse {
@@ -29,7 +29,7 @@ impl ChannelResponder {
 }
 
 impl Responder for ChannelResponder {
-    fn send(&mut self, message: String) -> bool {
+    fn send(&mut self, message: Vec<u8>) -> bool {
         match self.tx.send(ResponderEvent::Send(message)) {
             Ok(()) => match self.rx.recv_timeout(Duration::from_millis(10)) {
                 Ok(response) => match response {

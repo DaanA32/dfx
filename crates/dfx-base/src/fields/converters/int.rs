@@ -168,3 +168,9 @@ impl IntoFieldValue<FieldValue> for i64 {
         format!("{self}").as_bytes().to_vec().into()
     }
 }
+
+impl IntoFieldValue<FieldValue> for i32 {
+    fn into_field_value(&self) -> FieldValue {
+        format!("{self}").as_bytes().to_vec().into()
+    }
+}

@@ -25,8 +25,8 @@ pub struct Header(FieldMap);
 
 impl Header {
     #[must_use]
-    pub fn calculate_string(&self) -> String {
-        self.0.calculate_string(Some(HEADER_FIELD_ORDER.to_vec()))
+    pub fn calculate_bytes(&self) -> Vec<u8> {
+        self.0.calculate_bytes(Some(HEADER_FIELD_ORDER.to_vec()))
     }
 }
 
@@ -51,8 +51,8 @@ pub struct Trailer(FieldMap);
 
 impl Trailer {
     #[must_use]
-    pub fn calculate_string(&self) -> String {
-        self.0.calculate_string(Some(TRAILER_FIELD_ORDER.to_vec()))
+    pub fn calculate_bytes(&self) -> Vec<u8> {
+        self.0.calculate_bytes(Some(TRAILER_FIELD_ORDER.to_vec()))
     }
 }
 
@@ -551,19 +551,24 @@ impl Message {
         self.trailer.clear();
     }
 
-    pub fn to_string_mut(&mut self) -> String {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.header.calculate_bytes();
+        bytes.append(&mut self.calculate_bytes(None));
+        bytes.append(&mut self.trailer.calculate_bytes());
+        bytes
+    }
+
+    pub fn to_bytes_mut(&mut self) -> Vec<u8> {
         let len = self.body_length().to_string();
         self.header
             .set_field_base(FieldBase::new(tags::BodyLength, len), Some(true));
         let checksum = format!("{:03}", self.checksum());
         self.trailer
             .set_field_base(FieldBase::new(tags::CheckSum, checksum), Some(true));
-        format!(
-            "{}{}{}",
-            self.header.calculate_string(),
-            self.calculate_string(None),
-            self.trailer.calculate_string()
-        )
+        let mut bytes = self.header.calculate_bytes();
+        bytes.append(&mut self.calculate_bytes(None));
+        bytes.append(&mut self.trailer.calculate_bytes());
+        bytes
     }
 
     #[must_use]
@@ -781,12 +786,13 @@ impl DerefMut for Message {
 
 impl Display for Message {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.write_fmt(format_args!(
-            "{}{}{}",
-            self.header.calculate_string(),
-            self.calculate_string(None),
-            self.trailer.calculate_string()
-        ))
+        let actual = self
+            .to_bytes()
+            .iter()
+            .map(|b| *b as char)
+            .collect::<String>()
+            .replace(Message::SOH, "|");
+        fmt.write_fmt(format_args!("{}", actual))
     }
 }
 
@@ -883,7 +889,12 @@ mod tests {
         println!("{result:?}");
         assert!(result.is_ok());
 
-        let actual = message.to_string_mut().replace(Message::SOH, "|");
+        let actual = message
+            .to_bytes_mut()
+            .iter()
+            .map(|b| *b as char)
+            .collect::<String>()
+            .replace(Message::SOH, "|");
 
         println!("{expected:?}");
         println!("{actual:?}");
@@ -913,7 +924,12 @@ mod tests {
         assert!(result.is_ok());
         assert!(message.is_admin());
 
-        let actual = message.to_string_mut().replace(Message::SOH, "|");
+        let actual = message
+            .to_bytes_mut()
+            .iter()
+            .map(|b| *b as char)
+            .collect::<String>()
+            .replace(Message::SOH, "|");
 
         println!("{expected:?}");
         println!("{actual:?}");
@@ -971,7 +987,12 @@ mod tests {
         assert!(result.is_ok());
         assert!(message.is_admin());
 
-        let actual = message.to_string_mut().replace(Message::SOH, "|");
+        let actual = message
+            .to_bytes_mut()
+            .iter()
+            .map(|b| *b as char)
+            .collect::<String>()
+            .replace(Message::SOH, "|");
 
         let msgstr: String = expected
             .iter()

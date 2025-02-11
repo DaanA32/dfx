@@ -71,12 +71,12 @@ impl Group {
         self.field
     }
     #[must_use]
-    pub fn calculate_string(&self) -> String {
+    pub fn calculate_bytes(&self) -> Vec<u8> {
         if let Some(order) = &self.field_order {
             todo!("calculate order: {:?}", order)
         } else {
             let order: Vec<Tag> = vec![self.delim];
-            self.map.calculate_string(Some(order))
+            self.map.calculate_bytes(Some(order))
         }
     }
 }
@@ -125,6 +125,13 @@ impl Field {
             self.tag(),
             self.as_value::<&str>().ok().unwrap_or("")
         )
+    }
+    pub(crate) fn calculate_bytes(&self) -> Vec<u8> {
+        let mut value: Vec<u8> = self.tag().into_field_value().as_ref().into();
+        value.push('=' as u8);
+        value.append(&mut self.value().as_ref().into());
+        value.push(Message::SOH as u8);
+        value
     }
     pub fn as_value<'a, T>(&'a self) -> Result<T, ConversionError>
     where
@@ -443,26 +450,18 @@ impl FieldMap {
     }
 
     #[must_use]
-    pub fn calculate_string(&self, prefields: Option<FieldOrder>) -> String {
+    pub fn calculate_bytes(&self, prefields: Option<FieldOrder>) -> Vec<u8> {
         let group_counter_tags: BTreeSet<&Tag> = self.group_tags().collect();
         let prefields = prefields.unwrap_or_default();
-        let mut sb = String::new();
+        let mut sb = Vec::new();
 
         for prefield in &prefields {
-            if self.is_field_set(*prefield) {
-                sb.push_str(
-                    format!(
-                        "{}={}{}",
-                        prefield,
-                        self.get_string_unchecked(*prefield),
-                        Message::SOH
-                    )
-                    .as_str(),
-                );
+            if let Some(field) = self.get_field(*prefield) {
+                sb.append(&mut field.calculate_bytes());
                 if group_counter_tags.contains(prefield) {
                     let glist = &self.groups[prefield];
                     for g in glist {
-                        sb.push_str(&g.calculate_string());
+                        sb.append(&mut g.calculate_bytes());
                     }
                 }
             }
@@ -475,15 +474,7 @@ impl FieldMap {
             if prefields.contains(&field.tag()) {
                 continue; //already did this one
             }
-            sb.push_str(
-                format!(
-                    "{}={}{}",
-                    field.tag(),
-                    field.string_value().unwrap(),
-                    Message::SOH
-                )
-                .as_str(),
-            );
+            sb.append(&mut field.calculate_bytes());
         }
 
         for counter_tag in self.groups.keys() {
@@ -495,18 +486,10 @@ impl FieldMap {
             if grouplist.is_empty() {
                 continue; //probably unnecessary, but it doesn't hurt to check
             }
-
-            sb.push_str(
-                format!(
-                    "{}{}",
-                    self.fields[counter_tag].to_string_field(),
-                    Message::SOH
-                )
-                .as_str(),
-            );
+            sb.append(&mut self.fields[counter_tag].calculate_bytes());
 
             for group in grouplist {
-                sb.push_str(&group.calculate_string());
+                sb.append(&mut group.calculate_bytes());
             }
         }
 
