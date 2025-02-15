@@ -10,8 +10,8 @@ use dfx::{
 };
 
 mod common;
-use common::runner;
 use common::TestApplication;
+use dfx_testing::runner;
 
 #[test]
 pub fn test_client_heartbeat() {

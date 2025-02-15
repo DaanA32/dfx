@@ -1,9 +1,10 @@
 use std::{
     io::{Read, Write},
     sync::mpsc::{Receiver, Sender},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
+use chrono::Utc;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
 use dfx_base::message::{Message, MessageParseError};
 use dfx_base::message_factory::MessageFactory;
@@ -11,10 +12,11 @@ use dfx_base::session_id::SessionId;
 
 use crate::{
     logging::{LogFactory, Logger},
-    message_store::MessageStoreFactory,
+    message_store::{MessageStore, MessageStoreFactory},
     parser::{Parser, ParserError},
     session::{
-        Application, ChannelResponder, ISession, ResponderEvent, ResponderResponse, SessionSetting,
+        Application, ChannelResponder, Event, ISession, Input, Output, Replay, ReplayRequest,
+        ResponderEvent, ResponderResponse, SessionSetting,
     },
 };
 
@@ -30,6 +32,8 @@ pub(crate) struct SocketReactor<
     Log,
 > {
     session: Option<ISession<App, DataDictionaryProvider, Log, MessageFactory>>,
+    msg_store: Option<Box<dyn MessageStore>>,
+    logger: Option<Log>,
     parser: Parser,
     stream: Option<Stream>,
     buffer: [u8; BUF_SIZE],
@@ -99,6 +103,8 @@ where
     ) -> Self {
         let mut reactor = SocketReactor {
             session: None,
+            msg_store: None,
+            logger: None,
             settings,
             parser: Parser::default(),
             // TODO move this to a concurrent map > SessionState > Sender<Message>
@@ -107,9 +113,9 @@ where
             rx: None,
             tx: None,
             app,
-            store_factory,
+            store_factory: store_factory.clone(),
             data_dictionary_provider,
-            log_factory,
+            log_factory: log_factory.clone(),
             message_factory,
         };
         if reactor.settings.len() == 1 {
@@ -119,6 +125,8 @@ where
                 reactor.session = Some(
                     reactor.create_session(session_setting.session_id().clone(), session_setting),
                 );
+                reactor.msg_store = Some(store_factory.create(session_setting.session_id()));
+                reactor.logger = Some(log_factory.create(session_setting.session_id()));
             }
             if session_setting.connection().is_acceptor() && !session_setting.is_dynamic() {
                 eprintln!("Is acceptor");
@@ -132,12 +140,12 @@ where
     }
 
     fn create_responder(&mut self) {
-        if let Some(s) = self.session.as_mut() {
-            let (responder, rx1, tx1) = ChannelResponder::new();
-            s.set_responder(Box::new(responder));
-            self.rx = Some(rx1);
-            self.tx = Some(tx1);
-        }
+        // if let Some(s) = self.session.as_mut() {
+        //     let (responder, rx1, tx1) = ChannelResponder::new();
+        //     s.set_responder(Box::new(responder));
+        //     self.rx = Some(rx1);
+        //     self.tx = Some(tx1);
+        // }reactor
     }
 
     pub(crate) fn get_session_mut(&mut self) -> Option<&mut ISession<App, DDP, Log, MF>> {
@@ -180,6 +188,8 @@ where
         session
             .log()
             .on_event(format!("Connection succeeded {}", &session_id).as_str());
+        session.last_now(Instant::now());
+        session.last_utc(Utc::now());
         session.next();
         while let Ok(()) = self.read() {}
         let session_id = self
@@ -218,6 +228,8 @@ where
         if read > 0 {
             self.parser.add_to_stream(&self.buffer[..read]);
         } else if let Some(session) = self.get_session_mut() {
+            session.last_now(Instant::now());
+            session.last_utc(Utc::now());
             session.next();
             // } else {
             //     return Err(ReactorError::Timeout(
@@ -253,7 +265,10 @@ where
 
     fn process_stream(&mut self) -> Result<(), ReactorError> {
         while let Some(msg) = self.parser.read_fix_message()? {
+            println!("Received Message {:?}", msg);
             if let Some(session) = self.session.as_mut() {
+                session.last_now(Instant::now());
+                session.last_utc(Utc::now());
                 session.next_msg(msg);
             } else {
                 let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
@@ -263,11 +278,13 @@ where
                 match session_settings {
                     Some(settings) => {
                         if settings.accepts(&session_id) {
-                            let session = self.create_session(session_id.clone(), settings);
+                            let mut session = self.create_session(session_id.clone(), settings);
+                            session.last_now(Instant::now());
+                            session.last_utc(Utc::now());
+                            session.next_msg(msg);
                             self.session = Some(session);
-                            self.create_responder();
-                            // queue instead?
-                            self.session.as_mut().unwrap().next_msg(msg);
+                            self.msg_store = Some(self.store_factory.create(&session_id));
+                            self.logger = Some(self.log_factory.create(&session_id));
                         } else {
                             return Err(ReactorError::Disconnect);
                         }
@@ -296,29 +313,73 @@ where
             log,
             self.message_factory.clone(),
             settings.clone(),
+            Instant::now(),
+            Utc::now(),
         )
     }
 
     fn process_responder(&mut self) -> Result<(), ReactorError> {
-        match (self.tx.as_mut(), self.rx.as_mut()) {
-            (Some(tx), Some(rx)) => match rx.recv_timeout(Duration::from_millis(1)) {
-                Ok(event) => match event {
-                    ResponderEvent::Send(message) => {
-                        let stream = &mut self.stream.as_mut().unwrap();
-                        match stream.write_all(&message) {
-                            Ok(_) => tx.send(ResponderResponse::Sent(true)).unwrap_or(()),
-                            Err(_) => tx.send(ResponderResponse::Sent(false)).unwrap_or(()),
-                        };
-                        Ok(stream.flush()?)
-                    }
-                    ResponderEvent::Disconnect => {
-                        println!("Reactor: Disconnect");
-                        Err(ReactorError::Disconnect)
-                    }
-                },
-                Err(_) => Ok(()),
-            },
-            _ => Ok(()), //TODO should we just drop messages?
+        match (
+            &mut self.stream,
+            &mut self.session,
+            &mut self.msg_store,
+            &mut self.logger,
+        ) {
+            (Some(stream), Some(session), Some(msg_store), Some(logger)) => {
+                match session.poll_output() {
+                    Some(output) => match output {
+                        Output::Timeout => Ok(()),
+                        Output::Message(message) => {
+                            println!("Writing {message:?} to {}", session.session_id());
+                            stream.write_all(&message)?;
+                            stream.flush()?;
+                            Ok(())
+                        }
+                        Output::Event(event) => match event {
+                            Event::Disconnect => Err(ReactorError::Disconnect),
+                            Event::Reset(reason) => {
+                                msg_store.reset();
+                                let event = match reason {
+                                    Some(reason) => format!("Session reset: {reason}"),
+                                    _ => "Session reset".into(),
+                                };
+                                logger.on_event(event.as_str());
+                                Ok(())
+                            }
+                            Event::Refresh => Ok(msg_store.refresh()),
+                            Event::Persist(seq_num, msg) => Ok(msg_store.set(seq_num, &msg)),
+                            Event::IncreaseTargetSeqNum => {
+                                msg_store.incr_next_target_msg_seq_num();
+                                Ok(())
+                            }
+                            Event::IncreaseSenderSeqNum => {
+                                msg_store.incr_next_sender_msg_seq_num();
+                                Ok(())
+                            }
+                            Event::SetNextTargetSeqNum(seq_num) => {
+                                msg_store.set_next_sender_msg_seq_num(seq_num);
+                                Ok(())
+                            }
+                            Event::GetMessages(replay_request) => {
+                                let messages = msg_store
+                                    .get(replay_request.beg_seq_no, replay_request.end_seq_no);
+                                session.last_now(Instant::now());
+                                session.last_utc(Utc::now());
+                                session.process_input(Input::ReplayMessage(Replay {
+                                    resend_request: replay_request.resend_request,
+                                    beg_seq_no: replay_request.beg_seq_no,
+                                    end_seq_no: replay_request.end_seq_no,
+                                    messages,
+                                }));
+
+                                Ok(())
+                            }
+                        },
+                    },
+                    None => Ok(()),
+                }
+            }
+            _ => Ok(()),
         }
     }
 

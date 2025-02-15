@@ -19,6 +19,7 @@ use crate::tags;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::sync::Arc;
 
 #[derive(Default, Clone, Debug)]
 pub struct Header(FieldMap);
@@ -226,7 +227,6 @@ impl Message {
             }
         }
         let tag = if neg { -tag } else { tag };
-        eprintln!("tag: {tag}");
 
         *pos = tagend + 1;
 
@@ -238,7 +238,8 @@ impl Message {
         let fieldend = fieldend.ok_or(MessageParseError::FailedToFindSohAt(*pos))?;
         let fieldend = *pos + fieldend;
         let value = &msgstr[*pos..fieldend];
-        let field = FieldBase::from_bytes(tag, value.into());
+        let value: Arc<[u8]> = value.into();
+        let field = FieldBase::from_bytes(tag, value);
 
         /*
          TODO data dict stuff

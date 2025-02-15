@@ -1,12 +1,16 @@
 use std::cmp;
 use std::cmp::min;
+use std::collections::VecDeque;
+use std::rc::Rc;
 use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use chashmap::CHashMap;
+use chrono::DateTime;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 use dfx_base::data_dictionary::TagException;
@@ -79,12 +83,50 @@ fn disconnect_session(session_id: &SessionId) {
     SESSION_MAP.remove(session_id);
 }
 
+pub(crate) enum Event {
+    Disconnect,
+    Reset(Option<&'static str>),
+    Refresh,
+    Persist(u32, Box<[u8]>),
+    IncreaseTargetSeqNum,
+    IncreaseSenderSeqNum,
+    SetNextTargetSeqNum(u32),
+    GetMessages(ReplayRequest),
+}
+
+pub(crate) struct ReplayRequest {
+    pub(crate) resend_request: Message,
+    pub(crate) beg_seq_no: u32,
+    pub(crate) end_seq_no: u32,
+}
+
+pub(crate) enum Input {
+    // Timeout(),
+    // Event(Event),
+    ReplayMessage(Replay),
+}
+
+pub(crate) struct Replay {
+    pub(crate) resend_request: Message,
+    pub(crate) beg_seq_no: u32,
+    pub(crate) end_seq_no: u32,
+    pub(crate) messages: Vec<Vec<u8>>,
+}
+
+pub(crate) enum Output {
+    Timeout,
+    Event(Event),
+    Message(Vec<u8>),
+}
+
 //TODO: dyn to generic?
 pub(crate) struct ISession<App, DDP, Log, MF> {
     application: App,
     session_id: SessionId,
     _data_dictionary_provider: DDP, // TODO: REMOVE candidate
     schedule: SessionSchedule,
+    last_now: Instant,
+    last_utc: DateTime<Utc>,
     msg_factory: MF,
     app_does_early_intercept: bool,
     sender_default_appl_ver_id: Option<String>,
@@ -107,7 +149,7 @@ pub(crate) struct ISession<App, DDP, Log, MF> {
     requires_orig_sending_time: bool,
     check_latency: bool,
     max_latency: u32,
-    responder: Option<Box<dyn Responder>>,
+    outbound_queue: VecDeque<Output>,
     refresh_on_logon: bool,
     reset_on_logon: bool,
     reset_on_logout: bool,
@@ -203,6 +245,8 @@ where
         log: Log,
         msg_factory: MF,
         settings: SessionSetting,
+        last_now: Instant,
+        last_utc: DateTime<Utc>,
     ) -> Self {
         // REVIEW is this dumb?
         add_data_dictionaries(&mut data_dictionary_provider, &settings);
@@ -223,18 +267,22 @@ where
             log.clone(),
             settings.connection().heart_bt_int().unwrap_or(30),
             msg_store,
+            last_now,
         );
         state.set_logon_timeout(settings.connection().logon_timeout());
         state.set_logout_timeout(settings.connection().logout_timeout());
 
-        if !is_session_time(&settings.schedule().clone()) {
+        let mut outbound_queue = VecDeque::new();
+        if !is_session_time(&settings.schedule().clone(), &last_utc) {
             // Reset("Out of SessionTime (Session construction)")
             // ---
             // if(this.IsLoggedOn)
             //     GenerateLogout(logoutMessage);
             // Disconnect("Resetting...");
             // state_.Reset(loggedReason);
-            state.reset(Some("Out of SessionTime (Session construction)"));
+            outbound_queue.push_back(Output::Event(Event::Reset(Some(
+                "Out of SessionTime (Session construction)",
+            ))));
         } else {
             // Reset("New session")
             // ---
@@ -242,7 +290,7 @@ where
             //     GenerateLogout(logoutMessage);
             // Disconnect("Resetting...");
             // state_.Reset(loggedReason);
-            state.reset(Some("New session"));
+            outbound_queue.push_back(Output::Event(Event::Reset(Some("Resetting..."))));
         }
 
         let mut application = app;
@@ -254,6 +302,8 @@ where
             session_id,
             _data_dictionary_provider: data_dictionary_provider,
             schedule: settings.schedule().clone(),
+            last_now,
+            last_utc,
             msg_factory,
             //TODO app is IApplicationExt
             app_does_early_intercept: false,
@@ -293,16 +343,12 @@ where
             requires_orig_sending_time: settings.validation_options().requires_orig_sending_time(),
             check_latency: settings.validation_options().check_latency(),
             max_latency: settings.validation_options().max_latency(),
-            responder: None,
+            outbound_queue,
             refresh_on_logon: settings.validation_options().refresh_on_logon(),
             reset_on_logon: settings.validation_options().reset_on_logon(),
             reset_on_logout: settings.validation_options().reset_on_logout(),
             outbound: None,
         }
-    }
-
-    pub(crate) fn set_responder(&mut self, responder: Box<dyn Responder>) {
-        self.responder = Some(responder);
     }
 
     pub(crate) fn set_connected(
@@ -311,12 +357,14 @@ where
     ) -> Result<(), InternalSessionError> {
         let receiver = connect(session_id);
         self.outbound = Some(receiver?);
+        self.state.set_is_connected(true);
         Ok(())
     }
 
     pub(crate) fn set_disconnected(&mut self, session_id: &SessionId) {
         disconnect_session(session_id);
         self.outbound = None;
+        self.state.set_is_connected(false);
     }
 
     fn process_outbound(&mut self) {
@@ -331,10 +379,6 @@ where
         }
     }
     pub(crate) fn next(&mut self) {
-        if self.responder.is_none() {
-            return;
-        }
-
         self.process_outbound();
 
         if !self.is_session_time() {
@@ -350,7 +394,10 @@ where
         }
 
         if self.is_new_session() {
-            self.state.reset(Some("New session (detected in Next())"));
+            self.outbound_queue
+                .push_back(Output::Event(Event::Reset(Some(
+                    "New session (detected in Next())",
+                ))));
         }
 
         if !self.state.is_enabled() {
@@ -371,19 +418,19 @@ where
                 } else {
                     self.log.on_event("Error during logon request initiation");
                 }
-            } else if !self.state.should_send_logon() && self.state.logon_timed_out() {
+            } else if !self.state.should_send_logon() && self.state.logon_timed_out(self.last_now) {
                 self.disconnect("Timed out waiting for logon request");
-            } else if self.state.sent_logon() && self.state.logon_timed_out() {
+            } else if self.state.sent_logon() && self.state.logon_timed_out(self.last_now) {
                 self.disconnect("Timed out waiting for logon response");
             }
             return;
         }
 
-        if self.state.logout_timed_out() {
+        if self.state.logout_timed_out(self.last_now) {
             self.disconnect("Timed out waiting for logout response");
         }
 
-        if self.state.within_heartbeat() {
+        if self.state.within_heartbeat(self.last_now) {
             return;
         }
 
@@ -391,29 +438,29 @@ where
             return;
         }
 
-        if self.state.timed_out() {
+        if self.state.timed_out(self.last_now) {
             if self.send_logout_before_timeout_disconnect {
                 self.generate_logout(None, None);
             }
             self.disconnect("Timed out waiting for heartbeat");
-        } else if self.state.need_test_request() {
+        } else if self.state.need_test_request(self.last_now) {
             self.generate_test_request("TEST");
             self.state
                 .set_test_request_counter(self.state.test_request_counter() + 1);
             self.log.on_event("Sent test request TEST");
-        } else if self.state.need_heartbeat() {
+        } else if self.state.need_heartbeat(self.last_now) {
             self.generate_heartbeat();
         }
     }
 
     fn is_session_time(&self) -> bool {
-        is_session_time(&self.schedule)
+        is_session_time(&self.schedule, &self.last_utc)
     }
 
     fn is_new_session(&self) -> bool {
         self.state
             .creation_time()
-            .is_some_and(|ct| self.schedule.is_new_session(ct, Utc::now()))
+            .is_some_and(|ct| self.schedule.is_new_session(ct, self.last_utc))
     }
 
     fn is_logged_on(&self) -> bool {
@@ -425,19 +472,20 @@ where
     }
 
     fn refresh(&mut self) {
-        self.state.refresh();
+        self.outbound_queue.push_back(Output::Event(Event::Refresh));
     }
 
     fn refresh_on_logon(&self) -> bool {
         self.refresh_on_logon
     }
 
-    fn reset(&mut self, logged_reason: Option<&str>, logout_message: Option<&str>) {
+    fn reset(&mut self, logged_reason: Option<&'static str>, logout_message: Option<&str>) {
         if self.is_logged_on() {
             self.generate_logout(logout_message.map(std::convert::Into::into), None);
         }
         self.disconnect("Resetting...");
-        self.state.reset(logged_reason);
+        self.outbound_queue
+            .push_back(Output::Event(Event::Reset(logged_reason)));
     }
 
     fn should_send_reset(&self) -> bool {
@@ -473,14 +521,15 @@ where
             self.refresh();
         }
         if self.reset_on_logon() {
-            self.state.reset(Some("ResetOnLogon"));
+            self.outbound_queue
+                .push_back(Output::Event(Event::Reset(Some("ResetOnLogon"))));
         }
         if self.should_send_reset() {
             logon.set_field(ResetSeqNumFlag::new(true));
         }
 
         self.initialize_header(&mut logon, None);
-        self.state.set_last_received_time_dt(Instant::now());
+        self.state.set_last_sent_time_dt(self.last_now);
         self.state.set_test_request_counter(0);
         self.state.set_sent_logon(true);
         self.send_raw(logon, 0).is_ok()
@@ -601,12 +650,13 @@ where
     }
 
     fn disconnect(&mut self, reason: &str) {
-        if let Some(responder) = &mut self.responder {
+        if self.state.is_connected() {
             self.log.on_event(
                 format!("Session {} disconnecting: {}", self.session_id, reason).as_str(),
             );
-            responder.disconnect();
-            self.responder = None;
+            // TODO: Review push front?
+            self.outbound_queue
+                .push_back(Output::Event(Event::Disconnect));
         } else {
             self.log.on_event(
                 format!(
@@ -629,7 +679,8 @@ where
         self.state.clear_queue();
         self.state.set_logout_reason(None);
         if self.reset_on_disconnect {
-            self.state.reset(Some("ResetOnDisconnect"));
+            self.outbound_queue
+                .push_back(Output::Event(Event::Reset(Some("ResetOnDisconnect"))));
         }
         self.state.set_resend_range_begin_end(0, 0, None);
     }
@@ -646,7 +697,8 @@ where
                     false
                 };
                 if reset {
-                    self.state.reset(Some("ResetSeqNumFlag"));
+                    self.outbound_queue
+                        .push_back(Output::Event(Event::Reset(Some("ResetSeqNumFlag"))));
                     message.header_mut().set_field(Field::new(
                         tags::MsgSeqNum,
                         format!("{}", self.state.next_sender_msg_seq_num()),
@@ -676,14 +728,11 @@ where
         }
     }
     fn send(&mut self, message: Vec<u8>) -> bool {
-        self.state.set_last_sent_time_dt(Instant::now());
-        if let Some(responder) = self.responder.as_mut() {
-            let msg_str = String::from_utf8_lossy(&message);
-            self.log.on_outgoing(&msg_str);
-            responder.send(message)
-        } else {
-            false
-        }
+        self.state.set_last_sent_time_dt(self.last_now);
+        let msg_str = String::from_utf8_lossy(&message);
+        self.log.on_outgoing(&msg_str);
+        self.outbound_queue.push_back(Output::Message(message));
+        true
     }
 
     fn initialize_header(&mut self, message: &mut Message, seq_num: Option<u32>) {
@@ -767,7 +816,7 @@ where
             DateTimeFormat::Seconds.as_datetime_format()
         };
         // TODO fix timeformatting
-        let send_time = format!("{}", Utc::now().format(precision));
+        let send_time = format!("{}", self.last_utc.format(precision));
         message
             .header_mut()
             .set_tag_value(tags::SendingTime, &send_time);
@@ -802,85 +851,89 @@ where
         }
 
         if self.is_new_session() {
-            self.state
-                .reset(Some("New session (detected in next::msg(message))"));
+            self.outbound_queue
+                .push_back(Output::Event(Event::Reset(Some(
+                    "New session (detected in next::msg(message))",
+                ))));
         }
 
         let result = self.next_msg_handler(msg);
 
         if let Err(e) = result {
-            match e {
-                SessionHandleMessageError::InvalidMessageError(e) => {
-                    self.log.on_event(&e.message());
-                }
-                SessionHandleMessageError::MessageParseError {
-                    message,
-                    parse_error,
-                } => {
-                    self.log
-                        .on_event(format!("MessageParse Error: {parse_error:?}").as_str());
-                    let field = parse_error.as_tag();
-                    let reason = parse_error.as_session_reject();
-                    match Message::new(&message) {
-                        Ok(msg) => {
-                            self.generate_reject(msg, reason.unwrap(), field).unwrap();
-                        }
-                        Err(err) => {
-                            self.log
-                                .on_event(format!("Skipping message due to {err:?}.").as_str());
-                        }
-                    }
-                }
-                SessionHandleMessageError::TagException(msg, e) => {
-                    if let Some(msg) = e.inner() {
-                        self.log.on_event(msg.as_str());
-                    }
-                    self.generate_reject(msg, e.session_reject_reason().clone(), Some(e.field()))
-                        .unwrap();
-                }
-                SessionHandleMessageError::UnsupportedVersion {
-                    message,
-                    expected,
-                    actual,
-                } => {
-                    let result = message.header().get_string(tags::MsgType);
-                    if matches!(result, Ok(v) if MsgType::LOGOUT == v) {
-                        self.next_logout(message).unwrap();
-                    } else {
-                        self.log.on_event(
-                            format!("Received version {actual} but expected {expected}").as_str(),
-                        );
-                        self.generate_logout(
-                            Some(format!("Incorrect BeginString ({actual})")),
-                            None,
-                        );
-                        self.state.incr_next_target_msg_seq_num();
-                    }
-                }
-                SessionHandleMessageError::String(s) => self.log.on_event(&s),
-                SessionHandleMessageError::FieldMapError(fm) => todo!("{fm:?}"),
-                SessionHandleMessageError::ConversionError(conv) => todo!("{conv:?}"),
-                SessionHandleMessageError::LogonReject { reason } => {
-                    let disconnect_msg = match &reason {
-                        Some(r) => format!("Application LogonReject: {r}"),
-                        None => "Application LogonReject".into(),
-                    };
-                    self.generate_logout(reason, None);
-                    self.disconnect(&disconnect_msg);
-                }
-                SessionHandleMessageError::UnknownMessageType { message, msg_type } => {
-                    self.log
-                        .on_event(format!("Unsupported message type: {msg_type}").as_str());
-                    self.generate_business_message_reject(
-                        message,
-                        BusinessRejectReason::UNKNOWN_MESSAGE_TYPE(),
-                    )
-                    .unwrap();
-                }
-            }
+            self.handle_message_error(e);
         }
 
         self.next();
+    }
+
+    fn handle_message_error(&mut self, e: SessionHandleMessageError) {
+        match e {
+            SessionHandleMessageError::InvalidMessageError(e) => {
+                self.log.on_event(&e.message());
+            }
+            SessionHandleMessageError::MessageParseError {
+                message,
+                parse_error,
+            } => {
+                self.log
+                    .on_event(format!("MessageParse Error: {parse_error:?}").as_str());
+                let field = parse_error.as_tag();
+                let reason = parse_error.as_session_reject();
+                match Message::new(&message) {
+                    Ok(msg) => {
+                        self.generate_reject(msg, reason.unwrap(), field).unwrap();
+                    }
+                    Err(err) => {
+                        self.log
+                            .on_event(format!("Skipping message due to {err:?}.").as_str());
+                    }
+                }
+            }
+            SessionHandleMessageError::TagException(msg, e) => {
+                if let Some(msg) = e.inner() {
+                    self.log.on_event(msg.as_str());
+                }
+                self.generate_reject(msg, e.session_reject_reason().clone(), Some(e.field()))
+                    .unwrap();
+            }
+            SessionHandleMessageError::UnsupportedVersion {
+                message,
+                expected,
+                actual,
+            } => {
+                let result = message.header().get_string(tags::MsgType);
+                if matches!(result, Ok(v) if MsgType::LOGOUT == v) {
+                    self.next_logout(message).unwrap();
+                } else {
+                    self.log.on_event(
+                        format!("Received version {actual} but expected {expected}").as_str(),
+                    );
+                    self.generate_logout(Some(format!("Incorrect BeginString ({actual})")), None);
+                    self.outbound_queue
+                        .push_back(Output::Event(Event::IncreaseTargetSeqNum));
+                }
+            }
+            SessionHandleMessageError::String(s) => self.log.on_event(&s),
+            SessionHandleMessageError::FieldMapError(fm) => todo!("{fm:?}"),
+            SessionHandleMessageError::ConversionError(conv) => todo!("{conv:?}"),
+            SessionHandleMessageError::LogonReject { reason } => {
+                let disconnect_msg = match &reason {
+                    Some(r) => format!("Application LogonReject: {r}"),
+                    None => "Application LogonReject".into(),
+                };
+                self.generate_logout(reason, None);
+                self.disconnect(&disconnect_msg);
+            }
+            SessionHandleMessageError::UnknownMessageType { message, msg_type } => {
+                self.log
+                    .on_event(format!("Unsupported message type: {msg_type}").as_str());
+                self.generate_business_message_reject(
+                    message,
+                    BusinessRejectReason::UNKNOWN_MESSAGE_TYPE(),
+                )
+                .unwrap();
+            }
+        }
     }
 
     fn next_msg_handler(&mut self, msg: Vec<u8>) -> Result<(), SessionHandleMessageError> {
@@ -897,7 +950,6 @@ where
             }
         })?;
         let mut message = self.msg_factory.create(begin_string.as_str(), msg_type)?;
-        eprintln!("before from_string");
         message
             .from_string(
                 &msg,
@@ -911,7 +963,6 @@ where
                 message: msg.clone(),
                 parse_error: mp,
             })?;
-        eprintln!("before handle_msg");
         self.handle_msg(message, &begin_string, msg_type)
     }
 
@@ -1001,20 +1052,18 @@ where
         } else if self.verify(message)?.is_none() {
             Ok(())
         } else {
-            self.state.incr_next_target_msg_seq_num();
+            self.outbound_queue
+                .push_back(Output::Event(Event::IncreaseTargetSeqNum));
             Ok(())
         }
     }
 
     fn next_queued(&mut self) {
-        while let Some(msg) = self
-            .state
-            .dequeue(self.state.msg_store().next_target_msg_seq_num())
-        {
+        while let Some(msg) = self.state.dequeue(self.state.next_target_msg_seq_num()) {
             self.log.on_event(
                 format!(
                     "Processing queued message: {}",
-                    self.state.msg_store().next_target_msg_seq_num()
+                    self.state.next_target_msg_seq_num()
                 )
                 .as_str(),
             );
@@ -1025,7 +1074,8 @@ where
             ) {
                 (Ok(msg_type), Ok(begin_string)) => {
                     if msg_type == MsgType::LOGON || msg_type == MsgType::RESEND_REQUEST {
-                        self.state.incr_next_target_msg_seq_num();
+                        self.outbound_queue
+                            .push_back(Output::Event(Event::IncreaseTargetSeqNum));
                     } else {
                         self.handle_msg(msg, &begin_string, &msg_type).unwrap();
                     }
@@ -1038,9 +1088,13 @@ where
     fn persist(&mut self, message: &Message, message_string: &[u8]) {
         if self.persist_messages {
             let msg_seq_num = message.header().get_int(tags::MsgSeqNum).unwrap();
-            self.state.set(msg_seq_num, message_string);
+            let value = &message_string[..];
+            let value: Box<[u8]> = value.into();
+            self.outbound_queue
+                .push_back(Output::Event(Event::Persist(msg_seq_num, value)));
         }
-        self.state.incr_next_sender_msg_seq_num();
+        self.outbound_queue
+            .push_back(Output::Event(Event::IncreaseSenderSeqNum));
     }
 
     fn next_logon(&mut self, logon: Message) -> Result<(), SessionHandleMessageError> {
@@ -1052,12 +1106,16 @@ where
             self.log()
                 .on_event("Sequence numbers reset due to ResetSeqNumFlag=Y");
             if !self.state.sent_reset() {
-                self.state.reset(Some("Reset requested by counterparty"));
+                self.outbound_queue
+                    .push_back(Output::Event(Event::Reset(Some(
+                        "Reset requested by counterparty",
+                    ))));
             }
         }
 
         if !self.state.is_initiator() && self.reset_on_logon() {
-            self.state.reset(Some("ResetOnLogon"));
+            self.outbound_queue
+                .push_back(Output::Event(Event::Reset(Some("ResetOnLogon"))));
         }
         if self.refresh_on_logon() {
             self.refresh();
@@ -1092,7 +1150,8 @@ where
         if self.is_target_too_high(msg_seq_num) && !received_reset {
             self.do_target_too_high(logon, msg_seq_num)?;
         } else {
-            self.state.incr_next_target_msg_seq_num();
+            self.outbound_queue
+                .push_back(Output::Event(Event::IncreaseTargetSeqNum));
         }
 
         if self.is_logged_on() {
@@ -1118,10 +1177,12 @@ where
             reason
         };
 
-        self.state.incr_next_target_msg_seq_num();
+        self.outbound_queue
+            .push_back(Output::Event(Event::IncreaseTargetSeqNum));
 
         if self.reset_on_logon() {
-            self.state.reset(Some("ResetOnLogout"));
+            self.outbound_queue
+                .push_back(Output::Event(Event::Reset(Some("ResetOnLogout"))));
         }
         self.disconnect(reason);
         Ok(())
@@ -1130,7 +1191,8 @@ where
         if self.verify(message)?.is_none() {
             Ok(())
         } else {
-            self.state.incr_next_target_msg_seq_num();
+            self.outbound_queue
+                .push_back(Output::Event(Event::IncreaseTargetSeqNum));
             Ok(())
         }
     }
@@ -1138,7 +1200,8 @@ where
         match self.verify(message)? {
             Some(message) => {
                 self.generate_heartbeat_other(&message);
-                self.state.incr_next_target_msg_seq_num();
+                self.outbound_queue
+                    .push_back(Output::Event(Event::IncreaseTargetSeqNum));
                 Ok(())
             }
             None => Ok(()),
@@ -1166,7 +1229,8 @@ where
                 .as_str(),
             );
             if new_seq_no > self.state.next_target_msg_seq_num() {
-                self.state.set_next_target_msg_seq_num(new_seq_no);
+                self.outbound_queue
+                    .push_back(Output::Event(Event::SetNextTargetSeqNum(new_seq_no)));
             } else if new_seq_no < self.state.next_target_msg_seq_num() {
                 self.generate_reject(message, SessionRejectReason::VALUE_IS_INCORRECT(), None)?;
             }
@@ -1205,75 +1269,23 @@ where
                     msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
                     if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num)
                     {
-                        self.state.incr_next_target_msg_seq_num();
+                        self.outbound_queue
+                            .push_back(Output::Event(Event::IncreaseTargetSeqNum));
                     }
                     return Ok(());
                 }
 
-                let mut current = beg_seq_no;
-                let mut begin = 0;
-                for msg_str in self.state.get_messages(beg_seq_no, end_seq_no) {
-                    let mut msg = Message::default();
-                    msg.from_string(
-                        &msg_str,
-                        true,
-                        Some(&self.session_data_dictionary),
-                        Some(&self.application_data_dictionary),
-                        Some(&self.msg_factory),
-                        false,
-                    )
-                    .map_err(|mp| {
-                        SessionHandleMessageError::MessageParseError {
-                            message: msg_str,
-                            parse_error: mp,
-                        }
-                    })?;
-                    msg_seq_num = msg.header().get_int(tags::MsgSeqNum)?;
-
-                    if current != msg_seq_num && begin == 0 {
-                        begin = current;
-                    }
-
-                    if msg.is_admin()
-                        && !(self._resend_session_level_rejects
-                            && msg.header().get_string(tags::MsgType)? == MsgType::REJECT)
-                    {
-                        if begin == 0 {
-                            begin = msg_seq_num;
-                        }
-                    } else {
-                        self.initialize_resend_fields(&mut msg);
-                        let approved = self.resend_approved(msg);
-                        if let Some(mut msg) = approved {
-                            if begin != 0 {
-                                self.generate_sequence_reset(&resend_request, begin, msg_seq_num)?;
-                            }
-
-                            self.send(msg.to_bytes_mut());
-                            begin = 0;
-                        } else {
-                            continue;
-                        }
-                    }
-                    current = msg_seq_num + 1;
-                }
-
-                let next_seq_num = self.state.next_sender_msg_seq_num();
-                end_seq_no += 1;
-                if end_seq_no > next_seq_num {
-                    end_seq_no = next_seq_num;
-                }
-                if begin == 0 {
-                    begin = current;
-                }
-
-                if end_seq_no > begin {
-                    self.generate_sequence_reset(&resend_request, begin, end_seq_no)?;
-                }
+                self.outbound_queue
+                    .push_back(Output::Event(Event::GetMessages(ReplayRequest {
+                        resend_request: resend_request.clone(),
+                        beg_seq_no,
+                        end_seq_no,
+                    })));
             }
             let msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
             if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num) {
-                self.state.incr_next_target_msg_seq_num();
+                self.outbound_queue
+                    .push_back(Output::Event(Event::IncreaseTargetSeqNum));
             }
             Ok(())
         } else {
@@ -1405,6 +1417,7 @@ where
             )
             .as_str(),
         );
+
         self.state.queue(msg_seq_num, msg);
 
         if self.state.resend_requested() {
@@ -1452,7 +1465,7 @@ where
         }
 
         let sending_time = message.header().get_datetime(tags::SendingTime).unwrap();
-        let timespan = Utc::now() - sending_time;
+        let timespan = self.last_utc - sending_time;
 
         // TODO change to <=
         timespan.num_seconds().abs() < i64::from(self.max_latency)
@@ -1536,7 +1549,8 @@ where
             && MsgType::SEQUENCE_RESET != msg_type
             && msg_seq_num == self.state.next_target_msg_seq_num()
         {
-            self.state.incr_next_target_msg_seq_num();
+            self.outbound_queue
+                .push_back(Output::Event(Event::IncreaseTargetSeqNum));
         }
 
         if field != 0 || SessionRejectReason::INVALID_TAG_NUMBER().reason() == reason.reason() {
@@ -1777,7 +1791,8 @@ where
 
         self.initialize_header(&mut reject, None);
         reject.set_tag_value(tags::RefSeqNum, format!("{msg_seq_num}"));
-        self.state.incr_next_target_msg_seq_num();
+        self.outbound_queue
+            .push_back(Output::Event(Event::IncreaseTargetSeqNum));
 
         reject.set_tag_value(tags::Text, reason);
         self.log
@@ -1785,10 +1800,98 @@ where
         self.send_raw(reject, 0)?;
         Ok(())
     }
+
+    pub(crate) fn last_now(&mut self, now: Instant) {
+        self.last_now = now;
+    }
+    pub(crate) fn last_utc(&mut self, now: DateTime<Utc>) {
+        self.last_utc = now;
+    }
+    pub(crate) fn poll_output(&mut self) -> Option<Output> {
+        self.outbound_queue.pop_front()
+    }
+
+    pub(crate) fn process_input(&mut self, input: Input) {
+        let result = match input {
+            Input::ReplayMessage(replay) => self.replay_messages(replay),
+        };
+        if let Err(e) = result {
+            self.handle_message_error(e);
+        }
+    }
+
+    fn replay_messages(&mut self, replay: Replay) -> Result<(), SessionHandleMessageError> {
+        let beg_seq_no = replay.beg_seq_no;
+        let resend_request = replay.resend_request;
+
+        let mut end_seq_no = replay.beg_seq_no;
+        let mut msg_seq_num;
+
+        let mut current = beg_seq_no;
+        let mut begin = 0;
+        for msg_str in replay.messages {
+            let mut msg = Message::default();
+            msg.from_string(
+                &msg_str,
+                true,
+                Some(&self.session_data_dictionary),
+                Some(&self.application_data_dictionary),
+                Some(&self.msg_factory),
+                false,
+            )
+            .map_err(|mp| SessionHandleMessageError::MessageParseError {
+                message: msg_str,
+                parse_error: mp,
+            })?;
+            msg_seq_num = msg.header().get_int(tags::MsgSeqNum)?;
+
+            if current != msg_seq_num && begin == 0 {
+                begin = current;
+            }
+
+            if msg.is_admin()
+                && !(self._resend_session_level_rejects
+                    && msg.header().get_string(tags::MsgType)? == MsgType::REJECT)
+            {
+                if begin == 0 {
+                    begin = msg_seq_num;
+                }
+            } else {
+                self.initialize_resend_fields(&mut msg);
+                let approved = self.resend_approved(msg);
+                if let Some(mut msg) = approved {
+                    if begin != 0 {
+                        self.generate_sequence_reset(&resend_request, begin, msg_seq_num)?;
+                    }
+
+                    self.send(msg.to_bytes_mut());
+                    begin = 0;
+                } else {
+                    continue;
+                }
+            }
+            current = msg_seq_num + 1;
+        }
+
+        let next_seq_num = self.state.next_sender_msg_seq_num();
+        end_seq_no += 1;
+        if end_seq_no > next_seq_num {
+            end_seq_no = next_seq_num;
+        }
+        if begin == 0 {
+            begin = current;
+        }
+
+        if end_seq_no > begin {
+            self.generate_sequence_reset(&resend_request, begin, end_seq_no)?;
+        }
+
+        Ok(())
+    }
 }
 
-fn is_session_time(session_schedule: &SessionSchedule) -> bool {
-    session_schedule.is_session_time(&Utc::now())
+fn is_session_time(session_schedule: &SessionSchedule, now: &DateTime<Utc>) -> bool {
+    session_schedule.is_session_time(now)
 }
 
 #[derive(Debug, Clone)]
