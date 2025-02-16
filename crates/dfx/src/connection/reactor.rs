@@ -133,6 +133,8 @@ where
                 reactor.session = Some(
                     reactor.create_session(session_setting.session_id().clone(), session_setting),
                 );
+                reactor.msg_store = Some(store_factory.create(session_setting.session_id()));
+                reactor.logger = Some(log_factory.create(session_setting.session_id()));
             }
         }
         reactor.create_responder();
@@ -172,7 +174,44 @@ where
 
     fn event_loop(&mut self) -> Result<(), ReactorError> {
         while self.session.is_none() {
-            self.read()?;
+            {
+                let read = self.read_some()?;
+                if read > 0 {
+                    self.parser.add_to_stream(&self.buffer[..read]);
+                }
+
+                while let Some(msg) = self.parser.read_fix_message()? {
+                    println!("Received Message {:?}", msg);
+                    let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
+                    let session_id = message.extract_contra_session_id();
+                    eprintln!("Extracted session id {session_id}");
+                    let session_settings = self.for_session_id(&session_id);
+                    match session_settings {
+                        Some(settings) => {
+                            if settings.accepts(&session_id) {
+                                let mut session = self.create_session(session_id.clone(), settings);
+                                session.process_input(Input::Message {
+                                    last_now: Instant::now(),
+                                    last_utc: Utc::now(),
+                                    msg,
+                                });
+                                // session.last_now(Instant::now());
+                                // session.last_utc(Utc::now());
+                                // session.next_msg(msg);
+                                self.session = Some(session);
+                                self.msg_store = Some(self.store_factory.create(&session_id));
+                                self.logger = Some(self.log_factory.create(&session_id));
+                            } else {
+                                return Err(ReactorError::Disconnect);
+                            }
+                        }
+                        None => {
+                            return Err(ReactorError::Disconnect);
+                        }
+                    }
+                }
+                Ok::<(), ReactorError>(())
+            }?;
         }
 
         //TODO empty session
@@ -184,14 +223,20 @@ where
             .clone();
         self.set_connected(session_id.clone())?;
 
-        let session = self.session.as_mut().expect("Session not found!");
-        session
-            .log()
-            .on_event(format!("Connection succeeded {}", &session_id).as_str());
-        session.last_now(Instant::now());
-        session.last_utc(Utc::now());
-        session.next();
-        while let Ok(()) = self.read() {}
+        {
+            let session = self.session.as_mut().expect("Session not found!");
+            session
+                .log()
+                .on_event(format!("Connection succeeded {}", &session_id).as_str());
+            session.last_now(Instant::now());
+            session.last_utc(Utc::now());
+            session.next();
+        }
+
+        if let Err(err) = self.do_loop() {
+            println!("Disconnected: {:?}", err);
+        }
+
         let session_id = self
             .session
             .as_ref()
@@ -199,12 +244,9 @@ where
             .session_id()
             .clone();
         self.set_disconnected(session_id);
-        let remote = self.stream.as_ref().unwrap().peer_addr()?;
-        self.stream
-            .as_mut()
-            .unwrap()
-            .shutdown(std::net::Shutdown::Both)?;
-        println!("Disconnected: {remote:?}");
+        if let Some(stream) = self.stream.as_mut() {
+            let _result = stream.shutdown(std::net::Shutdown::Both);
+        }
         Ok(())
     }
 
@@ -223,80 +265,29 @@ where
         self.session.as_mut().unwrap().set_disconnected(&session_id);
     }
 
-    fn read(&mut self) -> Result<(), ReactorError> {
-        let read = self.read_some()?;
-        if read > 0 {
-            self.parser.add_to_stream(&self.buffer[..read]);
-        } else if let Some(session) = self.get_session_mut() {
-            session.last_now(Instant::now());
-            session.last_utc(Utc::now());
-            session.next();
-            // } else {
-            //     return Err(ReactorError::Timeout(
-            //         "Reactor timed out while reading socket".into(),
-            //     ));
-        }
-
-        self.process_responder()?;
-        self.process_stream()?;
-        Ok(())
-    }
-
     fn read_some(&mut self) -> Result<usize, ReactorError> {
         // read bytes nonblocking from stream...
         // add bytes to parser
         // return bytes read
         if let Some(stream) = self.stream.as_mut() {
-            match stream.read(&mut self.buffer) {
-                Ok(read) => Ok(read),
-                Err(ref e)
-                    if e.as_io_error().is_some()
-                        && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock =>
-                {
-                    // println!("Would block {e:?}");
-                    Ok(0)
-                }
-                Err(e) => Err(e.into()),
-            }
+            Self::read_stream(stream, &mut self.buffer)
         } else {
             panic!("reactor::read_some")
         }
     }
 
-    fn process_stream(&mut self) -> Result<(), ReactorError> {
-        while let Some(msg) = self.parser.read_fix_message()? {
-            println!("Received Message {:?}", msg);
-            if let Some(session) = self.session.as_mut() {
-                session.last_now(Instant::now());
-                session.last_utc(Utc::now());
-                session.next_msg(msg);
-            } else {
-                let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
-                let session_id = message.extract_contra_session_id();
-                eprintln!("Extracted session id {session_id}");
-                let session_settings = self.for_session_id(&session_id);
-                match session_settings {
-                    Some(settings) => {
-                        if settings.accepts(&session_id) {
-                            let mut session = self.create_session(session_id.clone(), settings);
-                            session.last_now(Instant::now());
-                            session.last_utc(Utc::now());
-                            session.next_msg(msg);
-                            self.session = Some(session);
-                            self.msg_store = Some(self.store_factory.create(&session_id));
-                            self.logger = Some(self.log_factory.create(&session_id));
-                        } else {
-                            return Err(ReactorError::Disconnect);
-                        }
-                    }
-                    None => {
-                        // TODO this.Log("ERROR: Disconnecting; received message for unknown session: " + msg);
-                        return Err(ReactorError::Disconnect);
-                    }
-                }
+    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> Result<usize, ReactorError> {
+        match stream.read(buffer) {
+            Ok(read) => Ok(read),
+            Err(ref e)
+                if e.as_io_error().is_some()
+                    && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock =>
+            {
+                // println!("Would block {e:?}");
+                Ok(0)
             }
+            Err(e) => Err(e.into()),
         }
-        Ok(())
     }
 
     fn create_session(
@@ -318,25 +309,60 @@ where
         )
     }
 
-    fn process_responder(&mut self) -> Result<(), ReactorError> {
-        match (
+    fn for_session_id(&self, session_id: &SessionId) -> Option<&SessionSetting> {
+        let best_match = &self
+            .settings
+            .iter()
+            .map(|s| (s.score(session_id), s))
+            .filter(|(score, _)| score > &0)
+            .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
+            .map(|(_, v)| v);
+        *best_match
+    }
+
+    fn do_loop(&mut self) -> Result<(), ReactorError> {
+        let parts = (
             &mut self.stream,
             &mut self.session,
             &mut self.msg_store,
             &mut self.logger,
-        ) {
-            (Some(stream), Some(session), Some(msg_store), Some(logger)) => {
-                match session.poll_output() {
-                    Some(output) => match output {
-                        Output::Timeout => Ok(()),
+            &mut self.buffer,
+        );
+        let session_parts = match parts {
+            (Some(stream), Some(session), Some(msg_store), Some(logger), buffer) => {
+                (stream, session, msg_store, logger, buffer)
+            }
+            (stream, session, msg_store, logger, _buffer) => {
+                println!(
+                    "{} {} {} {}",
+                    stream.is_some(),
+                    session.is_some(),
+                    msg_store.is_some(),
+                    logger.is_some()
+                );
+                return Ok(());
+            }
+        };
+        let (stream, session, msg_store, logger, buffer) = session_parts;
+        loop {
+            match session.poll_output() {
+                Some(output) => {
+                    println!("[DEBUG]: {}: {:?}", Utc::now(), output);
+                    match output {
                         Output::Message(message) => {
-                            println!("Writing {message:?} to {}", session.session_id());
-                            stream.write_all(&message)?;
-                            stream.flush()?;
-                            Ok(())
+                            let result = {
+                                stream.write_all(&message)?;
+                                stream.flush()
+                            };
+                            if let Err(e) = result.as_ref() {
+                                println!("Failed write: {:?}", e);
+                            }
+                            result?;
+                            session.last_sent(Instant::now());
+                            continue;
                         }
                         Output::Event(event) => match event {
-                            Event::Disconnect => Err(ReactorError::Disconnect),
+                            Event::Disconnect => break,
                             Event::Reset(reason) => {
                                 msg_store.reset();
                                 let event = match reason {
@@ -344,21 +370,29 @@ where
                                     _ => "Session reset".into(),
                                 };
                                 logger.on_event(event.as_str());
-                                Ok(())
+                                continue;
                             }
-                            Event::Refresh => Ok(msg_store.refresh()),
-                            Event::Persist(seq_num, msg) => Ok(msg_store.set(seq_num, &msg)),
-                            Event::IncreaseTargetSeqNum => {
-                                msg_store.incr_next_target_msg_seq_num();
-                                Ok(())
+                            Event::Refresh => {
+                                msg_store.refresh();
+                                session.process_input(Input::SetTargetSeqNum(
+                                    msg_store.next_target_msg_seq_num(),
+                                ));
+                                session.process_input(Input::SetSenderSeqNum(
+                                    msg_store.next_sender_msg_seq_num(),
+                                ));
+                                continue;
                             }
-                            Event::IncreaseSenderSeqNum => {
-                                msg_store.incr_next_sender_msg_seq_num();
-                                Ok(())
+                            Event::Persist(seq_num, msg) => {
+                                msg_store.set(seq_num, &msg);
+                                continue;
                             }
                             Event::SetNextTargetSeqNum(seq_num) => {
+                                msg_store.set_next_target_msg_seq_num(seq_num);
+                                continue;
+                            }
+                            Event::SetNextSenderSeqNum(seq_num) => {
                                 msg_store.set_next_sender_msg_seq_num(seq_num);
-                                Ok(())
+                                continue;
                             }
                             Event::GetMessages(replay_request) => {
                                 let messages = msg_store
@@ -372,25 +406,44 @@ where
                                     messages,
                                 }));
 
-                                Ok(())
+                                continue;
                             }
                         },
-                    },
-                    None => Ok(()),
+                    }
                 }
-            }
-            _ => Ok(()),
-        }
-    }
+                None => (),
+            };
 
-    fn for_session_id(&self, session_id: &SessionId) -> Option<&SessionSetting> {
-        let best_match = &self
-            .settings
-            .iter()
-            .map(|s| (s.score(session_id), s))
-            .filter(|(score, _)| score > &0)
-            .max_by(|(k1, _), (k2, _)| k1.cmp(k2))
-            .map(|(_, v)| v);
-        *best_match
+            let result = Self::read_stream(stream, buffer);
+            if let Err(e) = result.as_ref() {
+                println!("Failed read: {:?}", e);
+                break;
+            }
+            let read = result?;
+            if read > 0 {
+                self.parser.add_to_stream(&buffer[..read]);
+            }
+
+            let input = match self.parser.read_fix_message()? {
+                Some(msg) => {
+                    println!(
+                        "Received {} from {}",
+                        msg.iter()
+                            .map(|byte| if *byte == 1 { '|' } else { *byte as char })
+                            .collect::<String>(),
+                        session.session_id()
+                    );
+                    Input::Message {
+                        last_now: Instant::now(),
+                        last_utc: Utc::now(),
+                        msg,
+                    }
+                }
+                None => Input::Timeout(Instant::now(), Utc::now()),
+            };
+
+            session.process_input(input);
+        }
+        Ok(())
     }
 }

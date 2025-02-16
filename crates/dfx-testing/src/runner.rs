@@ -281,7 +281,7 @@ fn wait_for_disconnect(s: &mut TcpStream) -> Result<(), String> {
 }
 
 fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result<(), String> {
-    let mut buffer = [0; 512];
+    let mut buffer = [0; 131072];
     let other;
     let start = std::time::Instant::now();
     loop {
@@ -310,7 +310,7 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
             }
             Err(e) => return Err(format!("Test failed reading fix message: {e:?}")),
         };
-        std::thread::sleep(Duration::from_millis(1000));
+        std::thread::sleep(Duration::from_millis(1));
     }
     let other = other.expect("Read a message");
 
@@ -318,13 +318,18 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
     let (decoded, _decoder, _has_unmapped_chars) = encoder.decode(&other);
     let other: String = decoded.to_string();
     // let other: String = other.iter().map(|b| *b as char).collect();
-    // println!("Runner: Received {}", other.replace("\x01", "|"));
+    println!(
+        "[RUNNER] {} Received: {}",
+        Utc::now(),
+        other.replace("\x01", "|")
+    );
     let message = message.replace("|", "\x01");
-    let read_fields = from_fields(to_fields(other, '\x01', true), '|');
-    let expected_fields = from_fields(to_fields(message, '\x01', true), '|');
+    let read_fields = from_fields(to_fields(&other, '\x01', true), '|');
+    let expected_fields = from_fields(to_fields(&message, '\x01', true), '|');
     if read_fields != expected_fields {
         Err(format!(
-            "Expected: {expected_fields:?}\nRead: {read_fields:?}"
+            "Failure to read message:\n{}\nActual:\n{}\nExpected: {expected_fields:?}\nRead: {read_fields:?}",
+            message.replace("\x01", "|"), other.replace("\x01", "|")
         ))
     } else {
         Ok(())
@@ -378,7 +383,7 @@ fn do_send(message: String, s: &mut TcpStream) {
     } else {
         format!("{message}10={checksum:03}\x01")
     };
-    // println!("Runner: {}", message.replace("\x01", "|"));
+    println!("[RUNNER] Sent: {}", message.replace("\x01", "|"));
     let encoder = encoding_rs::WINDOWS_1252;
     let (encoded, _encoder, _has_unmapped_chars) = encoder.encode(&message);
     s.write_all(&encoded).expect("Sent message");
@@ -417,7 +422,7 @@ fn checksum(body: &str) -> u32 {
     let mut _field_sum = 0;
     let encoder = encoding_rs::WINDOWS_1252;
     for i in encoder.encode(body).0.iter() {
-        print!("{i}|");
+        //print!("{i}|");
         let i = *i;
         sum += i as u32;
         _field_sum += i as u32;
@@ -425,8 +430,8 @@ fn checksum(body: &str) -> u32 {
             _field_sum = 0;
         }
     }
-    println!();
-    println!("[RUNNER]: {body} {}", sum % 256);
+    // println!();
+    // println!("[RUNNER]: {body} {}", sum % 256);
     // println!("{}", sum % 256);
     sum % 256
 }
@@ -434,7 +439,7 @@ fn checksum(body: &str) -> u32 {
 type Fields = std::collections::BTreeMap<String, String>;
 // type Fields = Vec<(String, String)>;
 
-fn to_fields(message: String, delim: char, skip_time: bool) -> Fields {
+fn to_fields(message: &String, delim: char, skip_time: bool) -> Fields {
     // println!("Runner: {}", message.replace("\x01", "|"));
     message
         .split(delim)

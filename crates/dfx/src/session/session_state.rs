@@ -32,7 +32,6 @@ pub(crate) struct SessionState<Log> {
     logout_timeout_ms: u64,
     resend_range: Option<ResetRange>,
     message_queue: BTreeMap<u32, Message>,
-    msg_store: Box<dyn MessageStore>,
     logger: Log,
     creation_time: Option<DateTime<Utc>>,
     next_sender_msg_seq_num: u32,
@@ -40,13 +39,7 @@ pub(crate) struct SessionState<Log> {
 }
 
 impl<Log: Logger> SessionState<Log> {
-    pub fn new(
-        is_initiator: bool,
-        logger: Log,
-        heartbeat_int: u32,
-        msg_store: Box<dyn MessageStore>,
-        last_now: Instant,
-    ) -> Self {
+    pub fn new(is_initiator: bool, logger: Log, heartbeat_int: u32, last_now: Instant) -> Self {
         SessionState {
             is_enabled: true,
             is_initiator,
@@ -68,7 +61,6 @@ impl<Log: Logger> SessionState<Log> {
             logout_timeout_ms: 10 * 1000,
             resend_range: None,
             message_queue: BTreeMap::default(),
-            msg_store,
             logger,
             creation_time: None,
             next_sender_msg_seq_num: 1,
@@ -76,13 +68,10 @@ impl<Log: Logger> SessionState<Log> {
         }
     }
 
-    pub(crate) unsafe fn reset(&mut self, reason: Option<&str>) {
-        self.msg_store.reset();
-        let event = match reason {
-            Some(reason) => format!("Session reset: {reason}"),
-            _ => "Session reset".into(),
-        };
-        self.logger.on_event(event.as_str());
+    pub(crate) fn reset(&mut self) {
+        self.next_sender_msg_seq_num = 1;
+        self.next_target_msg_seq_num = 1;
+        self.creation_time = Some(Utc::now());
     }
 
     pub(crate) fn should_send_logon(&self) -> bool {
@@ -440,21 +429,6 @@ impl<Log: Logger> SessionState<Log> {
         self.message_queue = message_queue;
     }
 
-    /// Get a reference to the session state's msg store.
-    pub(crate) unsafe fn msg_store(&self) -> &dyn MessageStore {
-        self.msg_store.as_ref()
-    }
-
-    /// Get a mutable reference to the session state's msg store.
-    pub(crate) unsafe fn msg_store_mut(&mut self) -> &mut Box<dyn MessageStore> {
-        &mut self.msg_store
-    }
-
-    /// Set the session state's msg store.
-    pub(crate) unsafe fn set_msg_store(&mut self, msg_store: Box<dyn MessageStore>) {
-        self.msg_store = msg_store;
-    }
-
     /// Get a reference to the session state's logger.
     pub(crate) fn logger(&self) -> &Log {
         &self.logger
@@ -474,52 +448,32 @@ impl<Log: Logger> SessionState<Log> {
         self.creation_time
     }
 
-    pub(crate) unsafe fn refresh(&mut self) {
-        self.msg_store.refresh();
+    pub(crate) fn set_creation_time(&mut self, creation_time: Option<DateTime<Utc>>) {
+        self.creation_time = creation_time;
     }
 
     pub(crate) fn next_sender_msg_seq_num(&self) -> u32 {
         self.next_sender_msg_seq_num
     }
 
-    pub(crate) unsafe fn set_next_sender_msg_seq_num(&mut self, seq_num: u32) {
-        self.msg_store.set_next_sender_msg_seq_num(seq_num);
-    }
-
-    pub(crate) unsafe fn incr_next_sender_msg_seq_num(&mut self) {
-        self.msg_store.incr_next_sender_msg_seq_num();
+    pub(crate) fn set_next_sender_msg_seq_num(&mut self, seq_num: u32) {
+        self.next_sender_msg_seq_num = seq_num
     }
 
     pub(crate) fn next_target_msg_seq_num(&self) -> u32 {
         self.next_target_msg_seq_num
     }
 
-    pub(crate) unsafe fn set_next_target_msg_seq_num(&mut self, seq_num: u32) {
-        self.msg_store.set_next_target_msg_seq_num(seq_num);
-    }
-
-    pub(crate) unsafe fn incr_next_target_msg_seq_num(&mut self) {
-        self.msg_store.incr_next_target_msg_seq_num();
+    pub(crate) fn set_next_target_msg_seq_num(&mut self, seq_num: u32) {
+        self.next_target_msg_seq_num = seq_num;
     }
 
     pub(crate) fn clear_queue(&mut self) {
         self.message_queue.clear();
     }
 
-    pub(crate) unsafe fn set(&mut self, msg_seq_num: u32, message_string: &[u8]) {
-        self.msg_store.set(msg_seq_num, message_string)
-    }
-
     pub(crate) fn queue(&mut self, msg_seq_num: u32, msg: Message) {
         self.message_queue.insert(msg_seq_num, msg);
-    }
-
-    pub(crate) unsafe fn get_messages(&self, begin_seq_num: u32, end_seq_num: u32) -> Vec<Vec<u8>> {
-        self.msg_store
-            .get(begin_seq_num, end_seq_num)
-            .iter()
-            .map(|v| v.to_owned().to_owned())
-            .collect()
     }
 
     pub(crate) fn dequeue(&mut self, next_target_msg_seq_num: u32) -> Option<Message> {
@@ -536,6 +490,14 @@ impl<Log: Logger> SessionState<Log> {
 
     pub(crate) fn set_is_connected(&mut self, is_connected: bool) {
         self.is_connected = is_connected;
+    }
+
+    pub(crate) fn incr_next_sender_msg_seq_num(&mut self) {
+        self.next_sender_msg_seq_num += 1;
+    }
+
+    pub(crate) fn incr_next_target_msg_seq_num(&mut self) {
+        self.next_target_msg_seq_num += 1;
     }
 }
 
