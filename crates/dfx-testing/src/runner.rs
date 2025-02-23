@@ -186,15 +186,13 @@ fn perform_steps(steps: Vec<TestStep>, port: u32, filename: &str) -> Result<(), 
     let mut stream_map = std::collections::HashMap::new();
 
     for step in steps {
-        println!("[RUNNER] {step:?}");
+        println!("[RUNNER] {} {step:?}", Utc::now());
         match step {
             TestStep::InitiateConnect(n) => {
                 if stream_map.get(&n).is_none() {
                     let stream = TcpStream::connect(format!("127.0.0.1:{}", port))
                         .expect("Connection initiated.");
-                    stream
-                        .set_read_timeout(Some(Duration::from_secs(10)))
-                        .unwrap();
+                    stream.set_nonblocking(true).unwrap();
                     stream_map.insert(n, stream);
                 } else {
                     return Err(format!("Initiate connect[{n}] on existing stream"));
