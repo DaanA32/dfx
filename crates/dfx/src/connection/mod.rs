@@ -7,8 +7,6 @@ mod acceptor;
 pub use acceptor::*;
 mod reactor;
 pub(crate) use reactor::*;
-mod sans_reactor;
-pub use sans_reactor::*;
 mod socket_settings;
 pub(crate) use socket_settings::*;
 mod stream_factory;

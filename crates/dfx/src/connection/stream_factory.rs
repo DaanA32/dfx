@@ -59,10 +59,10 @@ impl Stream {
         }
     }
 
-    pub(crate) fn flush(&mut self) -> std::io::Result<()> {
+    pub(crate) fn flush(&mut self) -> Result<(), StreamError> {
         match self {
-            Stream::Tcp(tcp) => tcp.flush(),
-            Stream::Ssl(ssl) => ssl.flush(),
+            Stream::Tcp(tcp) => Ok(tcp.flush()?),
+            Stream::Ssl(ssl) => Ok(ssl.flush()?),
         }
     }
 }
@@ -78,7 +78,12 @@ impl Write for Stream {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.flush()
+        match self.flush() {
+            Ok(o) => Ok(o),
+            Err(err) => match err {
+                StreamError::IO(io) => Err(io),
+            },
+        }
     }
 }
 

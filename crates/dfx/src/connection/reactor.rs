@@ -1,26 +1,19 @@
-use std::{
-    io::{Read, Write},
-    sync::mpsc::{Receiver, Sender},
-    time::{Duration, Instant},
-};
+use std::{io::Write, time::Instant};
 
 use chrono::Utc;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
-use dfx_base::message::{Message, MessageParseError};
+use dfx_base::message::Message;
 use dfx_base::message_factory::MessageFactory;
 use dfx_base::session_id::SessionId;
 
 use crate::{
     logging::{LogFactory, Logger},
     message_store::{MessageStore, MessageStoreFactory},
-    parser::{Parser, ParserError},
-    session::{
-        Application, ChannelResponder, Event, ISession, Input, Output, Replay, ReplayRequest,
-        ResponderEvent, ResponderResponse, SessionSetting,
-    },
+    parser::Parser,
+    session::{Application, Event, ISession, Input, Output, Replay, SessionSetting},
 };
 
-use super::{ConnectionError, Stream, StreamError};
+use super::{Stream, StreamError};
 
 pub(crate) const BUF_SIZE: usize = 512;
 pub(crate) struct SocketReactor<
@@ -31,14 +24,12 @@ pub(crate) struct SocketReactor<
     MessageFactory,
     Log,
 > {
-    session: Option<ISession<App, DataDictionaryProvider, Log, MessageFactory>>,
+    session: Option<ISession<App, Log, MessageFactory>>,
     msg_store: Option<Box<dyn MessageStore>>,
     logger: Option<Log>,
     parser: Parser,
     stream: Option<Stream>,
     buffer: [u8; BUF_SIZE],
-    rx: Option<Receiver<ResponderEvent>>,
-    tx: Option<Sender<ResponderResponse>>,
     settings: Vec<SessionSetting>,
     app: App,
     store_factory: StoreFactory,
@@ -49,38 +40,7 @@ pub(crate) struct SocketReactor<
 
 #[derive(Debug)]
 pub(crate) enum ReactorError {
-    ConnectionError(ConnectionError),
-    ParserError(ParserError),
-    MessageParseError(MessageParseError),
-    IoError(std::io::Error),
-    StreamError(StreamError),
     Disconnect,
-}
-
-impl From<ConnectionError> for ReactorError {
-    fn from(e: ConnectionError) -> ReactorError {
-        ReactorError::ConnectionError(e)
-    }
-}
-impl From<ParserError> for ReactorError {
-    fn from(e: ParserError) -> ReactorError {
-        ReactorError::ParserError(e)
-    }
-}
-impl From<MessageParseError> for ReactorError {
-    fn from(e: MessageParseError) -> ReactorError {
-        ReactorError::MessageParseError(e)
-    }
-}
-impl From<std::io::Error> for ReactorError {
-    fn from(e: std::io::Error) -> ReactorError {
-        ReactorError::IoError(e)
-    }
-}
-impl From<StreamError> for ReactorError {
-    fn from(e: StreamError) -> ReactorError {
-        ReactorError::StreamError(e)
-    }
 }
 
 impl<App, SF, DDP, LF, MF, Log> SocketReactor<App, SF, DDP, LF, MF, Log>
@@ -110,8 +70,6 @@ where
             // TODO move this to a concurrent map > SessionState > Sender<Message>
             stream: Some(connection),
             buffer: [0; BUF_SIZE],
-            rx: None,
-            tx: None,
             app,
             store_factory: store_factory.clone(),
             data_dictionary_provider,
@@ -137,24 +95,10 @@ where
                 reactor.logger = Some(log_factory.create(session_setting.session_id()));
             }
         }
-        reactor.create_responder();
         reactor
     }
 
-    fn create_responder(&mut self) {
-        // if let Some(s) = self.session.as_mut() {
-        //     let (responder, rx1, tx1) = ChannelResponder::new();
-        //     s.set_responder(Box::new(responder));
-        //     self.rx = Some(rx1);
-        //     self.tx = Some(tx1);
-        // }reactor
-    }
-
-    pub(crate) fn get_session_mut(&mut self) -> Option<&mut ISession<App, DDP, Log, MF>> {
-        self.session.as_mut()
-    }
-
-    pub(crate) fn start(mut self) -> Option<ISession<App, DDP, Log, MF>> {
+    pub(crate) fn start(mut self) -> Option<ISession<App, Log, MF>> {
         // TODO while within session time
         if let Err(e) = self.event_loop() {
             match e {
@@ -175,12 +119,12 @@ where
     fn event_loop(&mut self) -> Result<(), ReactorError> {
         while self.session.is_none() {
             {
-                let read = self.read_some()?;
+                let read = self.read_some().map_err(|_| ReactorError::Disconnect)?;
                 if read > 0 {
                     self.parser.add_to_stream(&self.buffer[..read]);
                 }
 
-                while let Some(msg) = self.parser.read_fix_message()? {
+                while let Some(msg) = self.parser.read_fix_message() {
                     println!("Received Message {:?}", msg);
                     let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
                     let session_id = message.extract_contra_session_id();
@@ -265,7 +209,7 @@ where
         self.session.as_mut().unwrap().set_disconnected(&session_id);
     }
 
-    fn read_some(&mut self) -> Result<usize, ReactorError> {
+    fn read_some(&mut self) -> Result<usize, StreamError> {
         // read bytes nonblocking from stream...
         // add bytes to parser
         // return bytes read
@@ -276,7 +220,7 @@ where
         }
     }
 
-    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> Result<usize, ReactorError> {
+    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> Result<usize, StreamError> {
         match stream.read(buffer) {
             Ok(read) => Ok(read),
             Err(ref e)
@@ -286,7 +230,7 @@ where
                 // println!("Would block {e:?}");
                 Ok(0)
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }
     }
 
@@ -294,12 +238,11 @@ where
         &self,
         session_id: SessionId,
         settings: &SessionSetting,
-    ) -> ISession<App, DDP, Log, MF> {
+    ) -> ISession<App, Log, MF> {
         let log = self.log_factory.create(&session_id);
         ISession::from_settings(
             session_id,
             self.app.clone(),
-            Box::new(self.store_factory.clone()),
             self.data_dictionary_provider.clone(),
             log,
             self.message_factory.clone(),
@@ -350,15 +293,16 @@ where
                     println!("[DEBUG]: {}: {:?}", Utc::now(), output);
                     match output {
                         Output::Message(message) => {
-                            let result = {
-                                stream.write_all(&message)?;
-                                stream.flush()
-                            };
-                            if let Err(e) = result.as_ref() {
-                                println!("Failed write: {:?}", e);
+                            match stream
+                                .write_all(&message)
+                                .and_then(|()| Write::flush(stream))
+                            {
+                                Ok(()) => (),
+                                Err(e) => {
+                                    println!("Failed write: {:?}", e);
+                                    return Err(ReactorError::Disconnect);
+                                }
                             }
-                            result?;
-                            session.last_sent(Instant::now());
                             continue;
                         }
                         Output::Event(event) => match event {
@@ -415,16 +359,18 @@ where
             };
 
             let result = Self::read_stream(stream, buffer);
-            if let Err(e) = result.as_ref() {
-                println!("Failed read: {:?}", e);
-                break;
-            }
-            let read = result?;
+            let read = match result {
+                Ok(n) => n,
+                Err(e) => {
+                    println!("Failed read: {:?}", e);
+                    break;
+                }
+            };
             if read > 0 {
                 self.parser.add_to_stream(&buffer[..read]);
             }
 
-            let input = match self.parser.read_fix_message()? {
+            let input = match self.parser.read_fix_message() {
                 Some(msg) => {
                     println!(
                         "Received {} from {}",

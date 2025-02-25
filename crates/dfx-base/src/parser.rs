@@ -4,8 +4,8 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn read_fix_message(&mut self) -> Result<Option<Vec<u8>>, ParserError> {
-        Ok(read_fix(&mut self.buffer))
+    pub fn read_fix_message(&mut self) -> Option<Vec<u8>> {
+        read_fix(&mut self.buffer)
     }
 
     pub fn add_to_stream(&mut self, read: &[u8]) {
@@ -162,20 +162,14 @@ mod tests {
         let mut parser = Parser::default();
         parser.add_to_stream(buffer);
         let msg = parser.read_fix_message();
-        assert!(msg.is_ok());
-        if let Ok(msg) = msg {
-            assert!(msg.is_some());
-            assert!(!parser.buffer.is_empty());
-            println!(
-                "{}",
-                parser.buffer.iter().map(|b| *b as char).collect::<String>()
-            );
-        }
+        assert!(msg.is_some());
+        assert!(!parser.buffer.is_empty());
+        println!(
+            "{}",
+            parser.buffer.iter().map(|b| *b as char).collect::<String>()
+        );
         let msg = parser.read_fix_message();
-        assert!(msg.is_ok());
-        if let Ok(msg) = msg {
-            assert!(msg.is_some());
-        }
+        assert!(msg.is_some());
     }
 
     #[test]

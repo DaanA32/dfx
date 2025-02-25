@@ -290,15 +290,10 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
         if (start - std::time::Instant::now()) > Duration::from_secs(35) {
             panic!("Test failed reading fix message: Timeout");
         }
-        match parser.read_fix_message() {
-            Ok(message) => {
-                if let Some(value) = message {
-                    other = Some(value);
-                    break;
-                }
-            }
-            Err(_) => panic!("Test failed reading fix message."),
-        };
+        if let Some(value) = parser.read_fix_message() {
+            other = Some(value);
+            break;
+        }
     }
     let other = other.expect("Read a message");
     let other: String = other.iter().map(|b| *b as char).collect();

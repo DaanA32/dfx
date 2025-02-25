@@ -299,15 +299,10 @@ fn do_receive(s: &mut TcpStream, message: String, parser: &mut Parser) -> Result
                 "Test failed reading fix message timeout: {message}"
             ));
         }
-        match parser.read_fix_message() {
-            Ok(message) => {
-                if let Some(value) = message {
-                    other = Some(value);
-                    break;
-                }
-            }
-            Err(e) => return Err(format!("Test failed reading fix message: {e:?}")),
-        };
+        if let Some(value) = parser.read_fix_message() {
+            other = Some(value);
+            break;
+        }
         std::thread::sleep(Duration::from_millis(1));
     }
     let other = other.expect("Read a message");

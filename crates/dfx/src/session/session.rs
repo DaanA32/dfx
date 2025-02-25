@@ -1,11 +1,9 @@
 use std::cmp;
 use std::cmp::min;
 use std::collections::VecDeque;
-use std::rc::Rc;
 use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -21,7 +19,6 @@ use dfx_base::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
 
 use crate::fields::{DefaultApplVerID, EncryptMethod, HeartBtInt, MsgType, ResetSeqNumFlag};
-use crate::logging::LogFactory;
 use crate::logging::Logger;
 use dfx_base::data_dictionary::DataDictionary;
 use dfx_base::data_dictionary::MessageValidationError;
@@ -33,10 +30,8 @@ use dfx_base::fields::converters::datetime::DateTimeFormat;
 use dfx_base::fields::ConversionError;
 use dfx_base::fix_values::BeginString;
 
-use crate::message_store::MessageStoreFactory;
 use crate::session::Application;
 use crate::session::ApplicationError;
-use crate::session::Responder;
 use crate::session::SessionSchedule;
 use crate::session::SessionState;
 use dfx_base::message::Message;
@@ -141,7 +136,6 @@ pub(crate) enum Input {
     },
     SetSenderSeqNum(u32),
     SetTargetSeqNum(u32),
-    SetCreationTime(Option<chrono::DateTime<Utc>>),
 }
 
 #[derive(Debug)]
@@ -177,10 +171,9 @@ impl std::fmt::Debug for Output {
 }
 
 //TODO: dyn to generic?
-pub(crate) struct ISession<App, DDP, Log, MF> {
+pub(crate) struct ISession<App, Log, MF> {
     application: App,
     session_id: SessionId,
-    _data_dictionary_provider: DDP, // TODO: REMOVE candidate
     schedule: SessionSchedule,
     last_now: Instant,
     last_utc: DateTime<Utc>,
@@ -287,17 +280,15 @@ fn add_data_dictionaries<D: DataDictionaryProvider>(provider: &mut D, settings: 
     }
 }
 
-impl<App, DDP, Log, MF> ISession<App, DDP, Log, MF>
+impl<App, Log, MF> ISession<App, Log, MF>
 where
     App: Application + Clone + 'static,
-    DDP: DataDictionaryProvider + Send + Clone + 'static,
     Log: Logger + Clone,
     MF: MessageFactory + Send + Clone + 'static,
 {
-    pub(crate) fn from_settings(
+    pub(crate) fn from_settings<DDP: DataDictionaryProvider + Send + Clone + 'static>(
         session_id: SessionId,
         app: App,
-        store_factory: Box<dyn MessageStoreFactory>,
         mut data_dictionary_provider: DDP,
         log: Log,
         msg_factory: MF,
@@ -318,7 +309,6 @@ where
             session_data_dictionary.clone()
         };
 
-        let msg_store = store_factory.create(&session_id);
         let mut state = SessionState::new(
             settings.connection().is_initiator(),
             log.clone(),
@@ -358,7 +348,6 @@ where
         ISession {
             application,
             session_id,
-            _data_dictionary_provider: data_dictionary_provider,
             schedule: settings.schedule().clone(),
             last_now,
             last_utc,
@@ -1789,10 +1778,6 @@ where
         }
     }
 
-    pub(crate) fn set_session_id(&mut self, clone: SessionId) {
-        self.session_id = clone;
-    }
-
     fn generate_sequence_reset(
         &mut self,
         received_message: &Message,
@@ -1931,7 +1916,6 @@ where
             }
             Input::SetSenderSeqNum(seq_num) => Ok(self.state.set_next_sender_msg_seq_num(seq_num)),
             Input::SetTargetSeqNum(seq_num) => Ok(self.state.set_next_target_msg_seq_num(seq_num)),
-            Input::SetCreationTime(date_time) => Ok(self.state.set_creation_time(date_time)),
         };
         // println!("process_input: {:?}", result);
         if let Err(e) = result {
@@ -2008,11 +1992,6 @@ where
         }
 
         Ok(())
-    }
-
-    pub fn last_sent(&mut self, now: Instant) {
-        // self.last_now = now;
-        // self.state.set_last_sent_time_dt(now);
     }
 }
 
