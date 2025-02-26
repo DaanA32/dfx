@@ -19,7 +19,6 @@ use dfx_base::fix_values::SessionRejectReason;
 use lazy_static::lazy_static;
 
 use crate::fields::{DefaultApplVerID, EncryptMethod, HeartBtInt, MsgType, ResetSeqNumFlag};
-use crate::logging::Logger;
 use dfx_base::data_dictionary::DataDictionary;
 use dfx_base::data_dictionary::MessageValidationError;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
@@ -78,9 +77,17 @@ fn disconnect_session(session_id: &SessionId) {
     SESSION_MAP.remove(session_id);
 }
 
+#[derive(Debug)]
+pub(crate) enum LogEvent {
+    Event(String),
+    Inbound(String),
+    Outbound(String),
+}
+
 // #[derive(Debug)]
 pub(crate) enum Event {
     Disconnect,
+    Log(LogEvent),
     Reset(Option<&'static str>),
     Refresh,
     Persist(u32, Box<[u8]>),
@@ -114,6 +121,7 @@ impl std::fmt::Debug for Event {
             Event::SetNextTargetSeqNum(seq_num) => {
                 f.debug_tuple("SetNextTargetSeqNum").field(seq_num).finish()
             }
+            Event::Log(log_event) => f.debug_tuple("Log").field(log_event).finish(),
         }
     }
 }
@@ -171,7 +179,7 @@ impl std::fmt::Debug for Output {
 }
 
 //TODO: dyn to generic?
-pub(crate) struct ISession<App, Log, MF> {
+pub(crate) struct ISession<App, MF> {
     application: App,
     session_id: SessionId,
     schedule: SessionSchedule,
@@ -183,8 +191,7 @@ pub(crate) struct ISession<App, Log, MF> {
     target_default_appl_ver_id: Option<u32>,
     session_data_dictionary: DataDictionary,     //Option?
     application_data_dictionary: DataDictionary, //Option?
-    log: Log,
-    state: SessionState<Log>,
+    state: SessionState,
     persist_messages: bool,
     reset_on_disconnect: bool,
     send_redundant_resend_requests: bool,
@@ -280,17 +287,15 @@ fn add_data_dictionaries<D: DataDictionaryProvider>(provider: &mut D, settings: 
     }
 }
 
-impl<App, Log, MF> ISession<App, Log, MF>
+impl<App, MF> ISession<App, MF>
 where
     App: Application + Clone + 'static,
-    Log: Logger + Clone,
     MF: MessageFactory + Send + Clone + 'static,
 {
     pub(crate) fn from_settings<DDP: DataDictionaryProvider + Send + Clone + 'static>(
         session_id: SessionId,
         app: App,
         mut data_dictionary_provider: DDP,
-        log: Log,
         msg_factory: MF,
         settings: SessionSetting,
         last_now: Instant,
@@ -311,7 +316,6 @@ where
 
         let mut state = SessionState::new(
             settings.connection().is_initiator(),
-            log.clone(),
             settings.connection().heart_bt_int().unwrap_or(30),
             last_now,
         );
@@ -343,7 +347,7 @@ where
 
         let mut application = app;
         application.on_create(settings.session_id()).unwrap(); //TODO handle err
-        log.on_event("Created session");
+                                                               //log.on_event("Created session");
 
         ISession {
             application,
@@ -360,7 +364,6 @@ where
             target_default_appl_ver_id: None,
             session_data_dictionary,
             application_data_dictionary,
-            log,
             state,
             persist_messages: !matches!(settings.persistence(), Persistence::None),
             reset_on_disconnect: settings.validation_options().reset_on_disconnect(),
@@ -450,7 +453,7 @@ where
             }
 
             if !self.state.sent_logout() {
-                self.log.on_event("Initiated logout request");
+                self.on_event("Initiated logout request");
                 self.generate_logout(self.state.logout_reason().cloned(), None);
             }
         }
@@ -458,9 +461,9 @@ where
         if !self.state.received_logon() {
             if self.state.should_send_logon() && self.is_time_to_generate_logon() {
                 if self.generate_logon() {
-                    self.log.on_event("Initiated logon request");
+                    self.on_event("Initiated logon request");
                 } else {
-                    self.log.on_event("Error during logon request initiation");
+                    self.on_event("Error during logon request initiation");
                 }
             } else if !self.state.should_send_logon() && self.state.logon_timed_out(self.last_now) {
                 self.disconnect("Timed out waiting for logon request");
@@ -491,16 +494,13 @@ where
             self.generate_test_request("TEST");
             self.state
                 .set_test_request_counter(self.state.test_request_counter() + 1);
-            self.log.on_event("Sent test request TEST");
+            self.on_event("Sent test request TEST");
         } else if self.state.need_heartbeat(self.last_now) {
-            self.log.on_event(
-                format!(
-                    "Sent heartbeat last now: {:?} last sent: {:?}",
-                    self.last_now,
-                    self.state.last_sent_time_dt(),
-                )
-                .as_str(),
-            );
+            self.on_event(format!(
+                "Sent heartbeat last now: {:?} last sent: {:?}",
+                self.last_now,
+                self.state.last_sent_time_dt(),
+            ));
             self.generate_heartbeat();
         }
     }
@@ -605,8 +605,7 @@ where
                     .header_mut()
                     .set_tag_value(tags::LastMsgSeqNumProcessed, value);
             } else {
-                self.log
-                    .on_event(format!("Error: No message sequence number: {other}").as_str());
+                self.on_event(format!("Error: No message sequence number: {other}"));
             }
         }
 
@@ -643,9 +642,10 @@ where
                     .header_mut()
                     .set_tag_value(tags::LastMsgSeqNumProcessed, field.value());
             } else {
-                self.log().on_event(
-                    format!("Error: No message sequence number: {:?}", other.as_ref()).as_str(),
-                );
+                self.on_event(format!(
+                    "Error: No message sequence number: {:?}",
+                    other.as_ref()
+                ));
             }
         }
         let sent_logout = matches!(self.send_raw(logout, 0), Ok(v) if v);
@@ -668,13 +668,10 @@ where
             .unwrap(); // TODO handle unwrap
         self.initialize_header(&mut heartbeat, None);
         heartbeat.set_field(message.get_field(tags::TestReqID).unwrap().clone());
-        self.log.on_event(
-            format!(
-                "generate_heartbeat_other: {}",
-                self.enable_last_msg_seq_num_processed
-            )
-            .as_str(),
-        );
+        self.on_event(format!(
+            "generate_heartbeat_other: {}",
+            self.enable_last_msg_seq_num_processed
+        ));
         if self.enable_last_msg_seq_num_processed {
             if let Some(seq) = message.header().get_field(tags::MsgSeqNum) {
                 let value: &FieldValue = seq.value();
@@ -682,8 +679,7 @@ where
                     .header_mut()
                     .set_tag_value(tags::LastMsgSeqNumProcessed, value);
             } else {
-                self.log
-                    .on_event(format!("Error: No message sequence number: {message}").as_str());
+                self.on_event(format!("Error: No message sequence number: {message}"));
             }
         }
         self.send_raw(heartbeat, 0).unwrap()
@@ -701,20 +697,18 @@ where
 
     fn disconnect(&mut self, reason: &str) {
         if self.state.is_connected() {
-            self.log.on_event(
-                format!("Session {} disconnecting: {}", self.session_id, reason).as_str(),
-            );
+            self.on_event(format!(
+                "Session {} disconnecting: {}",
+                self.session_id, reason
+            ));
             // TODO: Review push front?
             self.outbound_queue
                 .push_back(Output::Event(Event::Disconnect));
         } else {
-            self.log.on_event(
-                format!(
-                    "Session {} already disconnected: {}",
-                    self.session_id, reason
-                )
-                .as_str(),
-            );
+            self.on_event(format!(
+                "Session {} already disconnected: {}",
+                self.session_id, reason
+            ));
         }
 
         if self.state.received_logon() || self.state.sent_logon() {
@@ -784,8 +778,7 @@ where
 
     fn send(&mut self, message: Vec<u8>) -> bool {
         self.state.set_last_sent_time_dt(self.last_now);
-        let msg_str = String::from_utf8_lossy(&message);
-        self.log.on_outgoing(&msg_str);
+        self.on_outgoing(&message);
         self.outbound_queue.push_back(Output::Message(message));
         true
     }
@@ -880,10 +873,6 @@ where
         &self.session_id
     }
 
-    pub(crate) fn log(&mut self) -> &mut Log {
-        &mut self.log
-    }
-
     pub(crate) fn next_msg(&mut self, msg: Vec<u8>) {
         self.internal_next_msg(msg);
         self.next_queued();
@@ -895,7 +884,7 @@ where
     //     SessionDisconnect { context, reason }
     // }
     fn internal_next_msg(&mut self, msg: Vec<u8>) {
-        self.log.on_incoming(&String::from_utf8_lossy(&msg));
+        self.on_incoming(&msg);
 
         if !self.is_session_time() {
             self.reset(
@@ -920,14 +909,13 @@ where
     fn handle_message_error(&mut self, e: SessionHandleMessageError) {
         match e {
             SessionHandleMessageError::InvalidMessageError(e) => {
-                self.log.on_event(&e.message());
+                self.on_event(e.message());
             }
             SessionHandleMessageError::MessageParseError {
                 message,
                 parse_error,
             } => {
-                self.log
-                    .on_event(format!("MessageParse Error: {parse_error:?}").as_str());
+                self.on_event(format!("MessageParse Error: {parse_error:?}"));
                 let field = parse_error.as_tag();
                 let reason = parse_error.as_session_reject();
                 match Message::new(&message) {
@@ -935,14 +923,13 @@ where
                         self.generate_reject(msg, reason.unwrap(), field).unwrap();
                     }
                     Err(err) => {
-                        self.log
-                            .on_event(format!("Skipping message due to {err:?}.").as_str());
+                        self.on_event(format!("Skipping message due to {err:?}."));
                     }
                 }
             }
             SessionHandleMessageError::TagException(msg, e) => {
                 if let Some(msg) = e.inner() {
-                    self.log.on_event(msg.as_str());
+                    self.on_event(msg);
                 }
                 self.generate_reject(msg, e.session_reject_reason().clone(), Some(e.field()))
                     .unwrap();
@@ -956,9 +943,7 @@ where
                 if matches!(result, Ok(v) if MsgType::LOGOUT == v) {
                     self.next_logout(message).unwrap();
                 } else {
-                    self.log.on_event(
-                        format!("Received version {actual} but expected {expected}").as_str(),
-                    );
+                    self.on_event(format!("Received version {actual} but expected {expected}"));
                     self.generate_logout(Some(format!("Incorrect BeginString ({actual})")), None);
                     self.state.incr_next_target_msg_seq_num();
                     self.outbound_queue
@@ -970,7 +955,7 @@ where
                     // );
                 }
             }
-            SessionHandleMessageError::String(s) => self.log.on_event(&s),
+            SessionHandleMessageError::String(s) => self.on_event(s),
             SessionHandleMessageError::FieldMapError(fm) => todo!("{fm:?}"),
             SessionHandleMessageError::ConversionError(conv) => todo!("{conv:?}"),
             SessionHandleMessageError::LogonReject { reason } => {
@@ -982,8 +967,7 @@ where
                 self.disconnect(&disconnect_msg);
             }
             SessionHandleMessageError::UnknownMessageType { message, msg_type } => {
-                self.log
-                    .on_event(format!("Unsupported message type: {msg_type}").as_str());
+                self.on_event(format!("Unsupported message type: {msg_type}"));
                 self.generate_business_message_reject(
                     message,
                     BusinessRejectReason::UNKNOWN_MESSAGE_TYPE(),
@@ -1120,13 +1104,10 @@ where
 
     fn next_queued(&mut self) {
         while let Some(msg) = self.state.dequeue(self.state.next_target_msg_seq_num()) {
-            self.log.on_event(
-                format!(
-                    "Processing queued message: {}",
-                    self.state.next_target_msg_seq_num()
-                )
-                .as_str(),
-            );
+            self.on_event(format!(
+                "Processing queued message: {}",
+                self.state.next_target_msg_seq_num()
+            ));
 
             match (
                 msg.header().get_string(tags::MsgType),
@@ -1169,8 +1150,7 @@ where
         self.state.set_received_reset(received_reset);
 
         if received_reset {
-            self.log()
-                .on_event("Sequence numbers reset due to ResetSeqNumFlag=Y");
+            self.on_event("Sequence numbers reset due to ResetSeqNumFlag=Y");
             if !self.state.sent_reset() {
                 self.reset_state(Some("Reset requested by counterparty"));
             }
@@ -1190,19 +1170,19 @@ where
         let logon = logon.unwrap();
 
         if !self.is_good_time(&logon) {
-            self.log().on_event("Logon has bad sending time");
+            self.on_event("Logon has bad sending time");
             self.disconnect("bad sending time");
             return Ok(());
         }
 
         self.state.set_received_logon(true);
-        self.log().on_event("Received logon");
+        self.on_event("Received logon");
 
         if !self.state.is_initiator() {
             let heartbeat_int = logon.get_int(tags::HeartBtInt)?;
             self.state.set_heartbeat_int(heartbeat_int);
             self.generate_logon_other(&logon);
-            self.log().on_event("Responding to logon request");
+            self.on_event("Responding to logon request");
         }
 
         self.state.set_sent_reset(false);
@@ -1233,12 +1213,12 @@ where
 
         let reason = if !self.state.sent_logout() {
             let reason = "Received logout request";
-            self.log().on_event(reason);
+            self.on_event(reason);
             self.generate_logout(None, Some(logout));
             reason
         } else {
             let reason = "Received logout response";
-            self.log().on_event(reason);
+            self.on_event(reason);
             reason
         };
 
@@ -1293,14 +1273,11 @@ where
 
         if message.is_field_set(tags::NewSeqNo) {
             let new_seq_no = message.get_int(tags::NewSeqNo)?;
-            self.log.on_event(
-                format!(
-                    "Received SequenceReset FROM: {} TO: {}",
-                    self.state.next_target_msg_seq_num(),
-                    new_seq_no
-                )
-                .as_str(),
-            );
+            self.on_event(format!(
+                "Received SequenceReset FROM: {} TO: {}",
+                self.state.next_target_msg_seq_num(),
+                new_seq_no
+            ));
             if new_seq_no > self.state.next_target_msg_seq_num() {
                 self.state.set_next_target_msg_seq_num(new_seq_no);
                 self.outbound_queue
@@ -1325,9 +1302,9 @@ where
                 let msg_seq_num;
                 let beg_seq_no = resend_request.get_int(tags::BeginSeqNo)?;
                 let mut end_seq_no = resend_request.get_int(tags::EndSeqNo)?;
-                self.log.on_event(
-                    format!("Got resend request from {beg_seq_no} to {end_seq_no}").as_str(),
-                );
+                self.on_event(format!(
+                    "Got resend request from {beg_seq_no} to {end_seq_no}"
+                ));
 
                 if end_seq_no == 999999 || end_seq_no == 0 {
                     end_seq_no = self.state.next_sender_msg_seq_num() - 1;
@@ -1417,21 +1394,18 @@ where
         if (check_too_high || check_too_low) && self.state.resend_requested() {
             if let Some(range) = self.state.resend_range() {
                 if msg_seq_num >= range.end_seq_num {
-                    self.log.on_event(
-                        format!(
-                            "ResendRequest for messages FROM: {} TO: {} has been satisfied.",
-                            range.begin_seq_num, range.end_seq_num
-                        )
-                        .as_str(),
-                    );
+                    self.on_event(format!(
+                        "ResendRequest for messages FROM: {} TO: {} has been satisfied.",
+                        range.begin_seq_num, range.end_seq_num
+                    ));
                     self.state.set_resend_range(None);
                 } else if let Some(chunk) = range.chunk_end_seq_num {
                     if msg_seq_num >= chunk {
-                        self.log.on_event(format!("Chunked ResendRequest for messages FROM: {} TO: {} has been satisfied.", range.begin_seq_num, chunk).as_str());
                         let new_chunk_end_seq_no = cmp::min(
                             range.end_seq_num,
                             chunk + self.max_messages_in_resend_request,
                         );
+                        self.on_event(format!("Chunked ResendRequest for messages FROM: {} TO: {} has been satisfied.", range.begin_seq_num, chunk));
                         self.generate_resend_request_range(
                             message.header().get_string(tags::BeginString)?,
                             chunk + 1,
@@ -1448,7 +1422,7 @@ where
         }
 
         if !self.is_good_time(&message) {
-            self.log().on_event("Sending time accuracy problem");
+            self.on_event("Sending time accuracy problem");
             self.generate_reject(
                 message,
                 SessionRejectReason::SENDING_TIME_ACCURACY_PROBLEM(),
@@ -1490,27 +1464,21 @@ where
     ) -> Result<(), SessionHandleMessageError> {
         let begin_string = msg.header().get_string(tags::BeginString)?;
 
-        self.log.on_event(
-            format!(
-                "MsgSeqNum too high, expecting {} but received {}",
-                self.state.next_target_msg_seq_num(),
-                msg_seq_num
-            )
-            .as_str(),
-        );
+        self.on_event(format!(
+            "MsgSeqNum too high, expecting {} but received {}",
+            self.state.next_target_msg_seq_num(),
+            msg_seq_num
+        ));
 
         self.state.queue(msg_seq_num, msg);
 
         if self.state.resend_requested() {
             if let Some(range) = self.state.resend_range() {
                 if !self.send_redundant_resend_requests && msg_seq_num >= range.begin_seq_num {
-                    self.log.on_event(
-                        format!(
-                            "Already sent ResendRequest FROM: {} TO: {}.  Not sending another.",
-                            range.begin_seq_num, range.end_seq_num
-                        )
-                        .as_str(),
-                    );
+                    self.on_event(format!(
+                        "Already sent ResendRequest FROM: {} TO: {}.  Not sending another.",
+                        range.begin_seq_num, range.end_seq_num
+                    ));
                     return Ok(());
                 }
             }
@@ -1567,14 +1535,14 @@ where
 
         self.initialize_header(&mut resend_request, None);
         if self.send_raw(resend_request, 0)? {
-            self.log.on_event(
-                format!("Sent ResendRequest FROM: {start_seq_num} TO: {end_seq_num}").as_str(),
-            );
+            self.on_event(format!(
+                "Sent ResendRequest FROM: {start_seq_num} TO: {end_seq_num}"
+            ));
             Ok(true)
         } else {
-            self.log.on_event(
-                format!("Error sending ResendRequest ({start_seq_num},{end_seq_num})").as_str(),
-            );
+            self.on_event(format!(
+                "Error sending ResendRequest ({start_seq_num},{end_seq_num})"
+            ));
             Ok(false)
         }
     }
@@ -1586,8 +1554,7 @@ where
         reason: SessionRejectReason,
         field: Option<Tag>,
     ) -> Result<bool, SessionHandleMessageError> {
-        self.log
-            .on_event(format!("Reject: {}", reason.reason()).as_str());
+        self.on_event(format!("Reject: {}", reason.reason()));
         let field = field.unwrap_or(0);
 
         let begin_string = &self.session_id.begin_string();
@@ -1660,28 +1627,22 @@ where
                     true,
                 );
             }
-            self.log.on_event(
-                format!(
-                    "Message {} Rejected: {} (Field={})",
-                    msg_seq_num,
-                    reason.description(),
-                    /*.description*/ field
-                )
-                .as_str(),
-            );
+            self.on_event(format!(
+                "Message {} Rejected: {} (Field={})",
+                msg_seq_num,
+                reason.description(),
+                /*.description*/ field
+            ));
         } else {
             self.populate_reject_reason(
                 &mut reject,
                 reason.description().as_str(), /*.description*/
             );
-            self.log.on_event(
-                format!(
-                    "Message {} Rejected: {}",
-                    msg_seq_num,
-                    reason.description() /*.description*/
-                )
-                .as_str(),
-            );
+            self.on_event(format!(
+                "Message {} Rejected: {}",
+                msg_seq_num,
+                reason.description() /*.description*/
+            ));
         }
 
         if !self.state.received_logon() {
@@ -1812,16 +1773,14 @@ where
                     .header_mut()
                     .set_tag_value(tags::LastMsgSeqNumProcessed, result?);
             } else {
-                self.log().on_event(
-                    format!("Error: Received message without MsgSeqNum: {received_message}")
-                        .as_str(),
-                );
+                self.on_event(format!(
+                    "Error: Received message without MsgSeqNum: {received_message}"
+                ));
             }
         }
 
         self.send_raw(sequence_reset, begin_seq_no)?;
-        self.log()
-            .on_event(format!("Sent SequenceReset TO: {begin_seq_no}").as_str());
+        self.on_event(format!("Sent SequenceReset TO: {begin_seq_no}"));
         Ok(())
     }
 
@@ -1878,8 +1837,9 @@ where
             )));
 
         reject.set_tag_value(tags::Text, reason);
-        self.log
-            .on_event("Reject sent for Message: {msg_seq_num} Reason:{reason}");
+        self.on_event(format!(
+            "Reject sent for Message: {msg_seq_num} Reason:{reason}"
+        ));
         self.send_raw(reject, 0)?;
         Ok(())
     }
@@ -1992,6 +1952,25 @@ where
         }
 
         Ok(())
+    }
+
+    fn on_event(&mut self, arg: impl Into<String>) {
+        self.outbound_queue
+            .push_back(Output::Event(Event::Log(LogEvent::Event(arg.into()))));
+    }
+
+    fn on_outgoing(&mut self, message: &[u8]) {
+        let msg_str = String::from_utf8_lossy(message);
+        self.outbound_queue
+            .push_back(Output::Event(Event::Log(LogEvent::Outbound(
+                msg_str.into(),
+            ))));
+    }
+
+    fn on_incoming(&mut self, message: &[u8]) {
+        let msg_str = String::from_utf8_lossy(message);
+        self.outbound_queue
+            .push_back(Output::Event(Event::Log(LogEvent::Inbound(msg_str.into()))));
     }
 }
 

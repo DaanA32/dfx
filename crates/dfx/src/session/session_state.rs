@@ -11,7 +11,7 @@ use std::time::Instant;
 use crate::session::ResetRange;
 
 #[derive(Debug)]
-pub(crate) struct SessionState<Log> {
+pub(crate) struct SessionState {
     is_enabled: bool,
     is_initiator: bool,
     is_connected: bool,
@@ -32,14 +32,13 @@ pub(crate) struct SessionState<Log> {
     logout_timeout_ms: u64,
     resend_range: Option<ResetRange>,
     message_queue: BTreeMap<u32, Message>,
-    logger: Log,
     creation_time: Option<DateTime<Utc>>,
     next_sender_msg_seq_num: u32,
     next_target_msg_seq_num: u32,
 }
 
-impl<Log: Logger> SessionState<Log> {
-    pub fn new(is_initiator: bool, logger: Log, heartbeat_int: u32, last_now: Instant) -> Self {
+impl SessionState {
+    pub fn new(is_initiator: bool, heartbeat_int: u32, last_now: Instant) -> Self {
         SessionState {
             is_enabled: true,
             is_initiator,
@@ -61,7 +60,6 @@ impl<Log: Logger> SessionState<Log> {
             logout_timeout_ms: 10 * 1000,
             resend_range: None,
             message_queue: BTreeMap::default(),
-            logger,
             creation_time: None,
             next_sender_msg_seq_num: 1,
             next_target_msg_seq_num: 1,
@@ -427,21 +425,6 @@ impl<Log: Logger> SessionState<Log> {
     /// Set the session state's message queue.
     pub(crate) fn set_message_queue(&mut self, message_queue: BTreeMap<u32, Message>) {
         self.message_queue = message_queue;
-    }
-
-    /// Get a reference to the session state's logger.
-    pub(crate) fn logger(&self) -> &Log {
-        &self.logger
-    }
-
-    /// Get a mutable reference to the session state's logger.
-    pub(crate) fn logger_mut(&mut self) -> &mut Log {
-        &mut self.logger
-    }
-
-    /// Set the session state's logger.
-    pub(crate) fn set_logger(&mut self, logger: Log) {
-        self.logger = logger;
     }
 
     pub(crate) fn creation_time(&self) -> Option<DateTime<Utc>> {

@@ -10,7 +10,7 @@ use crate::{
     logging::{LogFactory, Logger},
     message_store::{MessageStore, MessageStoreFactory},
     parser::Parser,
-    session::{Application, Event, ISession, Input, Output, Replay, SessionSetting},
+    session::{Application, Event, ISession, Input, LogEvent, Output, Replay, SessionSetting},
 };
 
 use super::{Stream, StreamError};
@@ -24,7 +24,7 @@ pub(crate) struct SocketReactor<
     MessageFactory,
     Log,
 > {
-    session: Option<ISession<App, Log, MessageFactory>>,
+    session: Option<ISession<App, MessageFactory>>,
     msg_store: Option<Box<dyn MessageStore>>,
     logger: Option<Log>,
     parser: Parser,
@@ -98,7 +98,7 @@ where
         reactor
     }
 
-    pub(crate) fn start(mut self) -> Option<ISession<App, Log, MF>> {
+    pub(crate) fn start(mut self) -> Option<ISession<App, MF>> {
         // TODO while within session time
         if let Err(e) = self.event_loop() {
             match e {
@@ -110,7 +110,6 @@ where
                         // TODO
                     }
                 }
-                e => todo!("SocketReactor::start: Error {:?}", e),
             }
         }
         self.session
@@ -169,8 +168,9 @@ where
 
         {
             let session = self.session.as_mut().expect("Session not found!");
-            session
-                .log()
+            self.logger
+                .as_mut()
+                .unwrap()
                 .on_event(format!("Connection succeeded {}", &session_id).as_str());
             session.last_now(Instant::now());
             session.last_utc(Utc::now());
@@ -238,13 +238,11 @@ where
         &self,
         session_id: SessionId,
         settings: &SessionSetting,
-    ) -> ISession<App, Log, MF> {
-        let log = self.log_factory.create(&session_id);
+    ) -> ISession<App, MF> {
         ISession::from_settings(
             session_id,
             self.app.clone(),
             self.data_dictionary_provider.clone(),
-            log,
             self.message_factory.clone(),
             settings.clone(),
             Instant::now(),
@@ -352,6 +350,7 @@ where
 
                                 continue;
                             }
+                            Event::Log(log_event) => handle_log_event(logger, log_event),
                         },
                     }
                 }
@@ -391,5 +390,13 @@ where
             session.process_input(input);
         }
         Ok(())
+    }
+}
+
+fn handle_log_event(logger: &mut impl Logger, log_event: LogEvent) {
+    match log_event {
+        LogEvent::Event(e) => logger.on_event(e.as_str()),
+        LogEvent::Inbound(inbound) => logger.on_incoming(inbound.as_str()),
+        LogEvent::Outbound(outbound) => logger.on_outgoing(outbound.as_str()),
     }
 }
