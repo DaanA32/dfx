@@ -1,19 +1,19 @@
 use std::{
     sync::{atomic::AtomicBool, Arc},
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::{
     connection::StreamFactory,
     logging::{LogFactory, Logger},
     message_store::MessageStoreFactory,
-    session::{Application, SessionSetting, SessionSettings},
+    session::{Application, ISession, SessionSetting, SessionSettings},
 };
 use chrono::Utc;
-use dfx_base::data_dictionary_provider::DataDictionaryProvider;
 use dfx_base::message_factory::MessageFactory;
 use dfx_base::parser::ParserError;
+use dfx_base::{data_dictionary_provider::DataDictionaryProvider, session_id::SessionId};
 
 use super::{ConnectionError, SocketReactor};
 
@@ -96,6 +96,7 @@ pub(crate) struct SocketInitiatorThread<
     MessageFactory,
 > {
     app: App,
+    session: Option<ISession<App, MessageFactory>>,
     store_factory: StoreFactory,
     data_dictionary_provider: DataDictionaryProvider,
     log_factory: LogFactory,
@@ -143,8 +144,16 @@ where
         message_factory: MF,
         session_settings: SessionSetting,
     ) -> Self {
+        let session = Some(Self::create_session(
+            session_settings.session_id().clone(),
+            app.clone(),
+            data_dictionary_provider.clone(),
+            message_factory.clone(),
+            session_settings.clone(),
+        ));
         SocketInitiatorThread {
             app,
+            session,
             store_factory,
             data_dictionary_provider,
             log_factory,
@@ -176,6 +185,9 @@ where
                             }
                         }
                     }
+                    // else {
+                    //     poll receiver and append to enqueued messages
+                    // }
                     thread::sleep(Duration::from_millis(timeout));
                 }
             })
@@ -183,9 +195,13 @@ where
     }
 
     fn event_loop(&mut self) -> Result<(), InitiatorError> {
-        println!("before");
         let stream = StreamFactory::create_client_stream(self.session_settings.socket_settings())?;
-        println!("after");
+        let mut session = match self.session.take() {
+            Some(s) => s,
+            None => unreachable!(),
+        };
+        let session_id = session.session_id().clone();
+        let _ = session.set_connected(&session_id);
         let app = self.app.clone();
         let store_factory = self.store_factory.clone();
         let data_dictionary_provider = self.data_dictionary_provider.clone();
@@ -193,6 +209,7 @@ where
         let message_factory = self.message_factory.clone();
         let reactor = SocketReactor::new(
             stream,
+            Some(session),
             vec![self.session_settings.clone()],
             app,
             store_factory,
@@ -203,5 +220,23 @@ where
         reactor.start();
 
         Ok(())
+    }
+
+    fn create_session(
+        session_id: SessionId,
+        app: App,
+        data_dictionary_provider: DDP,
+        message_factory: MF,
+        session_settings: SessionSetting,
+    ) -> ISession<App, MF> {
+        ISession::from_settings(
+            session_id,
+            app,
+            data_dictionary_provider,
+            message_factory,
+            session_settings,
+            Instant::now(),
+            Utc::now(),
+        )
     }
 }

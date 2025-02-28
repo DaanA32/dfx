@@ -24,216 +24,74 @@ pub(crate) struct SocketReactor<
     MessageFactory,
     Log,
 > {
-    session: Option<ISession<App, MessageFactory>>,
-    msg_store: Option<Box<dyn MessageStore>>,
-    logger: Option<Log>,
-    parser: Parser,
-    stream: Option<Stream>,
     buffer: [u8; BUF_SIZE],
-    settings: Vec<SessionSetting>,
+    parser: Parser,
+    stream: Stream,
+    reactor_part:
+        ReactorPart<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory, Log>,
+}
+
+enum ReactorPart<
+    App: Application,
+    StoreFactory,
+    DataDictionaryProvider,
+    LogFactory,
+    MessageFactory,
+    Log,
+> {
+    Session(SessionReactor<App, MessageFactory, Log>),
+    Sessionless(
+        SessionlessReactor<App, StoreFactory, DataDictionaryProvider, LogFactory, MessageFactory>,
+    ),
+}
+
+struct SessionReactor<App: Application, MessageFactory, Log> {
+    session: ISession<App, MessageFactory>,
+    msg_store: Box<dyn MessageStore>,
+    logger: Log,
+}
+
+impl<App, MF, Log> SessionReactor<App, MF, Log>
+where
+    App: Application + Clone + 'static,
+    MF: MessageFactory + Send + Clone + 'static,
+    Log: Logger + Clone + 'static,
+{
+    fn set_connected(&mut self, session_id: SessionId) -> Result<(), ReactorError> {
+        self.session
+            .set_connected(&session_id)
+            .map_err(|_e| ReactorError::Disconnect)?;
+        Ok(())
+    }
+
+    fn set_disconnected(&mut self, session_id: SessionId) {
+        self.session.set_disconnected(&session_id);
+    }
+}
+
+struct SessionlessReactor<
+    App: Application,
+    StoreFactory,
+    DataDictionaryProvider,
+    LogFactory,
+    MessageFactory,
+> {
     app: App,
+    settings: Vec<SessionSetting>,
     store_factory: StoreFactory,
     data_dictionary_provider: DataDictionaryProvider,
     log_factory: LogFactory,
     message_factory: MessageFactory,
 }
 
-#[derive(Debug)]
-pub(crate) enum ReactorError {
-    Disconnect,
-}
-
-impl<App, SF, DDP, LF, MF, Log> SocketReactor<App, SF, DDP, LF, MF, Log>
+impl<App, SF, DDP, LF, MF, Log> SessionlessReactor<App, SF, DDP, LF, MF>
 where
     App: Application + Clone + 'static,
     SF: MessageStoreFactory + Send + Clone + 'static,
     DDP: DataDictionaryProvider + Send + Clone + 'static,
     LF: LogFactory<Log = Log> + Send + Clone + 'static,
     MF: MessageFactory + Send + Clone + 'static,
-    Log: Logger + Clone + 'static,
 {
-    pub(crate) fn new(
-        connection: Stream,
-        settings: Vec<SessionSetting>,
-        app: App,
-        store_factory: SF,
-        data_dictionary_provider: DDP,
-        log_factory: LF,
-        message_factory: MF,
-    ) -> Self {
-        let mut reactor = SocketReactor {
-            session: None,
-            msg_store: None,
-            logger: None,
-            settings,
-            parser: Parser::default(),
-            // TODO move this to a concurrent map > SessionState > Sender<Message>
-            stream: Some(connection),
-            buffer: [0; BUF_SIZE],
-            app,
-            store_factory: store_factory.clone(),
-            data_dictionary_provider,
-            log_factory: log_factory.clone(),
-            message_factory,
-        };
-        if reactor.settings.len() == 1 {
-            let session_setting = &reactor.settings[0];
-            if session_setting.connection().is_initiator() {
-                eprintln!("Is initiator");
-                reactor.session = Some(
-                    reactor.create_session(session_setting.session_id().clone(), session_setting),
-                );
-                reactor.msg_store = Some(store_factory.create(session_setting.session_id()));
-                reactor.logger = Some(log_factory.create(session_setting.session_id()));
-            }
-            if session_setting.connection().is_acceptor() && !session_setting.is_dynamic() {
-                eprintln!("Is acceptor");
-                reactor.session = Some(
-                    reactor.create_session(session_setting.session_id().clone(), session_setting),
-                );
-                reactor.msg_store = Some(store_factory.create(session_setting.session_id()));
-                reactor.logger = Some(log_factory.create(session_setting.session_id()));
-            }
-        }
-        reactor
-    }
-
-    pub(crate) fn start(mut self) -> Option<ISession<App, MF>> {
-        // TODO while within session time
-        if let Err(e) = self.event_loop() {
-            match e {
-                ReactorError::Disconnect => {
-                    if let Some(session) = self.session.as_ref() {
-                        let session_id = session.session_id().clone();
-                        self.set_disconnected(session_id);
-                    } else {
-                        // TODO
-                    }
-                }
-            }
-        }
-        self.session
-    }
-
-    fn event_loop(&mut self) -> Result<(), ReactorError> {
-        while self.session.is_none() {
-            {
-                let read = self.read_some().map_err(|_| ReactorError::Disconnect)?;
-                if read > 0 {
-                    self.parser.add_to_stream(&self.buffer[..read]);
-                }
-
-                while let Some(msg) = self.parser.read_fix_message() {
-                    println!("Received Message {:?}", msg);
-                    let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
-                    let session_id = message.extract_contra_session_id();
-                    eprintln!("Extracted session id {session_id}");
-                    let session_settings = self.for_session_id(&session_id);
-                    match session_settings {
-                        Some(settings) => {
-                            if settings.accepts(&session_id) {
-                                let mut session = self.create_session(session_id.clone(), settings);
-                                session.process_input(Input::Message {
-                                    last_now: Instant::now(),
-                                    last_utc: Utc::now(),
-                                    msg,
-                                });
-                                // session.last_now(Instant::now());
-                                // session.last_utc(Utc::now());
-                                // session.next_msg(msg);
-                                self.session = Some(session);
-                                self.msg_store = Some(self.store_factory.create(&session_id));
-                                self.logger = Some(self.log_factory.create(&session_id));
-                            } else {
-                                return Err(ReactorError::Disconnect);
-                            }
-                        }
-                        None => {
-                            return Err(ReactorError::Disconnect);
-                        }
-                    }
-                }
-                Ok::<(), ReactorError>(())
-            }?;
-        }
-
-        //TODO empty session
-        let session_id = self
-            .session
-            .as_ref()
-            .expect("Session not found!")
-            .session_id()
-            .clone();
-        self.set_connected(session_id.clone())?;
-
-        {
-            let session = self.session.as_mut().expect("Session not found!");
-            self.logger
-                .as_mut()
-                .unwrap()
-                .on_event(format!("Connection succeeded {}", &session_id).as_str());
-            session.last_now(Instant::now());
-            session.last_utc(Utc::now());
-            session.next();
-        }
-
-        if let Err(err) = self.do_loop() {
-            println!("Disconnected: {:?}", err);
-        }
-
-        let session_id = self
-            .session
-            .as_ref()
-            .expect("Session not found!")
-            .session_id()
-            .clone();
-        self.set_disconnected(session_id);
-        if let Some(stream) = self.stream.as_mut() {
-            let _result = stream.shutdown(std::net::Shutdown::Both);
-        }
-        Ok(())
-    }
-
-    // TODO move this to a concurrent map > SessionState > Sender<Message>
-    fn set_connected(&mut self, session_id: SessionId) -> Result<(), ReactorError> {
-        self.session
-            .as_mut()
-            .unwrap()
-            .set_connected(&session_id)
-            .map_err(|_e| ReactorError::Disconnect)?;
-        Ok(())
-    }
-
-    // TODO move this to a concurrent map > SessionState > Sender<Message>
-    fn set_disconnected(&mut self, session_id: SessionId) {
-        self.session.as_mut().unwrap().set_disconnected(&session_id);
-    }
-
-    fn read_some(&mut self) -> Result<usize, StreamError> {
-        // read bytes nonblocking from stream...
-        // add bytes to parser
-        // return bytes read
-        if let Some(stream) = self.stream.as_mut() {
-            Self::read_stream(stream, &mut self.buffer)
-        } else {
-            panic!("reactor::read_some")
-        }
-    }
-
-    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> Result<usize, StreamError> {
-        match stream.read(buffer) {
-            Ok(read) => Ok(read),
-            Err(ref e)
-                if e.as_io_error().is_some()
-                    && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock =>
-            {
-                // println!("Would block {e:?}");
-                Ok(0)
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     fn create_session(
         &self,
         session_id: SessionId,
@@ -260,136 +118,265 @@ where
             .map(|(_, v)| v);
         *best_match
     }
+}
+
+#[derive(Debug)]
+pub(crate) enum ReactorError {
+    Disconnect,
+}
+
+impl<App, SF, DDP, LF, MF, Log> SocketReactor<App, SF, DDP, LF, MF, Log>
+where
+    App: Application + Clone + 'static,
+    SF: MessageStoreFactory + Send + Clone + 'static,
+    DDP: DataDictionaryProvider + Send + Clone + 'static,
+    LF: LogFactory<Log = Log> + Send + Clone + 'static,
+    MF: MessageFactory + Send + Clone + 'static,
+    Log: Logger + Clone + 'static,
+{
+    pub(crate) fn new(
+        connection: Stream,
+        session: Option<ISession<App, MF>>,
+        settings: Vec<SessionSetting>,
+        app: App,
+        store_factory: SF,
+        data_dictionary_provider: DDP,
+        log_factory: LF,
+        message_factory: MF,
+    ) -> Self {
+        let reactor_part = if let Some(session) = session {
+            let msg_store = store_factory.create(session.session_id());
+            let logger = log_factory.create(session.session_id());
+            ReactorPart::Session(SessionReactor {
+                session,
+                msg_store,
+                logger,
+            })
+        // Below clause should be redundant!
+        // } else if settings.len() == 1
+        //     && settings[0].connection().is_acceptor()
+        //     && !settings[0].is_dynamic()
+        // {
+        //     let mut session = ISession::from_settings(
+        //         settings[0].session_id().clone(),
+        //         app,
+        //         data_dictionary_provider,
+        //         message_factory,
+        //         settings[0].clone(),
+        //         Instant::now(),
+        //         Utc::now(),
+        //     );
+        //     let _ = session.set_connected(&settings[0].session_id().clone());
+        //     let msg_store = store_factory.create(session.session_id());
+        //     let logger = log_factory.create(session.session_id());
+        //     ReactorPart::Session(SessionReactor {
+        //         session,
+        //         msg_store,
+        //         logger,
+        //     })
+        } else {
+            ReactorPart::Sessionless(SessionlessReactor {
+                app,
+                settings,
+                store_factory,
+                data_dictionary_provider,
+                log_factory,
+                message_factory,
+            })
+        };
+
+        Self {
+            parser: Parser::default(),
+            buffer: [0; BUF_SIZE],
+            stream: connection,
+            reactor_part,
+        }
+    }
+
+    pub(crate) fn start(mut self) -> Option<ISession<App, MF>> {
+        if let Err(_err) = self.do_loop() {}
+        match &mut self.reactor_part {
+            ReactorPart::Session(session_reactor) => {
+                session_reactor.set_disconnected(session_reactor.session.session_id().clone());
+            }
+            ReactorPart::Sessionless(_sessionless_reactor) => {}
+        }
+        let _result = self.stream.shutdown(std::net::Shutdown::Both);
+        match self.reactor_part {
+            ReactorPart::Session(session_reactor) => Some(session_reactor.session),
+            ReactorPart::Sessionless(_sessionless_reactor) => None,
+        }
+    }
+
+    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> Result<usize, StreamError> {
+        match stream.read(buffer) {
+            Ok(read) => Ok(read),
+            Err(ref e)
+                if e.as_io_error().is_some()
+                    && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock =>
+            {
+                Ok(0)
+            }
+            Err(e) => Err(e),
+        }
+    }
 
     fn do_loop(&mut self) -> Result<(), ReactorError> {
-        let parts = (
-            &mut self.stream,
-            &mut self.session,
-            &mut self.msg_store,
-            &mut self.logger,
-            &mut self.buffer,
-        );
-        let session_parts = match parts {
-            (Some(stream), Some(session), Some(msg_store), Some(logger), buffer) => {
-                (stream, session, msg_store, logger, buffer)
-            }
-            (stream, session, msg_store, logger, _buffer) => {
-                println!(
-                    "{} {} {} {}",
-                    stream.is_some(),
-                    session.is_some(),
-                    msg_store.is_some(),
-                    logger.is_some()
-                );
-                return Ok(());
-            }
-        };
-        let (stream, session, msg_store, logger, buffer) = session_parts;
+        self.do_sessionless_loop()?;
+        self.do_session_loop()?;
+        Ok(())
+    }
+
+    fn do_session_loop(&mut self) -> Result<(), ReactorError> {
+        let reactor = match &mut self.reactor_part {
+            ReactorPart::Session(session_reactor) => Ok(session_reactor),
+            ReactorPart::Sessionless(_sessionless_reactor) => Err(ReactorError::Disconnect),
+        }?;
+        let session = &mut reactor.session;
         loop {
             match session.poll_output() {
-                Some(output) => {
-                    println!("[DEBUG]: {}: {:?}", Utc::now(), output);
-                    match output {
-                        Output::Message(message) => {
-                            match stream
-                                .write_all(&message)
-                                .and_then(|()| Write::flush(stream))
-                            {
-                                Ok(()) => (),
-                                Err(e) => {
-                                    println!("Failed write: {:?}", e);
-                                    return Err(ReactorError::Disconnect);
-                                }
-                            }
+                Some(output) => match output {
+                    Output::Message(message) => {
+                        match (&mut self.stream)
+                            .write_all(&message)
+                            .and_then(|()| Write::flush(&mut self.stream))
+                        {
+                            Ok(()) => Ok(()),
+                            Err(e) => Err(ReactorError::Disconnect),
+                        }?;
+                        continue;
+                    }
+                    Output::Event(event) => match event {
+                        Event::Disconnect => break,
+                        Event::Reset(reason) => {
+                            (&mut reactor.msg_store).reset();
+                            let event = match reason {
+                                Some(reason) => format!("Session reset: {reason}"),
+                                _ => "Session reset".into(),
+                            };
+                            (&mut reactor.logger).on_event(event.as_str());
                             continue;
                         }
-                        Output::Event(event) => match event {
-                            Event::Disconnect => break,
-                            Event::Reset(reason) => {
-                                msg_store.reset();
-                                let event = match reason {
-                                    Some(reason) => format!("Session reset: {reason}"),
-                                    _ => "Session reset".into(),
-                                };
-                                logger.on_event(event.as_str());
-                                continue;
-                            }
-                            Event::Refresh => {
-                                msg_store.refresh();
-                                session.process_input(Input::SetTargetSeqNum(
-                                    msg_store.next_target_msg_seq_num(),
-                                ));
-                                session.process_input(Input::SetSenderSeqNum(
-                                    msg_store.next_sender_msg_seq_num(),
-                                ));
-                                continue;
-                            }
-                            Event::Persist(seq_num, msg) => {
-                                msg_store.set(seq_num, &msg);
-                                continue;
-                            }
-                            Event::SetNextTargetSeqNum(seq_num) => {
-                                msg_store.set_next_target_msg_seq_num(seq_num);
-                                continue;
-                            }
-                            Event::SetNextSenderSeqNum(seq_num) => {
-                                msg_store.set_next_sender_msg_seq_num(seq_num);
-                                continue;
-                            }
-                            Event::GetMessages(replay_request) => {
-                                let messages = msg_store
-                                    .get(replay_request.beg_seq_no, replay_request.end_seq_no);
-                                session.last_now(Instant::now());
-                                session.last_utc(Utc::now());
-                                session.process_input(Input::ReplayMessage(Replay {
-                                    resend_request: replay_request.resend_request,
-                                    beg_seq_no: replay_request.beg_seq_no,
-                                    end_seq_no: replay_request.end_seq_no,
-                                    messages,
-                                }));
+                        Event::Refresh => {
+                            (&mut reactor.msg_store).refresh();
+                            session.process_input(Input::SetTargetSeqNum(
+                                (&mut reactor.msg_store).next_target_msg_seq_num(),
+                            ));
+                            session.process_input(Input::SetSenderSeqNum(
+                                (&mut reactor.msg_store).next_sender_msg_seq_num(),
+                            ));
+                            continue;
+                        }
+                        Event::Persist(seq_num, msg) => {
+                            (&mut reactor.msg_store).set(seq_num, &msg);
+                            continue;
+                        }
+                        Event::SetNextTargetSeqNum(seq_num) => {
+                            (&mut reactor.msg_store).set_next_target_msg_seq_num(seq_num);
+                            continue;
+                        }
+                        Event::SetNextSenderSeqNum(seq_num) => {
+                            (&mut reactor.msg_store).set_next_sender_msg_seq_num(seq_num);
+                            continue;
+                        }
+                        Event::GetMessages(replay_request) => {
+                            let messages = (&mut reactor.msg_store)
+                                .get(replay_request.beg_seq_no, replay_request.end_seq_no);
+                            session.last_now(Instant::now());
+                            session.last_utc(Utc::now());
+                            session.process_input(Input::ReplayMessage(Replay {
+                                resend_request: replay_request.resend_request,
+                                beg_seq_no: replay_request.beg_seq_no,
+                                end_seq_no: replay_request.end_seq_no,
+                                messages,
+                            }));
 
-                                continue;
-                            }
-                            Event::Log(log_event) => handle_log_event(logger, log_event),
-                        },
-                    }
-                }
+                            continue;
+                        }
+                        Event::Log(log_event) => handle_log_event(&mut reactor.logger, log_event),
+                    },
+                },
                 None => (),
             };
 
-            let result = Self::read_stream(stream, buffer);
+            let result = Self::read_stream(&mut self.stream, &mut self.buffer);
             let read = match result {
                 Ok(n) => n,
-                Err(e) => {
-                    println!("Failed read: {:?}", e);
+                Err(_e) => {
                     break;
                 }
             };
             if read > 0 {
-                self.parser.add_to_stream(&buffer[..read]);
+                self.parser.add_to_stream(&(&mut self.buffer)[..read]);
             }
 
             let input = match self.parser.read_fix_message() {
-                Some(msg) => {
-                    println!(
-                        "Received {} from {}",
-                        msg.iter()
-                            .map(|byte| if *byte == 1 { '|' } else { *byte as char })
-                            .collect::<String>(),
-                        session.session_id()
-                    );
-                    Input::Message {
-                        last_now: Instant::now(),
-                        last_utc: Utc::now(),
-                        msg,
-                    }
-                }
+                Some(msg) => Input::Message {
+                    last_now: Instant::now(),
+                    last_utc: Utc::now(),
+                    msg,
+                },
                 None => Input::Timeout(Instant::now(), Utc::now()),
             };
 
             session.process_input(input);
         }
         Ok(())
+    }
+
+    fn do_sessionless_loop(&mut self) -> Result<(), ReactorError> {
+        let reactor = match &mut self.reactor_part {
+            ReactorPart::Session(_session_reactor) => return Ok(()),
+            ReactorPart::Sessionless(sessionless_reactor) => sessionless_reactor,
+        };
+
+        let msg: Vec<u8> = loop {
+            let read = Self::read_stream(&mut self.stream, &mut self.buffer)
+                .map_err(|_| ReactorError::Disconnect)?;
+            if read > 0 {
+                self.parser.add_to_stream(&self.buffer[..read]);
+            }
+            if let Some(msg) = self.parser.read_fix_message() {
+                break msg;
+            }
+        };
+
+        let message = Message::new(&msg[..]).map_err(|_e| ReactorError::Disconnect)?;
+        let session_id = message.extract_contra_session_id();
+        let session_settings = reactor.for_session_id(&session_id);
+        let result: Result<(), _> = match session_settings {
+            Some(settings) => {
+                if settings.accepts(&session_id) {
+                    let mut session = reactor.create_session(session_id.clone(), settings);
+                    session
+                        .set_connected(&session_id)
+                        .map_err(|_e| ReactorError::Disconnect)?;
+                    session.process_input(Input::Message {
+                        last_now: Instant::now(),
+                        last_utc: Utc::now(),
+                        msg,
+                    });
+
+                    let msg_store = reactor.store_factory.create(session.session_id());
+                    let logger = reactor.log_factory.create(session.session_id());
+
+                    self.reactor_part = ReactorPart::Session(SessionReactor {
+                        session,
+                        msg_store,
+                        logger,
+                    });
+
+                    match &self.reactor_part {
+                        ReactorPart::Session(_) => Ok(()),
+                        ReactorPart::Sessionless(_) => Err(ReactorError::Disconnect),
+                    }
+                } else {
+                    Err(ReactorError::Disconnect)?
+                }
+            }
+            None => Err(ReactorError::Disconnect)?,
+        };
+        result
     }
 }
 

@@ -1,8 +1,9 @@
 use crate::{
     logging::{LogFactory, Logger},
     message_store::MessageStoreFactory,
-    session::{Application, SessionSetting, SessionSettings},
+    session::{Application, ISession, SessionSetting, SessionSettings},
 };
+use chrono::Utc;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
 use dfx_base::message_factory::MessageFactory;
 use std::{
@@ -10,7 +11,7 @@ use std::{
     net::{SocketAddr, TcpListener},
     sync::{atomic::AtomicBool, Arc, Mutex},
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use super::{ConnectionError, SocketReactor, StreamFactory};
@@ -233,30 +234,57 @@ where
                         true,
                     )?;
                     let stream = stream;
-                    let session_settings = self.session_settings.clone();
-                    let app = self.app.clone();
-                    let store_factory = self.store_factory.clone();
-                    let data_dictionary_provider = self.data_dictionary_provider.clone();
-                    let log_factory = self.log_factory.clone();
-                    let message_factory = self.message_factory.clone();
-
-                    let t = thread::Builder::new()
-                        .name(format!("socket-acceptor-connection-{n}"))
-                        .spawn(move || {
-                            let reactor = SocketReactor::new(
-                                stream,
-                                session_settings,
-                                app,
-                                store_factory,
-                                data_dictionary_provider,
-                                log_factory,
-                                message_factory,
+                    let session_result =
+                        if self.session_settings.len() == 1 && !session_setting.is_dynamic() {
+                            let mut session = ISession::from_settings(
+                                session_setting.session_id().clone(),
+                                self.app.clone(),
+                                self.data_dictionary_provider.clone(),
+                                self.message_factory.clone(),
+                                session_setting.clone(),
+                                Instant::now(),
+                                Utc::now(),
                             );
-                            reactor.start()
-                        })
-                        .unwrap();
-                    threads.push(t);
-                    n += 1;
+                            if let Err(e) = session
+                                .set_connected(&self.session_settings[0].session_id().clone())
+                            {
+                                Err(e)
+                            } else {
+                                Ok(Some(session))
+                            }
+                        } else {
+                            Ok(None)
+                        };
+                    match session_result {
+                        Ok(session) => {
+                            let session_settings = self.session_settings.clone();
+                            let app = self.app.clone();
+                            let store_factory = self.store_factory.clone();
+                            let data_dictionary_provider = self.data_dictionary_provider.clone();
+                            let log_factory = self.log_factory.clone();
+                            let message_factory = self.message_factory.clone();
+
+                            let t = thread::Builder::new()
+                                .name(format!("socket-acceptor-connection-{n}"))
+                                .spawn(move || {
+                                    let reactor = SocketReactor::new(
+                                        stream,
+                                        session,
+                                        session_settings,
+                                        app,
+                                        store_factory,
+                                        data_dictionary_provider,
+                                        log_factory,
+                                        message_factory,
+                                    );
+                                    reactor.start()
+                                })
+                                .unwrap();
+                            threads.push(t);
+                            n += 1;
+                        }
+                        Err(_) => {}
+                    }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     thread::sleep(Duration::from_millis(1));

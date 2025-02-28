@@ -334,6 +334,7 @@ where
             outbound_queue.push_back(Output::Event(Event::Reset(Some(
                 "Out of SessionTime (Session construction)",
             ))));
+            // outbound_queue.push_back(Output::Event(Event::Disconnect));
         } else {
             // Reset("New session")
             // ---
@@ -347,8 +348,39 @@ where
 
         let mut application = app;
         application.on_create(settings.session_id()).unwrap(); //TODO handle err
-                                                               //log.on_event("Created session");
 
+        //log.on_event("Created session");
+
+        ISession::new(
+            session_id,
+            msg_factory,
+            settings,
+            last_now,
+            last_utc,
+            session_data_dictionary,
+            application_data_dictionary,
+            state,
+            outbound_queue,
+            application,
+        )
+    }
+
+    pub fn new(
+        session_id: SessionId,
+        msg_factory: MF,
+        settings: SessionSetting,
+        last_now: Instant,
+        last_utc: DateTime<Utc>,
+        session_data_dictionary: DataDictionary,
+        application_data_dictionary: DataDictionary,
+        state: SessionState,
+        outbound_queue: VecDeque<Output>,
+        application: App,
+    ) -> ISession<App, MF>
+    where
+        App: Application + Clone + 'static,
+        MF: MessageFactory + Send + Clone + 'static,
+    {
         ISession {
             application,
             session_id,
