@@ -1,4 +1,7 @@
-use std::{io::Write, time::Instant};
+use std::{
+    io::{Read, Write},
+    time::Instant,
+};
 
 use chrono::Utc;
 use dfx_base::data_dictionary_provider::DataDictionaryProvider;
@@ -13,8 +16,6 @@ use crate::{
     session::{Application, Event, ISession, Input, LogEvent, Output, Replay, SessionSetting},
 };
 
-use super::{Stream, StreamError};
-
 pub(crate) const BUF_SIZE: usize = 512;
 pub(crate) struct SocketReactor<
     App: Application,
@@ -23,6 +24,7 @@ pub(crate) struct SocketReactor<
     LogFactory,
     MessageFactory,
     Log,
+    Stream,
 > {
     buffer: [u8; BUF_SIZE],
     parser: Parser,
@@ -125,7 +127,7 @@ pub(crate) enum ReactorError {
     Disconnect,
 }
 
-impl<App, SF, DDP, LF, MF, Log> SocketReactor<App, SF, DDP, LF, MF, Log>
+impl<App, SF, DDP, LF, MF, Log, Stream> SocketReactor<App, SF, DDP, LF, MF, Log, Stream>
 where
     App: Application + Clone + 'static,
     SF: MessageStoreFactory + Send + Clone + 'static,
@@ -133,6 +135,7 @@ where
     LF: LogFactory<Log = Log> + Send + Clone + 'static,
     MF: MessageFactory + Send + Clone + 'static,
     Log: Logger + Clone + 'static,
+    Stream: Read + Write,
 {
     pub(crate) fn new(
         connection: Stream,
@@ -201,22 +204,17 @@ where
             }
             ReactorPart::Sessionless(_sessionless_reactor) => {}
         }
-        let _result = self.stream.shutdown(std::net::Shutdown::Both);
+        // let _result = self.stream.shutdown(std::net::Shutdown::Both);
         match self.reactor_part {
             ReactorPart::Session(session_reactor) => Some(session_reactor.session),
             ReactorPart::Sessionless(_sessionless_reactor) => None,
         }
     }
 
-    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> Result<usize, StreamError> {
+    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> std::io::Result<usize> {
         match stream.read(buffer) {
             Ok(read) => Ok(read),
-            Err(ref e)
-                if e.as_io_error().is_some()
-                    && e.as_io_error().unwrap().kind() == std::io::ErrorKind::WouldBlock =>
-            {
-                Ok(0)
-            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
             Err(e) => Err(e),
         }
     }

@@ -12,77 +12,27 @@ pub(crate) enum Stream {
     Ssl(native_tls::TlsStream<TcpStream>),
 }
 
-#[derive(Debug)]
-pub(crate) enum StreamError {
-    IO(std::io::Error),
-}
-
-impl From<std::io::Error> for StreamError {
-    fn from(err: std::io::Error) -> Self {
-        StreamError::IO(err)
-    }
-}
-
-impl StreamError {
-    pub(crate) fn as_io_error(&self) -> Option<&std::io::Error> {
+impl Read for Stream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
-            StreamError::IO(io) => Some(io),
-        }
-    }
-}
-
-impl Stream {
-    pub(crate) fn peer_addr(&self) -> std::io::Result<Option<SocketAddr>> {
-        match self {
-            Stream::Tcp(tcp) => tcp.peer_addr().map(Some),
-            Stream::Ssl(ssl) => ssl.get_ref().peer_addr().map(Some),
-        }
-    }
-    pub(crate) fn shutdown(&mut self, how: std::net::Shutdown) -> std::io::Result<()> {
-        match self {
-            Stream::Tcp(tcp) => tcp.shutdown(how),
-            Stream::Ssl(ssl) => ssl.shutdown(),
-        }
-    }
-
-    pub(crate) fn read(&mut self, buf: &mut [u8]) -> Result<usize, StreamError> {
-        match self {
-            Stream::Tcp(tcp) => Ok(tcp.read(buf)?),
-            Stream::Ssl(ssl) => Ok(ssl.read(buf)?),
-        }
-    }
-
-    pub(crate) fn write(&mut self, buf: &[u8]) -> Result<usize, StreamError> {
-        match self {
-            Stream::Tcp(tcp) => Ok(tcp.write(buf)?),
-            Stream::Ssl(ssl) => Ok(ssl.write(buf)?),
-        }
-    }
-
-    pub(crate) fn flush(&mut self) -> Result<(), StreamError> {
-        match self {
-            Stream::Tcp(tcp) => Ok(tcp.flush()?),
-            Stream::Ssl(ssl) => Ok(ssl.flush()?),
+            Stream::Tcp(tcp) => tcp.read(buf),
+            Stream::Ssl(ssl) => ssl.read(buf),
         }
     }
 }
 
 impl Write for Stream {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        match self.write(buf) {
-            Ok(o) => Ok(o),
-            Err(err) => match err {
-                StreamError::IO(io) => Err(io),
-            },
+        match self {
+            Stream::Tcp(tcp) => tcp.write(buf),
+            Stream::Ssl(ssl) => ssl.write(buf),
         }
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        match self.flush() {
-            Ok(o) => Ok(o),
-            Err(err) => match err {
-                StreamError::IO(io) => Err(io),
-            },
+        match self {
+            Stream::Tcp(tcp) => tcp.flush(),
+            Stream::Ssl(ssl) => ssl.flush(),
         }
     }
 }
