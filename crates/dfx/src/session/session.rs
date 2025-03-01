@@ -988,7 +988,9 @@ where
                 }
             }
             SessionHandleMessageError::String(s) => self.on_event(s),
+            // Field is empty when it was expected
             SessionHandleMessageError::FieldMapError(fm) => todo!("{fm:?}"),
+            // Field definition does not match data dictionary
             SessionHandleMessageError::ConversionError(conv) => todo!("{conv:?}"),
             SessionHandleMessageError::LogonReject { reason } => {
                 let disconnect_msg = match &reason {

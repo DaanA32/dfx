@@ -2,6 +2,7 @@ mod fields;
 pub(crate) mod limits;
 pub mod types;
 
+pub use converters::*;
 pub use fields::*;
 
 use crate::field_map::Tag;

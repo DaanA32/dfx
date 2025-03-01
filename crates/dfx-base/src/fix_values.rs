@@ -258,6 +258,22 @@ impl BusinessRejectReason {
         }
     }
 
+    pub fn CONDITIONALLY_REQUIRED_FIELD_MISSING() -> BusinessRejectReason {
+        BusinessRejectReason {
+            index: 3,
+            reason: "Conditionally Required Field Missing".to_string(),
+        }
+    }
+
+    // { Fields.BusinessRejectReason.OTHER, "Other" },
+    // { Fields.BusinessRejectReason.UNKNOWN_ID, "Unknown ID" },
+    // { Fields.BusinessRejectReason.UNKNOWN_SECURITY, "Unknown Security" },
+    // { Fields.BusinessRejectReason.UNKNOWN_MESSAGE_TYPE, "Unsupported Message Type" },
+    // { Fields.BusinessRejectReason.APPLICATION_NOT_AVAILABLE, "Application Not Available" },
+    // { Fields.BusinessRejectReason.CONDITIONALLY_REQUIRED_FIELD_MISSING, "" },
+    // { Fields.BusinessRejectReason.NOT_AUTHORIZED, "Not authorized" },
+    // { Fields.BusinessRejectReason.DELIVERTO_FIRM_NOT_AVAILABLE_AT_THIS_TIME, "DeliverTo Firm Not Available At This Time" }
+
     #[must_use]
     pub fn index(&self) -> usize {
         self.index

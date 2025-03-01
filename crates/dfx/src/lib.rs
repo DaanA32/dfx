@@ -6,7 +6,7 @@
 // TODO remove above once closer to completed
 
 pub mod connection;
-pub(crate) mod fields;
+pub mod fields;
 pub mod logging;
 pub mod message_store;
 pub mod session;
