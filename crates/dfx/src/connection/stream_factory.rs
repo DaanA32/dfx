@@ -52,6 +52,7 @@ impl StreamFactory {
         settings: SocketSettings,
         _acceptor: bool,
     ) -> Result<Stream, ConnectionError> {
+        println!("{:?} -> {:?}", stream, settings);
         match settings.ssl_options() {
             Some(SslOptions::Acceptor { acceptor }) => {
                 let mut stream = acceptor.accept(stream).unwrap();
@@ -73,18 +74,14 @@ impl StreamFactory {
         stream: &mut TcpStream,
         settings: &SocketSettings,
     ) -> Result<(), ConnectionError> {
-        stream.set_read_timeout(match settings.receive_timeout() {
-            0 => None,
-            v => Some(Duration::from_millis(v)),
-        })?;
-        stream.set_write_timeout(match settings.send_timeout() {
-            0 => None,
-            v => Some(Duration::from_millis(v)),
-        })?;
+        stream.set_read_timeout(Some(Duration::from_nanos(1)))?;
+        stream.set_write_timeout(Some(Duration::from_nanos(1)))?;
+        // stream.set_read_timeout(None)?;
+        // stream.set_write_timeout(None)?;
         stream.set_nodelay(settings.no_delay())?;
         // This is only okay because there is a timeout due to heartbeats,
         // otherwise it would be necessary to disconnect if read n == 0
-        stream.set_nonblocking(true)?;
+        // stream.set_nonblocking(false)?;
         Ok(())
     }
 }

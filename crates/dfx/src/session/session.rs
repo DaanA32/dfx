@@ -2053,7 +2053,7 @@ pub(crate) enum SessionHandleMessageError {
         reason: Option<String>,
     },
     // Handle same way?
-    FieldMapError(FieldMapError),
+    FieldMapError(Message, FieldMapError),
     ConversionError(ConversionError),
 }
 

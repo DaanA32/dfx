@@ -8,6 +8,7 @@ use dfx_base::data_dictionary_provider::DataDictionaryProvider;
 use dfx_base::message::Message;
 use dfx_base::message_factory::MessageFactory;
 use dfx_base::session_id::SessionId;
+use log::info;
 
 use crate::{
     logging::{LogFactory, Logger},
@@ -214,8 +215,10 @@ where
     fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> std::io::Result<usize> {
         match stream.read(buffer) {
             Ok(read) => Ok(read),
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(0),
-            Err(e) => Err(e),
+            Err(e) => {
+                eprintln!("Error: {:?}", e);
+                Err(e)
+            },
         }
     }
 
@@ -297,13 +300,7 @@ where
                 None => (),
             };
 
-            let result = Self::read_stream(&mut self.stream, &mut self.buffer);
-            let read = match result {
-                Ok(n) => n,
-                Err(_e) => {
-                    break;
-                }
-            };
+            let read = Self::read_stream(&mut self.stream, &mut self.buffer)?;
             if read > 0 {
                 self.parser.add_to_stream(&(&mut self.buffer)[..read]);
             }
@@ -329,8 +326,7 @@ where
         };
 
         let msg: Vec<u8> = loop {
-            let read = Self::read_stream(&mut self.stream, &mut self.buffer)
-                .map_err(|_| ReactorError::Disconnect)?;
+            let read = Self::read_stream(&mut self.stream, &mut self.buffer)?;
             if read > 0 {
                 self.parser.add_to_stream(&self.buffer[..read]);
             }
