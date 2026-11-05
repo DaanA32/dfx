@@ -212,12 +212,19 @@ where
         }
     }
 
-    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> std::io::Result<usize> {
+    fn read_stream(stream: &mut Stream, buffer: &mut [u8]) -> Result<usize, ReactorError> {
         match stream.read(buffer) {
+            Ok(0) => {
+                eprintln!("Disconnecting => No bytes read");
+                Err(ReactorError::Disconnect)
+            },
             Ok(read) => Ok(read),
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Ok(0)
+            },
             Err(e) => {
-                eprintln!("Error: {:?}", e);
-                Err(e)
+                eprintln!("Disconnecting => {:?}", e);
+                Err(ReactorError::Disconnect)
             },
         }
     }

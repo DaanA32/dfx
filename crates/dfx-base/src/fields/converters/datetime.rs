@@ -78,10 +78,10 @@ impl<'a> TryFromFieldValue<&'a FieldValue> for ChronoDateTime<Utc> {
 
     fn try_from_field_value(value: &'a FieldValue) -> Result<Self, Self::Error> {
         let time: &str = TryFromFieldValue::try_from_field_value(value)?;
-        match Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS) {
-            Ok(t) => Ok(t),
-            Err(e) => match Utc.datetime_from_str(time, DATE_TIME_FORMAT_WITH_MILLISECONDS) {
-                Ok(t) => Ok(t),
+        match NaiveDateTime::parse_from_str(time, DATE_TIME_FORMAT_WITHOUT_MILLISECONDS) {
+            Ok(t) => Ok(Utc.from_utc_datetime(&t)),
+            Err(e) => match NaiveDateTime::parse_from_str(time, DATE_TIME_FORMAT_WITH_MILLISECONDS) {
+                Ok(t) => Ok(Utc.from_utc_datetime(&t)),
                 Err(_) => todo!(),
             },
         }

@@ -8,7 +8,7 @@ use dfx_base::data_dictionary_provider::DataDictionaryProvider;
 use dfx_base::message_factory::MessageFactory;
 use std::{
     fmt::Display,
-    net::{SocketAddr, TcpListener},
+    net::{SocketAddr, TcpListener, ToSocketAddrs},
     sync::{atomic::AtomicBool, Arc, Mutex},
     thread::{self, JoinHandle},
     time::{Duration, Instant},
@@ -211,7 +211,10 @@ where
         running: Arc<AtomicBool>,
         endpoint: Arc<Mutex<Option<SocketAddr>>>,
     ) -> Result<(), AcceptorError> {
-        let listener = self.bind()?;
+        let logger = self
+            .log_factory
+            .create(self.session_settings[0].session_id());
+        let listener = self.bind(&logger)?;
         let addr = listener.local_addr().unwrap();
         match endpoint.lock() {
             Ok(mut guard) => {
@@ -297,9 +300,11 @@ where
         Ok(())
     }
 
-    fn bind(&self) -> Result<TcpListener, AcceptorError> {
+    fn bind(&self, logger: &Log) -> Result<TcpListener, AcceptorError> {
+        logger.on_event(&format!("Attempting to bind on {}", self.addr));
         let listener =
             TcpListener::bind(self.addr).map_err(|e| AcceptorError::BindError(e, self.addr))?;
+        logger.on_event(&format!("Listening on {}", self.addr));
         listener
             .set_nonblocking(true)
             .expect("Cannot set non-blocking");

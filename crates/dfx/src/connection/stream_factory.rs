@@ -81,7 +81,7 @@ impl StreamFactory {
         stream.set_nodelay(settings.no_delay())?;
         // This is only okay because there is a timeout due to heartbeats,
         // otherwise it would be necessary to disconnect if read n == 0
-        // stream.set_nonblocking(false)?;
+        stream.set_nonblocking(false)?;
         Ok(())
     }
 }

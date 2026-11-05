@@ -334,7 +334,7 @@ where
             outbound_queue.push_back(Output::Event(Event::Reset(Some(
                 "Out of SessionTime (Session construction)",
             ))));
-            // outbound_queue.push_back(Output::Event(Event::Disconnect));
+            outbound_queue.push_back(Output::Event(Event::Disconnect));
         } else {
             // Reset("New session")
             // ---
@@ -766,14 +766,26 @@ where
             .push_back(Output::Event(Event::Reset(reason)));
     }
 
-    fn send_raw(&mut self, mut message: Message, seq_num: u32) -> Result<bool, FieldMapError> {
-        let msg_type = message.header().get_string(tags::MsgType)?;
+    fn send_raw(&mut self, mut message: Message, seq_num: u32) -> Result<bool, SessionHandleMessageError> {
+        let msg_type = match message.header().get_string(tags::MsgType) {
+            Ok(value) => value,
+            Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+        };
         self.initialize_header(&mut message, Some(seq_num));
         let message = if Message::is_admin_msg_type(msg_type.as_bytes()) {
-            let mut message = self.application.to_admin(message, &self.session_id)?;
+            // TODO: remove cp
+            let cp = message.clone();
+            let mut message = match self.application.to_admin(message, &self.session_id) {
+                Ok(value) => value,
+                Err(e) => return Err(SessionHandleMessageError::FieldMapError(cp, e)),
+            };
             if MsgType::LOGON == msg_type && !self.state.received_reset() {
                 let reset = if message.is_field_set(tags::ResetSeqNumFlag) {
-                    message.get_string(tags::ResetSeqNumFlag)?.as_str() == "Y"
+                    let reset_seq_num_flag = match message.get_string(tags::ResetSeqNumFlag) {
+                        Ok(value) => value,
+                        Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+                    };
+                    reset_seq_num_flag.as_str() == "Y"
                 } else {
                     false
                 };
@@ -788,9 +800,11 @@ where
             }
             Ok(message)
         } else {
-            self.application
-                .to_app(&mut message, &self.session_id)
-                .map(|()| message)
+            match self.application
+                .to_app(&mut message, &self.session_id) {
+                Ok(_) => Ok(message),
+                Err(e) => Err((message, e)),
+            }
         };
 
         match message {
@@ -801,9 +815,9 @@ where
                 }
                 Ok(self.send(message_string))
             }
-            Err(e) => match e {
+            Err((msg, e)) => match e {
                 ApplicationError::DoNotSend => Ok(false),
-                ApplicationError::FieldMapError(e) => Err(e),
+                ApplicationError::FieldMapError(e) => Err(SessionHandleMessageError::FieldMapError(msg, e)),
             },
         }
     }
@@ -963,6 +977,7 @@ where
                 if let Some(msg) = e.inner() {
                     self.on_event(msg);
                 }
+                self.on_event(format!("Tag exception: {}", msg));
                 self.generate_reject(msg, e.session_reject_reason().clone(), Some(e.field()))
                     .unwrap();
             }
@@ -989,7 +1004,16 @@ where
             }
             SessionHandleMessageError::String(s) => self.on_event(s),
             // Field is empty when it was expected
-            SessionHandleMessageError::FieldMapError(fm) => todo!("{fm:?}"),
+            SessionHandleMessageError::FieldMapError(msg, fm) => {
+                // Handle field not found
+                let message = format!("Missing field ({:?})", fm);
+                self.on_event(message);
+                self.generate_business_message_reject(
+                    msg,
+                    BusinessRejectReason::CONDITIONALLY_REQUIRED_FIELD_MISSING(),
+                )
+                .unwrap();
+            },
             // Field definition does not match data dictionary
             SessionHandleMessageError::ConversionError(conv) => todo!("{conv:?}"),
             SessionHandleMessageError::LogonReject { reason } => {
@@ -1063,7 +1087,11 @@ where
 
         if MsgType::LOGON == msg_type {
             if self.session_id.is_fixt() {
-                self.target_default_appl_ver_id = Some(message.get_int(tags::DefaultApplVerID)?);
+                let default_appl_ver_id = match message.get_int(tags::DefaultApplVerID) {
+                    Ok(value) => value,
+                    Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+                };
+                self.target_default_appl_ver_id = Some(default_appl_ver_id);
             } else {
                 self.target_default_appl_ver_id = Some(Message::get_appl_ver_id(begin_string)?);
             }
@@ -1101,7 +1129,7 @@ where
                     SessionHandleMessageError::TagException(message, tag_exception)
                 }
                 MessageValidationError::FieldMapError(fm) => {
-                    SessionHandleMessageError::FieldMapError(fm)
+                    SessionHandleMessageError::FieldMapError(message, fm)
                 }
                 MessageValidationError::ConversionError(ce) => {
                     SessionHandleMessageError::ConversionError(ce)
@@ -1213,7 +1241,10 @@ where
         self.on_event("Received logon");
 
         if !self.state.is_initiator() {
-            let heartbeat_int = logon.get_int(tags::HeartBtInt)?;
+            let heartbeat_int = match logon.get_int(tags::HeartBtInt) {
+                Ok(value) => value,
+                Err(e) => return Err(SessionHandleMessageError::FieldMapError(logon, e)),
+            };
             self.state.set_heartbeat_int(heartbeat_int);
             self.generate_logon_other(&logon);
             self.on_event("Responding to logon request");
@@ -1222,7 +1253,10 @@ where
         self.state.set_sent_reset(false);
         self.state.set_received_reset(false);
 
-        let msg_seq_num = logon.header().get_int(tags::MsgSeqNum)?;
+        let msg_seq_num = match logon.header().get_int(tags::MsgSeqNum) {
+            Ok(value) => value,
+            Err(e) => return Err(SessionHandleMessageError::FieldMapError(logon, e)),
+        };
         if self.is_target_too_high(msg_seq_num) && !received_reset {
             self.do_target_too_high(logon, msg_seq_num)?;
         } else {
@@ -1306,7 +1340,10 @@ where
         let message = message.unwrap();
 
         if message.is_field_set(tags::NewSeqNo) {
-            let new_seq_no = message.get_int(tags::NewSeqNo)?;
+            let new_seq_no = match message.get_int(tags::NewSeqNo) {
+                Ok(value) => value,
+                Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+            };
             self.on_event(format!(
                 "Received SequenceReset FROM: {} TO: {}",
                 self.state.next_target_msg_seq_num(),
@@ -1334,8 +1371,14 @@ where
                 && resend_request.header().is_field_set(tags::PossDupFlag))
             {
                 let msg_seq_num;
-                let beg_seq_no = resend_request.get_int(tags::BeginSeqNo)?;
-                let mut end_seq_no = resend_request.get_int(tags::EndSeqNo)?;
+                let beg_seq_no = match resend_request.get_int(tags::BeginSeqNo) {
+                    Ok(value) => value,
+                    Err(e) => return Err(SessionHandleMessageError::FieldMapError(resend_request, e)),
+                };
+                let mut end_seq_no = match resend_request.get_int(tags::EndSeqNo) {
+                    Ok(value) => value,
+                    Err(e) => return Err(SessionHandleMessageError::FieldMapError(resend_request, e)),
+                };
                 self.on_event(format!(
                     "Got resend request from {beg_seq_no} to {end_seq_no}"
                 ));
@@ -1351,7 +1394,10 @@ where
                         end_seq_no = next;
                     }
                     self.generate_sequence_reset(&resend_request, beg_seq_no, end_seq_no)?;
-                    msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
+                    msg_seq_num = match resend_request.header().get_int(tags::MsgSeqNum) {
+                        Ok(value) => value,
+                        Err(e) => return Err(SessionHandleMessageError::FieldMapError(resend_request, e)),
+                    };
                     if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num)
                     {
                         self.state.incr_next_target_msg_seq_num();
@@ -1370,7 +1416,10 @@ where
                         end_seq_no,
                     })));
             }
-            let msg_seq_num = resend_request.header().get_int(tags::MsgSeqNum)?;
+            let msg_seq_num = match resend_request.header().get_int(tags::MsgSeqNum) {
+                Ok(value) => value,
+                Err(e) => return Err(SessionHandleMessageError::FieldMapError(resend_request, e)),
+            };
             if !self.is_target_too_high(msg_seq_num) && !self.is_target_too_low(msg_seq_num) {
                 self.state.incr_next_target_msg_seq_num();
                 self.outbound_queue
@@ -1396,10 +1445,19 @@ where
         check_too_low: bool,
     ) -> Result<Option<Message>, SessionHandleMessageError> {
         let mut msg_seq_num = 0;
-        let msg_type = message.header().get_string(tags::MsgType)?;
+        let msg_type = match message.header().get_string(tags::MsgType) {
+            Ok(value) => value,
+            Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+        };
 
-        let sender_comp_id = message.header().get_string(tags::SenderCompID)?;
-        let target_comp_id = message.header().get_string(tags::TargetCompID)?;
+        let sender_comp_id = match message.header().get_string(tags::SenderCompID) {
+            Ok(value) => value,
+            Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+        };
+        let target_comp_id = match message.header().get_string(tags::TargetCompID) {
+            Ok(value) => value,
+            Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+        };
 
         if !self.is_correct_comp_id(target_comp_id, sender_comp_id) {
             self.generate_reject(message, SessionRejectReason::COMPID_PROBLEM(), None)?;
@@ -1440,8 +1498,12 @@ where
                             chunk + self.max_messages_in_resend_request,
                         );
                         self.on_event(format!("Chunked ResendRequest for messages FROM: {} TO: {} has been satisfied.", range.begin_seq_num, chunk));
+                        let begin_string = match message.header().get_string(tags::BeginString) {
+                            Ok(value) => value,
+                            Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+                        };
                         self.generate_resend_request_range(
-                            message.header().get_string(tags::BeginString)?,
+                            begin_string,
                             chunk + 1,
                             new_chunk_end_seq_no,
                         )?;
@@ -1470,9 +1532,20 @@ where
         self.state.set_test_request_counter(0);
 
         if Message::is_admin_msg_type(msg_type.as_bytes()) {
-            self.application.from_admin(&message, &self.session_id)?;
+            match self.application.from_admin(&message, &self.session_id) {
+                Ok(value) => value,
+                Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+            }
         } else {
-            self.application.from_app(&message, &self.session_id)?;
+            match self.application.from_app(&message, &self.session_id) {
+                Ok(value) => value,
+                Err(e) => match e {
+                     FromAppError::UnknownMessageType { message, msg_type } => {
+                         return Err(SessionHandleMessageError::UnknownMessageType { message, msg_type })
+                     }
+                     FromAppError::FieldMapError(fm) => return Err(SessionHandleMessageError::FieldMapError(message, fm)),
+                }
+            }
         }
         Ok(Some(message))
     }
@@ -1496,7 +1569,10 @@ where
         msg: Message,
         msg_seq_num: u32,
     ) -> Result<(), SessionHandleMessageError> {
-        let begin_string = msg.header().get_string(tags::BeginString)?;
+        let begin_string = match msg.header().get_string(tags::BeginString) {
+            Ok(value) => value,
+            Err(e) => return Err(SessionHandleMessageError::FieldMapError(msg, e)),
+        };
 
         self.on_event(format!(
             "MsgSeqNum too high, expecting {} but received {}",
@@ -1598,7 +1674,11 @@ where
         self.initialize_header(&mut reject, None);
 
         let msg_type = if message.header().is_field_set(tags::MsgType) {
-            message.header().get_string(tags::MsgType)?
+            let msg_type = match message.header().get_string(tags::MsgType) {
+                Ok(msg_type) => msg_type,
+                Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+            };
+            msg_type
         } else {
             String::new()
         };
@@ -1722,7 +1802,10 @@ where
     }
 
     fn do_poss_dup(&mut self, message: Message) -> Result<(), SessionHandleMessageError> {
-        let msg_type = message.header().get_string(tags::MsgType)?;
+        let msg_type = match message.header().get_string(tags::MsgType) {
+            Ok(msg_type) => msg_type,
+            Err(e) => return Err(SessionHandleMessageError::FieldMapError(message, e)),
+        };
         if msg_type == MsgType::SEQUENCE_RESET && !self.requires_orig_sending_time {
             return Ok(());
         }
@@ -1838,8 +1921,8 @@ where
         message: Message,
         business_reject_reason: BusinessRejectReason,
     ) -> Result<(), SessionHandleMessageError> {
-        let msg_type = message.header().get_string(tags::MsgType)?;
-        let msg_seq_num = message.header().get_int(tags::MsgSeqNum)?;
+        let msg_type = message.header().get_string(tags::MsgType).map_err(|e| SessionHandleMessageError::FieldMapError(message.clone(), e))?;
+        let msg_seq_num = message.header().get_int(tags::MsgSeqNum).map_err(|e| SessionHandleMessageError::FieldMapError(message.clone(), e))?;
         let reason = business_reject_reason.reason();
         let mut reject = if self.session_id.begin_string() >= BeginString::FIX42 {
             let mut reject = self.msg_factory.create(
@@ -1874,6 +1957,7 @@ where
         self.on_event(format!(
             "Reject sent for Message: {msg_seq_num} Reason:{reason}"
         ));
+        let reject_clone = reject.clone();
         self.send_raw(reject, 0)?;
         Ok(())
     }
@@ -1940,15 +2024,17 @@ where
                 message: msg_str,
                 parse_error: mp,
             })?;
-            msg_seq_num = msg.header().get_int(tags::MsgSeqNum)?;
+            let msg_copy = msg.clone();
+            msg_seq_num = msg.header().get_int(tags::MsgSeqNum).map_err(|e| SessionHandleMessageError::FieldMapError(msg_copy, e))?;
 
             if current != msg_seq_num && begin == 0 {
                 begin = current;
             }
 
+            let msg_copy = msg.clone();
             if msg.is_admin()
                 && !(self._resend_session_level_rejects
-                    && msg.header().get_string(tags::MsgType)? == MsgType::REJECT)
+                    && msg.header().get_string(tags::MsgType).map_err(|e| SessionHandleMessageError::FieldMapError(msg_copy, e))? == MsgType::REJECT)
             {
                 if begin == 0 {
                     begin = msg_seq_num;
@@ -2082,23 +2168,23 @@ impl From<LogonReject> for SessionHandleMessageError {
         SessionHandleMessageError::LogonReject { reason: e.reason }
     }
 }
-impl From<FieldMapError> for SessionHandleMessageError {
-    fn from(e: FieldMapError) -> Self {
-        SessionHandleMessageError::FieldMapError(e)
-    }
-}
+// impl From<FieldMapError> for SessionHandleMessageError {
+//     fn from(e: FieldMapError) -> Self {
+//         SessionHandleMessageError::FieldMapError(e)
+//     }
+// }
 impl From<dfx_base::fields::ConversionError> for SessionHandleMessageError {
     fn from(e: dfx_base::fields::ConversionError) -> Self {
         SessionHandleMessageError::ConversionError(e)
     }
 }
-impl From<FromAppError> for SessionHandleMessageError {
-    fn from(from_app_error: FromAppError) -> Self {
-        match from_app_error {
-            FromAppError::UnknownMessageType { message, msg_type } => {
-                SessionHandleMessageError::UnknownMessageType { message, msg_type }
-            }
-            FromAppError::FieldMapError(fm) => SessionHandleMessageError::FieldMapError(fm),
-        }
-    }
-}
+// impl From<FromAppError> for SessionHandleMessageError {
+//     fn from(from_app_error: FromAppError) -> Self {
+//         match from_app_error {
+//             FromAppError::UnknownMessageType { message, msg_type } => {
+//                 SessionHandleMessageError::UnknownMessageType { message, msg_type }
+//             }
+//             FromAppError::FieldMapError { message, fm } => SessionHandleMessageError::FieldMapError(message, fm),
+//         }
+//     }
+// }
